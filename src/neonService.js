@@ -1,9 +1,4 @@
-// Servicio de datos: usa el endpoint de Vite en desarrollo,
-// y el endpoint de producción cuando está desplegado.
-
-const API_URL = import.meta.env.PROD
-  ? 'https://galushop.store/distrito/api/pedidos'
-  : '/api/pedidos';
+import { API_URL } from "./config/api";
 
 export async function fetchInitData() {
   try {
@@ -17,8 +12,6 @@ export async function fetchInitData() {
     throw new Error(data.message || 'Error en respuesta');
   } catch (error) {
     console.error('❌ Error cargando datos:', error.message);
-    // Retorna vacío para que la UI muestre "sin productos"
-    // en vez de datos de demo incorrectos
     return {
       status: 'ok',
       products: [],
