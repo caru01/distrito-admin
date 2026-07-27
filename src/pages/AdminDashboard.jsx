@@ -1,6 +1,6 @@
+import { API_URL } from '../config/api';
 import React, { useEffect, useState } from 'react';
 
-const API_URL = import.meta.env.PROD ? '/api/pedidos' : 'http://localhost:3001/api/pedidos';
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState({ totalOrders: 0, revenue: 0 });

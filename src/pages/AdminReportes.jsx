@@ -1,3 +1,4 @@
+import { BASE_URL as API_URL } from '../config/api';
 import React, { useState, useEffect, Component } from 'react';
 import { 
   BarChart3, DollarSign, ShoppingCart, Package, Warehouse, Users, 
@@ -41,8 +42,6 @@ function AdminReportesInner() {
   const [activeTab, setActiveTab] = useState('Resumen');
   const [dateRange, setDateRange] = useState('Últimos 30 días');
   const [selectedClient, setSelectedClient] = useState(null);
-
-  const API_URL = import.meta.env.PROD ? '' : 'http://localhost:3001';
 
   useEffect(() => {
     fetchData();

@@ -1,3 +1,4 @@
+import { API_URL } from '../config/api';
 import React, { useState, useEffect } from 'react';
 import { 
   ShoppingCart, Plus, Search, Filter, Globe, MessageCircle, Store, Phone, 
@@ -5,7 +6,6 @@ import {
   Banknote, CreditCard, Smartphone, X, ChevronLeft, ChevronRight, Trash2, MapPin
 } from 'lucide-react';
 
-const API_URL = import.meta.env.PROD ? '/api/pedidos' : 'http://localhost:3001/api/pedidos';
 
 export default function AdminPedidos() {
   const [orders, setOrders] = useState([]);

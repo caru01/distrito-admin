@@ -1,3 +1,4 @@
+import { BASE_URL as API_URL } from '../config/api';
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Edit2, Scale, Calculator, ArrowRight, DollarSign, ShoppingCart } from 'lucide-react';
 
@@ -20,8 +21,6 @@ export default function AdminRendimientos() {
 
   const [newIngredientName, setNewIngredientName] = useState('');
   const [showNewIngredientInput, setShowNewIngredientInput] = useState(false);
-
-  const API_URL = import.meta.env.PROD ? '' : 'http://localhost:3001';
 
   useEffect(() => {
     fetchData();

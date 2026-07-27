@@ -1,7 +1,7 @@
+import { API_URL } from '../config/api';
 import React, { useState, useEffect } from 'react';
 import { Megaphone, Save, Image as ImageIcon, CheckCircle, XCircle, Bell, Send } from 'lucide-react';
 
-const API_URL = import.meta.env.PROD ? '/api/pedidos' : 'http://localhost:3001/api/pedidos';
 
 export default function AdminAnuncios() {
   const [announcement, setAnnouncement] = useState({

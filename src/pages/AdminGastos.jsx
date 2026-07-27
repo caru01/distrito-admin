@@ -1,3 +1,4 @@
+import { BASE_URL as API_URL } from '../config/api';
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Calendar, DollarSign, Tag, FileText } from 'lucide-react';
 
@@ -11,8 +12,6 @@ export default function AdminGastos() {
     amount: '',
     expense_date: new Date().toISOString().split('T')[0]
   });
-
-  const API_URL = import.meta.env.PROD ? '' : 'http://localhost:3001';
   
   const formatter = new Intl.NumberFormat('es-CO', {
     style: 'currency',

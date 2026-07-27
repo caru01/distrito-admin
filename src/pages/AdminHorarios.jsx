@@ -1,3 +1,4 @@
+import { BASE_URL as API_URL } from '../config/api';
 import React, { useState, useEffect } from 'react';
 import { Clock, Calendar, Shield, Save, Trash2, Plus, CalendarX, Power, Info, AlertTriangle } from 'lucide-react';
 
@@ -10,8 +11,6 @@ export default function AdminHorarios() {
   const [isSaving, setIsSaving] = useState(false);
   const [showExceptionModal, setShowExceptionModal] = useState(false);
   const [newException, setNewException] = useState({ exception_date: '', description: '', is_closed: true, open_time: '18:00', close_time: '22:00' });
-
-  const API_URL = import.meta.env.PROD ? '' : 'http://localhost:3001';
   const token = sessionStorage.getItem('distrito_admin_token');
 
   useEffect(() => {

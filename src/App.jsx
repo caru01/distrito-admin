@@ -2,9 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, Minus, Trash2, ShoppingBag, ShoppingCart, Copy, Check, X, ArrowLeft, Lock, CreditCard, Wallet, Smartphone, Banknote, Menu, Download, Share } from 'lucide-react';
 import logoImg from './assets/logo-horizontal.png';
 
-const API_URL = import.meta.env.PROD
-  ? '/api/pedidos'
-  : 'http://localhost:3001/api/pedidos';
+import { API_URL } from './config/api';
 
 
 function App() {

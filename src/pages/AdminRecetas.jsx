@@ -1,3 +1,4 @@
+import { BASE_URL as API_URL } from '../config/api';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Trash2, Search, ArrowRight, TrendingUp, AlertCircle } from 'lucide-react';
 
@@ -11,8 +12,6 @@ export default function AdminRecetas() {
   
   const [newIngredientId, setNewIngredientId] = useState('');
   const [cantidadUsada, setCantidadUsada] = useState('');
-
-  const API_URL = import.meta.env.PROD ? '' : 'http://localhost:3001';
   
   const formatter = new Intl.NumberFormat('es-CO', {
     style: 'currency',

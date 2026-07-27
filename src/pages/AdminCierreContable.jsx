@@ -1,3 +1,4 @@
+import { BASE_URL as API_URL } from '../config/api';
 import React, { useState, useEffect } from 'react';
 import { Lock, Unlock, Calendar, TrendingUp, TrendingDown, DollarSign, ShoppingBag, PieChart, FileText, Download, Printer } from 'lucide-react';
 
@@ -10,8 +11,6 @@ export default function AdminCierreContable() {
   const [isClosed, setIsClosed] = useState(false);
   const [closedInfo, setClosedInfo] = useState(null);
   const [loading, setLoading] = useState(false);
-
-  const API_URL = import.meta.env.PROD ? '' : 'http://localhost:3001';
   
   const formatter = new Intl.NumberFormat('es-CO', {
     style: 'currency', currency: 'COP', minimumFractionDigits: 0

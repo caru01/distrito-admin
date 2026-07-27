@@ -1,3 +1,4 @@
+import { API_URL } from '../config/api';
 import React, { useState, useEffect } from 'react';
 import { 
   Package, Search, Filter, Plus, Beef, Sandwich, Milk, 
@@ -6,7 +7,6 @@ import {
   TrendingUp, TrendingDown, DollarSign, X, Receipt
 } from 'lucide-react';
 
-const API_URL = import.meta.env.PROD ? '/api/pedidos' : 'http://localhost:3001/api/pedidos';
 
 export default function AdminInventario() {
   const [items, setItems] = useState([]);
