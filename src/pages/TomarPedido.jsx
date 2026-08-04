@@ -2,7 +2,7 @@ import { API_URL } from '../config/api';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { printTicket } from '../services/printService';
-import { DeliveryAddressPicker } from '@distrito/shared-ui';
+import DeliveryAddressPicker from '../components/DeliveryAddressPicker.jsx';
 import {
   Zap, Search, ShoppingCart, Trash2, Plus, Minus, ChefHat, Printer,
   MessageCircle, Phone, Globe, Store, Banknote, Wallet, CreditCard,

@@ -1,6 +1,6 @@
 import { API_URL } from '../config/api';
 import React, { useState, useEffect } from 'react';
-import { DeliveryAddressPicker } from '@distrito/shared-ui';
+import DeliveryAddressPicker from '../components/DeliveryAddressPicker.jsx';
 import { 
   Settings, Building2, CreditCard, Bike,
   Upload, Save, Clock, Phone,

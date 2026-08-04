@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bike, Clock3, MapPin, Navigation, Package, Radio, RefreshCw, Send, Signal, SignalZero, UserCheck } from 'lucide-react';
-import { LiveDeliveryMap } from '@distrito/shared-ui';
+import LiveDeliveryMap from '../components/LiveDeliveryMap.jsx';
 import { API_URL } from '../config/api';
 
 const money = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
