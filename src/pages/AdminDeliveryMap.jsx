@@ -113,6 +113,20 @@ export default function AdminDeliveryMap() {
       ? `${driver.active_order_count}/${driver.max_active_orders || 5} pedidos`
       : (driver.vehicle_type || driver.plate || 'Domiciliario'),
   })), [drivers]);
+
+  // Destino del driver seleccionado para mostrarlo en el mapa
+  const selectedDestination = useMemo(() => {
+    if (!selected) return null;
+    if (!selected.active_destination_latitude || !selected.active_destination_longitude) return null;
+    return {
+      latitude: Number(selected.active_destination_latitude),
+      longitude: Number(selected.active_destination_longitude),
+      address: [
+        selected.active_order_id ? `#${selected.active_order_id}` : null,
+        selected.active_customer || null,
+      ].filter(Boolean).join(' — ') || 'Destino de entrega',
+    };
+  }, [selected]);
   const connected = drivers.filter((driver) => driver.live_status !== 'Desconectado').length;
   const busy = drivers.filter((driver) => driver.live_status === 'Ocupado').length;
 
@@ -151,12 +165,13 @@ export default function AdminDeliveryMap() {
           apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''}
           mapId={import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID'}
           store={store}
+          destination={selectedDestination}
           drivers={mappedDrivers}
           selectedDriverId={selectedId}
           onDriverSelect={setSelectedId}
           ariaLabel="Mapa con todos los domiciliarios y la cocina"
         />
-        <div className="delivery-map-legend"><span><i className="is-store">🏪</i> Cocina · punto de salida</span><span><i className="is-driver">🛵</i> Domiciliario en vivo</span></div>
+        <div className="delivery-map-legend"><span><i className="is-store">🏪</i> Cocina · punto de salida</span><span><i className="is-driver">🛵</i> Domiciliario en vivo</span>{selectedDestination && <span><i>📍</i> {selectedDestination.address}</span>}</div>
         <div className="delivery-map-footer"><span><Clock3/> Último GPS: {time(selected?.last_location_at)}</span>{selected?.current_latitude && selected?.current_longitude && <a className="ds-btn ds-btn-primary" target="_blank" rel="noreferrer" href={`https://www.google.com/maps/search/?api=1&query=${selected.current_latitude},${selected.current_longitude}`}><Navigation size={17}/> Abrir Google Maps</a>}</div>
       </section>
       <section className="ds-card delivery-driver-panel">
