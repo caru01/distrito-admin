@@ -1,654 +1,86 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, Archive, ScanLine as Barcode, Boxes, Edit3, ExternalLink, PackageCheck, PackageX, Plus, Search, X } from 'lucide-react';
 import { API_URL } from '../config/api';
-import React, { useState, useEffect } from 'react';
-import { 
-  Package, Search, Filter, Plus, Beef, Sandwich, Milk, 
-  Leaf, Droplets, Snowflake, Box, Pencil, ArrowDownCircle, 
-  ArrowUpCircle, History, AlertTriangle, Trash2, ChevronLeft, ChevronRight,
-  TrendingUp, TrendingDown, DollarSign, X, Receipt
-} from 'lucide-react';
-
 
 export default function AdminInventario() {
-  const [items, setItems] = useState([]);
-  const [purchases, setPurchases] = useState([]);
-  const [loading, setLoading] = useState(true);
-  
-  // Filters
-  const [activeTab, setActiveTab] = useState('Ingredientes');
-  const [searchQuery, setSearchQuery] = useState('');
-  
-  // Modals
-  const [isItemModalOpen, setIsItemModalOpen] = useState(false);
-  const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
-  const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
-  
-  const [currentItem, setCurrentItem] = useState({
-    id: null, image: '', name: '', type: 'Ingrediente', category: 'Carnes', 
-    unit: 'Gramos', purchase_unit: 'Kg', consumption_unit: 'Gramos', conversion_factor: 1000,
-    sku: '', stock: 0, min_stock: 0, max_stock: '', status: 'Activo', observations: ''
+  const [products, setProducts] = useState([]);
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState('all');
+  const [selected, setSelected] = useState(undefined);
+  const [settings, setSettings] = useState({ barcode: '', track_stock: true, low_stock_threshold: 5, inventory_unit: 'unidad', inventory_unit_cost: 0 });
+  const [movement, setMovement] = useState({ movement_type: 'ENTRADA', quantity: 1, reason: '' });
+  const [lookup, setLookup] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState({ type: '', text: '' });
+  const token = sessionStorage.getItem('distrito_admin_token');
+  const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
+
+  const load = useCallback(async () => {
+    setBusy(true);
+    try {
+      const response = await fetch(`${API_URL}/admin/product-stock`, { headers }); const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'No fue posible cargar el inventario');
+      setProducts(data.data || []);
+    } catch (error) { setMessage({ type: 'error', text: error.message }); }
+    finally { setBusy(false); }
+  }, [headers]);
+  useEffect(() => { load(); }, [load]);
+
+  const open = (product) => {
+    setSelected(product); setLookup(null);
+    setSettings({ barcode: product.barcode || '', track_stock: product.track_stock, low_stock_threshold: product.low_stock_threshold ?? 5, inventory_unit: product.inventory_unit || 'unidad', inventory_unit_cost: product.inventory_unit_cost || 0 });
+    setMovement({ movement_type: 'ENTRADA', quantity: 1, reason: '' });
+  };
+
+  const saveSettings = async () => {
+    setBusy(true);
+    try {
+      const response = await fetch(`${API_URL}/admin/product-stock/${selected.id}`, { method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify(settings) });
+      const data = await response.json(); if (!response.ok) throw new Error(data.error || 'No fue posible guardar');
+      setMessage({ type: 'success', text: 'Control de inventario actualizado.' }); await load(); setSelected(undefined);
+    } catch (error) { setMessage({ type: 'error', text: error.message }); }
+    finally { setBusy(false); }
+  };
+
+  const registerMovement = async () => {
+    setBusy(true);
+    try {
+      const response = await fetch(`${API_URL}/admin/product-stock/${selected.id}/movements`, { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify(movement) });
+      const data = await response.json(); if (!response.ok) throw new Error(data.error || 'No fue posible registrar el movimiento');
+      setMessage({ type: 'success', text: `Movimiento registrado. Nuevo stock: ${data.stock}.` }); await load(); setSelected(undefined);
+    } catch (error) { setMessage({ type: 'error', text: error.message }); }
+    finally { setBusy(false); }
+  };
+
+  const lookupBarcode = async () => {
+    setBusy(true); setLookup(null);
+    try {
+      const response = await fetch(`${API_URL}/admin/products/lookup-barcode/${settings.barcode}`, { headers }); const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Código no encontrado');
+      setLookup(data.product); setMessage({ type: 'success', text: 'Referencia encontrada. Verifica los datos antes de usarlos.' });
+    } catch (error) { setMessage({ type: 'error', text: error.message }); }
+    finally { setBusy(false); }
+  };
+
+  const stats = { tracked: products.filter((p) => p.track_stock).length, low: products.filter((p) => p.track_stock && Number(p.stock) > 0 && Number(p.stock) <= Number(p.low_stock_threshold)).length, out: products.filter((p) => p.track_stock && Number(p.stock) <= 0).length };
+  const filtered = products.filter((product) => {
+    const matches = `${product.title} ${product.category || ''} ${product.barcode || ''}`.toLowerCase().includes(query.toLowerCase());
+    if (!matches) return false;
+    if (filter === 'low') return product.track_stock && Number(product.stock) <= Number(product.low_stock_threshold);
+    if (filter === 'untracked') return !product.track_stock;
+    return true;
   });
-  
-  const [currentMove, setCurrentMove] = useState({
-    inventory_id: null, movement_type: 'IN', quantity: 0, notes: ''
-  });
+  const stockBadge = (product) => !product.track_stock ? ['Sin control', 'ds-badge-neutral'] : Number(product.stock) <= 0 ? ['Agotado', 'ds-badge-danger'] : Number(product.stock) <= Number(product.low_stock_threshold) ? ['Stock bajo', 'ds-badge-warning'] : ['Disponible', 'ds-badge-success'];
 
-  // Purchase State
-  const [newPurchase, setNewPurchase] = useState({
-    id: null, invoice_number: '', supplier: '', purchase_date: new Date().toISOString().split('T')[0], notes: '', iva_amount: 0, items: []
-  });
-  const [purchaseItemSearch, setPurchaseItemSearch] = useState('');
-
-  const fetchData = async () => {
-    try {
-      const token = sessionStorage.getItem('distrito_admin_token');
-      const resItems = await fetch(`${API_URL}/admin/inventory`, { headers: { 'Authorization': `Bearer ${token}` } });
-      const dataItems = await resItems.json();
-      if (dataItems.status === 'ok') setItems(dataItems.items);
-
-      const resPurchases = await fetch(`${API_URL}/admin/purchases`, { headers: { 'Authorization': `Bearer ${token}` } });
-      const dataPurchases = await resPurchases.json();
-      if (dataPurchases.status === 'ok') setPurchases(dataPurchases.purchases);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const handleSaveItem = async (e) => {
-    e.preventDefault();
-    if (!currentItem.name) return alert('El nombre es requerido');
-    
-    const token = sessionStorage.getItem('distrito_admin_token');
-    const method = currentItem.id ? 'PUT' : 'POST';
-    const url = currentItem.id ? `${API_URL}/admin/inventory/${currentItem.id}` : `${API_URL}/admin/inventory`;
-
-    try {
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(currentItem)
-      });
-      if (res.ok) {
-        setIsItemModalOpen(false);
-        fetchData();
-      } else {
-        alert('Error al guardar el ítem');
-      }
-    } catch (err) { console.error(err); }
-  };
-
-  const handleSaveMovement = async (e) => {
-    e.preventDefault();
-    if (currentMove.quantity <= 0) return alert('La cantidad debe ser mayor a 0');
-    
-    const token = sessionStorage.getItem('distrito_admin_token');
-    try {
-      const res = await fetch(`${API_URL}/admin/inventory/${currentMove.inventory_id}/movement`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(currentMove)
-      });
-      if (res.ok) {
-        setIsMoveModalOpen(false);
-        fetchData();
-      } else {
-        alert('Error al registrar movimiento');
-      }
-    } catch (err) { console.error(err); }
-  };
-
-  const handleDelete = async (id) => {
-    if (!window.confirm('¿Estás seguro de eliminar este ítem del inventario?')) return;
-    const token = sessionStorage.getItem('distrito_admin_token');
-    try {
-      await fetch(`${API_URL}/admin/inventory/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
-      fetchData();
-    } catch (err) { console.error(err); }
-  };
-
-  const handleSavePurchase = async (e) => {
-    e.preventDefault();
-    if (newPurchase.items.length === 0) return alert('Debes agregar al menos un ítem a la compra');
-    
-    const token = sessionStorage.getItem('distrito_admin_token');
-    const total_amount = Math.round(newPurchase.items.reduce((sum, item) => sum + item.total_cost + (item.total_cost * (item.iva_amount || 0) / 100), 0));
-
-    try {
-      const isEditing = !!newPurchase.id;
-      const url = isEditing ? `${API_URL}/admin/purchases/${newPurchase.id}` : `${API_URL}/admin/purchases`;
-      const method = isEditing ? 'PUT' : 'POST';
-
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ ...newPurchase, total_amount })
-      });
-      if (res.ok) {
-        setIsPurchaseModalOpen(false);
-        setNewPurchase({ id: null, invoice_number: '', supplier: '', purchase_date: new Date().toISOString().split('T')[0], notes: '', iva_amount: 0, items: [] });
-        fetchData();
-      } else {
-        const errText = await res.text();
-        alert('Error al registrar compra: ' + errText);
-      }
-    } catch (err) { console.error(err); alert('Exception: ' + err.message); }
-  };
-
-  const handleEditPurchase = async (purchase) => {
-    try {
-      const token = sessionStorage.getItem('distrito_admin_token');
-      const res = await fetch(`${API_URL}/admin/purchases/${purchase.id}/items`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (data.status === 'ok') {
-        setNewPurchase({
-          id: purchase.id,
-          invoice_number: purchase.invoice_number || '',
-          supplier: purchase.supplier || '',
-          purchase_date: new Date(purchase.purchase_date).toISOString().split('T')[0],
-          notes: purchase.notes || '',
-          iva_amount: purchase.iva_amount || 0,
-          items: data.items
-        });
-        setIsPurchaseModalOpen(true);
-      }
-    } catch (err) {
-      console.error(err);
-      alert('Error obteniendo ítems de compra');
-    }
-  };
-
-  // Cálculos estadísticos
-  const totalValue = items.reduce((sum, item) => sum + (item.stock * item.unit_cost), 0);
-  const lowStockCount = items.filter(i => i.stock > 0 && i.stock <= i.min_stock).length;
-  const outOfStockCount = items.filter(i => i.stock <= 0).length;
-  
-  // Filtros
-  const tabs = ['Ingredientes', 'Empaques', 'Insumos operativos', 'Compras'];
-  const tabToType = {
-    'Ingredientes': 'Ingrediente',
-    'Empaques': 'Empaque',
-    'Insumos operativos': 'Insumo'
-  };
-  
-  const filteredItems = items.filter(item => {
-    if (activeTab === 'Compras') return false;
-    const matchesTab = item.type === tabToType[activeTab];
-    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesTab && matchesSearch;
-  });
-
-  const getStockColor = (stock, min) => {
-    if (stock <= 0) return '#EF4444'; 
-    if (stock <= min) return '#F59E0B'; 
-    return '#22C55E'; 
-  };
-
-  const getStatusBadge = (stock, min) => {
-    if (stock <= 0) return <span style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#EF4444', padding: '4px 10px', borderRadius: '8px', fontSize: '13px', fontWeight: '600' }}>Agotado</span>;
-    if (stock <= min) return <span style={{ backgroundColor: 'rgba(245, 158, 11, 0.15)', color: '#F59E0B', padding: '4px 10px', borderRadius: '8px', fontSize: '13px', fontWeight: '600' }}>Stock Bajo</span>;
-    return <span style={{ backgroundColor: 'rgba(34, 197, 94, 0.15)', color: '#4ADE80', padding: '4px 10px', borderRadius: '8px', fontSize: '13px', fontWeight: '600' }}>En stock</span>;
-  };
-
-  const getCategoryBadge = (cat) => {
-    const colors = {
-      'Carnes': { bg: '#451a03', color: '#fca5a5' },
-      'Panadería': { bg: '#422006', color: '#fde047' },
-      'Lácteos': { bg: '#1e3a8a', color: '#bfdbfe' },
-      'Verduras': { bg: '#14532d', color: '#86efac' },
-      'Salsas': { bg: '#7f1d1d', color: '#fca5a5' },
-      'Bebidas': { bg: '#0f766e', color: '#5eead4' },
-      'Empaques': { bg: '#3f3f46', color: '#d4d4d8' }
-    };
-    const c = colors[cat] || { bg: '#27272a', color: '#e4e4e7' };
-    return <span style={{ backgroundColor: c.bg, color: c.color, padding: '4px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: '600' }}>{cat}</span>;
-  };
-
-  return (
-    <div style={{ padding: '40px', fontFamily: "'Montserrat', 'Poppins', sans-serif", backgroundColor: '#0D0D0D', minHeight: '100%' }}>
-      {/* Encabezado */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '30px' }}>
-        <div>
-          <div style={{ color: '#BDBDBD', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
-            Dashboard <span style={{ margin: '0 8px' }}>/</span> <span style={{ color: '#FFFFFF' }}>Inventario</span>
-          </div>
-          <h1 style={{ color: '#FFFFFF', fontSize: '36px', fontWeight: '800', margin: '0 0 8px 0' }}>Inventario</h1>
-          <p style={{ color: '#BDBDBD', fontSize: '16px', margin: 0 }}>Primero crea ingredientes y empaques; después registra compras y consulta existencias calculadas.</p>
-        </div>
-      </div>
-
-      {/* Tarjetas Estadísticas */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '32px' }}>
-        {[
-          { label: 'Valor del Inventario', value: `$${totalValue.toLocaleString()}`, icon: <DollarSign size={24} />, color: '#D4A017' },
-          { label: 'Total de Ítems', value: items.length, icon: <Package size={24} />, color: '#3B82F6' },
-          { label: 'Stock Bajo', value: lowStockCount, icon: <TrendingDown size={24} />, color: '#F59E0B' },
-          { label: 'Agotados', value: outOfStockCount, icon: <AlertTriangle size={24} />, color: '#EF4444' }
-        ].map((stat, i) => (
-          <div key={i} style={{ backgroundColor: '#111111', borderRadius: '20px', padding: '24px', border: '1px solid #222222', boxShadow: '0 4px 15px rgba(0,0,0,0.2)', position: 'relative', overflow: 'hidden' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <div style={{ color: '#BDBDBD', fontSize: '14px', fontWeight: '500', marginBottom: '8px' }}>{stat.label}</div>
-                <div style={{ fontSize: '32px', fontWeight: '800', color: '#FFFFFF', lineHeight: '1' }}>{stat.value}</div>
-              </div>
-              <div style={{ width: '48px', height: '48px', borderRadius: '12px', backgroundColor: `${stat.color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: stat.color }}>
-                {stat.icon}
-              </div>
-            </div>
-            <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: '4px', backgroundColor: stat.color }} />
-          </div>
-        ))}
-      </div>
-
-      {/* Pestañas */}
-      <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid #222222', paddingBottom: '16px', marginBottom: '24px', overflowX: 'auto' }}>
-        {tabs.map(tab => {
-          const isActive = activeTab === tab;
-          return (
-            <button 
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              style={{ 
-                backgroundColor: isActive ? '#D4A017' : 'transparent', 
-                color: isActive ? '#000000' : '#BDBDBD', 
-                border: 'none', borderRadius: '999px', padding: '10px 24px', fontSize: '15px', fontWeight: '600', 
-                cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap'
-              }}
-            >
-              {tab}
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Barra de Herramientas */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', marginBottom: '24px', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', gap: '16px', flex: 1, minWidth: '300px' }}>
-          <div style={{ position: 'relative', flex: 1, maxWidth: '400px' }}>
-            <Search size={20} style={{ position: 'absolute', left: '16px', top: '16px', color: '#6B7280' }} />
-            <input 
-              type="text" 
-              placeholder={activeTab === 'Compras' ? "Buscar factura o proveedor..." : "Buscar ingrediente..."}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{ width: '100%', backgroundColor: '#111111', border: '1px solid #2A2A2A', borderRadius: '12px', padding: '16px 16px 16px 48px', color: '#FFFFFF', fontSize: '15px', outline: 'none', boxSizing: 'border-box' }} 
-            />
-          </div>
-          <button style={{ backgroundColor: '#111111', border: '1px solid #2A2A2A', borderRadius: '12px', padding: '0 20px', color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: '500' }}>
-            <Filter size={18} color="#D4A017" /> Filtros
-          </button>
-        </div>
-        
-        {activeTab === 'Compras' ? (
-          <button 
-            onClick={() => setIsPurchaseModalOpen(true)}
-            style={{ backgroundColor: '#D4A017', color: '#000000', border: 'none', borderRadius: '12px', height: '52px', padding: '0 24px', fontSize: '15px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
-          >
-            <Receipt size={20} /> Registrar Compra
-          </button>
-        ) : (
-          <button 
-            onClick={() => {
-              const type = tabToType[activeTab];
-              const isIngredient = type === 'Ingrediente';
-              setCurrentItem({ id: null, image: '', name: '', type, category: isIngredient ? 'Carnes' : activeTab === 'Empaques' ? 'Empaques' : 'Operación', unit: isIngredient ? 'Gramos' : 'Unidades', purchase_unit: isIngredient ? 'Kg' : 'Unidades', consumption_unit: isIngredient ? 'Gramos' : 'Unidades', conversion_factor: isIngredient ? 1000 : 1, sku: '', stock: 0, min_stock: 0, max_stock: '', status: 'Activo', observations: '' });
-              setIsItemModalOpen(true);
-            }}
-            style={{ backgroundColor: '#D4A017', color: '#000000', border: 'none', borderRadius: '12px', height: '52px', padding: '0 24px', fontSize: '15px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
-          >
-            <Plus size={20} /> Nuevo {activeTab === 'Ingredientes' ? 'Ingrediente' : activeTab === 'Empaques' ? 'Empaque' : 'Insumo'}
-          </button>
-        )}
-      </div>
-
-      {/* Tabla Principal */}
-      <div style={{ backgroundColor: '#111111', borderRadius: '20px', border: '1px solid #222222', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>
-        <div style={{ overflowX: 'auto' }}>
-          {activeTab === 'Compras' ? (
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '1000px' }}>
-              <thead>
-                <tr style={{ backgroundColor: '#181818', borderBottom: '1px solid #222222' }}>
-                  <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '13px', textTransform: 'uppercase' }}>Fecha</th>
-                  <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '13px', textTransform: 'uppercase' }}>Factura #</th>
-                  <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '13px', textTransform: 'uppercase' }}>Proveedor</th>
-                  <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '13px', textTransform: 'uppercase' }}>IVA</th>
-                  <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '13px', textTransform: 'uppercase' }}>Total</th>
-                  <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '13px', textTransform: 'uppercase' }}>Notas</th>
-                  <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '13px', textTransform: 'uppercase' }}>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {purchases.map((purchase, index) => (
-                  <tr key={purchase.id} style={{ borderBottom: index === purchases.length - 1 ? 'none' : '1px solid #222222', transition: 'background-color 0.2s' }}>
-                    <td style={{ padding: '16px 24px', color: '#FFFFFF', fontWeight: '500' }}>{new Date(purchase.purchase_date).toLocaleDateString()}</td>
-                    <td style={{ padding: '16px 24px', color: '#D4A017', fontWeight: '700' }}>{purchase.invoice_number || 'S/N'}</td>
-                    <td style={{ padding: '16px 24px', color: '#FFFFFF' }}>{purchase.supplier || 'Varios'}</td>
-                    <td style={{ padding: '16px 24px', color: '#FFFFFF' }}>${(purchase.iva_amount || 0).toLocaleString()}</td>
-                    <td style={{ padding: '16px 24px', color: '#FFFFFF', fontWeight: '700' }}>${(purchase.total_amount || 0).toLocaleString()}</td>
-                    <td style={{ padding: '16px 24px', color: '#BDBDBD' }}>{purchase.notes}</td>
-                    <td style={{ padding: '16px 24px' }}>
-                      <button onClick={() => handleEditPurchase(purchase)} style={{ background: 'none', border: 'none', color: '#D4A017', cursor: 'pointer' }}><Pencil size={18} /></button>
-                    </td>
-                  </tr>
-                ))}
-                {purchases.length === 0 && (
-                  <tr>
-                    <td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: '#6B7280' }}>No hay compras registradas</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '1000px' }}>
-              <thead>
-                <tr style={{ backgroundColor: '#181818', borderBottom: '1px solid #222222' }}>
-                  <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '13px', textTransform: 'uppercase' }}>Ítem</th>
-                  <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '13px', textTransform: 'uppercase' }}>Categoría</th>
-                  <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '13px', textTransform: 'uppercase' }}>Stock Actual</th>
-                  <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '13px', textTransform: 'uppercase' }}>Min.</th>
-                  <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '13px', textTransform: 'uppercase' }}>Estado</th>
-                  <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '13px', textTransform: 'uppercase' }}>Valor Unit.</th>
-                  <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '13px', textTransform: 'uppercase' }}>Total</th>
-                  <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '13px', textTransform: 'uppercase', textAlign: 'right' }}>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredItems.map((item, index) => (
-                  <tr key={item.id} style={{ borderBottom: index === filteredItems.length - 1 ? 'none' : '1px solid #222222', transition: 'background-color 0.2s' }}>
-                    <td style={{ padding: '16px 24px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        <div style={{ width: '48px', height: '48px', borderRadius: '12px', backgroundColor: '#1A1A1A', backgroundImage: `url(${item.image})`, backgroundSize: 'cover', backgroundPosition: 'center', border: '1px solid #333' }} />
-                        <div>
-                          <div style={{ color: '#FFFFFF', fontWeight: '700', fontSize: '15px' }}>{item.name}</div>
-                          <div style={{ color: '#BDBDBD', fontSize: '13px', marginTop: '2px' }}>{item.type}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td style={{ padding: '16px 24px' }}>{getCategoryBadge(item.category)}</td>
-                    <td style={{ padding: '16px 24px' }}>
-                      <div style={{ color: getStockColor(item.stock, item.min_stock), fontWeight: '800', fontSize: '16px' }}>
-                        {item.stock} <span style={{ fontSize: '13px', fontWeight: '500', color: '#888' }}>{item.unit}</span>
-                      </div>
-                    </td>
-                    <td style={{ padding: '16px 24px', color: '#BDBDBD', fontSize: '14px', fontWeight: '500' }}>{item.min_stock} {item.unit}</td>
-                    <td style={{ padding: '16px 24px' }}>{getStatusBadge(item.stock, item.min_stock)}</td>
-                    <td style={{ padding: '16px 24px', color: '#FFFFFF', fontSize: '14px', fontWeight: '500' }}>${(item.unit_cost || 0).toLocaleString()}</td>
-                    <td style={{ padding: '16px 24px', color: '#D4A017', fontSize: '15px', fontWeight: '700' }}>${((item.unit_cost || 0) * item.stock).toLocaleString()}</td>
-                    <td style={{ padding: '16px 24px', textAlign: 'right' }}>
-                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                        <button title="Entrada" onClick={() => { setCurrentMove({ inventory_id: item.id, movement_type: 'IN', quantity: 0, notes: '' }); setIsMoveModalOpen(true); }} style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#1A1A1A', border: '1px solid #333333', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#4ADE80', cursor: 'pointer' }}>
-                          <ArrowDownCircle size={16} />
-                        </button>
-                        <button title="Salida" onClick={() => { setCurrentMove({ inventory_id: item.id, movement_type: 'OUT', quantity: 0, notes: '' }); setIsMoveModalOpen(true); }} style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#1A1A1A', border: '1px solid #333333', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#EF4444', cursor: 'pointer' }}>
-                          <ArrowUpCircle size={16} />
-                        </button>
-                        <button title="Editar" onClick={() => { setCurrentItem(item); setIsItemModalOpen(true); }} style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#1A1A1A', border: '1px solid #333333', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFFFFF', cursor: 'pointer' }}>
-                          <Pencil size={16} />
-                        </button>
-                        <button title="Eliminar" onClick={() => handleDelete(item.id)} style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#1A1A1A', border: '1px solid #333333', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#EF4444', cursor: 'pointer' }}>
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
-
-      {/* Modal Crear/Editar Ítem */}
-      {isItemModalOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-          <div style={{ backgroundColor: '#111111', width: '600px', borderRadius: '20px', border: '1px solid #222222', overflow: 'hidden' }}>
-            <div style={{ padding: '24px', borderBottom: '1px solid #222222', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1A1A1A' }}>
-              <h2 style={{ color: '#FFFFFF', margin: 0, fontSize: '20px' }}>{currentItem.id ? 'Editar Ítem' : 'Nuevo Ítem'}</h2>
-              <button onClick={() => setIsItemModalOpen(false)} style={{ background: 'none', border: 'none', color: '#BDBDBD', cursor: 'pointer' }}><X size={24} /></button>
-            </div>
-            <form onSubmit={handleSaveItem} style={{ padding: '24px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-                <div style={{ gridColumn: 'span 2' }}>
-                  <label style={{ color: '#BDBDBD', display: 'block', marginBottom: '8px', fontSize: '14px' }}>Nombre</label>
-                  <input required type="text" value={currentItem.name} onChange={e => setCurrentItem({...currentItem, name: e.target.value})} style={{ width: '100%', backgroundColor: '#1A1A1A', border: '1px solid #333', padding: '12px', borderRadius: '10px', color: '#FFF', outline: 'none' }} />
-                </div>
-                <div>
-                  <label style={{ color: '#BDBDBD', display: 'block', marginBottom: '8px', fontSize: '14px' }}>Categoría</label>
-                  <input 
-                    type="text" 
-                    list="inventory-category-options"
-                    value={currentItem.category} 
-                    onChange={e => setCurrentItem({...currentItem, category: e.target.value})} 
-                    placeholder="Selecciona o escribe una nueva..."
-                    style={{ width: '100%', backgroundColor: '#1A1A1A', border: '1px solid #333', padding: '12px', borderRadius: '10px', color: '#FFF', outline: 'none' }} 
-                  />
-                  <datalist id="inventory-category-options">
-                    <option value="Carnes" />
-                    <option value="Panadería" />
-                    <option value="Lácteos" />
-                    <option value="Verduras" />
-                    <option value="Salsas" />
-                    <option value="Bebidas" />
-                    <option value="Empaques" />
-                    <option value="Limpieza" />
-                    {Array.from(new Set(items.map(i => i.category))).filter(c => !['Carnes','Panadería','Lácteos','Verduras','Salsas','Bebidas','Empaques','Limpieza'].includes(c)).map(cat => (
-                      <option key={cat} value={cat} />
-                    ))}
-                  </datalist>
-                </div>
-                <div>
-                  <label style={{ color: '#BDBDBD', display: 'block', marginBottom: '8px', fontSize: '14px' }}>SKU (automático)</label>
-                  <input type="text" value={currentItem.sku || 'Se genera al guardar'} readOnly style={{ width: '100%', boxSizing: 'border-box', backgroundColor: '#141414', border: '1px solid #333', padding: '12px', borderRadius: '10px', color: '#888', outline: 'none' }} />
-                </div>
-                <div>
-                  <label style={{ color: '#BDBDBD', display: 'block', marginBottom: '8px', fontSize: '14px' }}>Unidad de compra</label>
-                  <select value={currentItem.purchase_unit || currentItem.unit} onChange={e => setCurrentItem({...currentItem, purchase_unit: e.target.value})} style={{ width: '100%', backgroundColor: '#1A1A1A', border: '1px solid #333', padding: '12px', borderRadius: '10px', color: '#FFF', outline: 'none' }}>
-                    <option value="Kg">Kg</option>
-                    <option value="Gramos">Gramos</option>
-                    <option value="Litros">Litros</option>
-                    <option value="Mililitros">Mililitros</option>
-                    <option value="Unidades">Unidades</option>
-                    <option value="Paquetes">Paquetes</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={{ color: '#BDBDBD', display: 'block', marginBottom: '8px', fontSize: '14px' }}>Unidad base de consumo</label>
-                  <select value={currentItem.consumption_unit || currentItem.unit} onChange={e => setCurrentItem({...currentItem, consumption_unit: e.target.value, unit: e.target.value})} style={{ width: '100%', backgroundColor: '#1A1A1A', border: '1px solid #333', padding: '12px', borderRadius: '10px', color: '#FFF', outline: 'none' }}>
-                    <option value="Gramos">Gramos</option><option value="Mililitros">Mililitros</option><option value="Unidades">Unidades</option><option value="Porciones">Porciones</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={{ color: '#BDBDBD', display: 'block', marginBottom: '8px', fontSize: '14px' }}>Conversión estándar</label>
-                  <input type="number" min="0.0001" step="0.0001" value={currentItem.conversion_factor || 1} onChange={e => setCurrentItem({...currentItem, conversion_factor: parseFloat(e.target.value) || 1})} style={{ width: '100%', boxSizing: 'border-box', backgroundColor: '#1A1A1A', border: '1px solid #333', padding: '12px', borderRadius: '10px', color: '#FFF', outline: 'none' }} />
-                </div>
-                <div>
-                  <label style={{ color: '#BDBDBD', display: 'block', marginBottom: '8px', fontSize: '14px' }}>Stock Mínimo</label>
-                  <input type="number" value={currentItem.min_stock} onChange={e => setCurrentItem({...currentItem, min_stock: parseFloat(e.target.value) || 0})} style={{ width: '100%', backgroundColor: '#1A1A1A', border: '1px solid #333', padding: '12px', borderRadius: '10px', color: '#FFF', outline: 'none' }} />
-                </div>
-                <div>
-                  <label style={{ color: '#BDBDBD', display: 'block', marginBottom: '8px', fontSize: '14px' }}>Stock Máximo</label>
-                  <input type="number" value={currentItem.max_stock || ''} onChange={e => setCurrentItem({...currentItem, max_stock: e.target.value})} style={{ width: '100%', boxSizing: 'border-box', backgroundColor: '#1A1A1A', border: '1px solid #333', padding: '12px', borderRadius: '10px', color: '#FFF', outline: 'none' }} />
-                </div>
-                <div style={{ gridColumn: 'span 2' }}>
-                  <label style={{ color: '#BDBDBD', display: 'block', marginBottom: '8px', fontSize: '14px' }}>URL de Imagen</label>
-                  <input type="text" placeholder="https://..." value={currentItem.image} onChange={e => setCurrentItem({...currentItem, image: e.target.value})} style={{ width: '100%', backgroundColor: '#1A1A1A', border: '1px solid #333', padding: '12px', borderRadius: '10px', color: '#FFF', outline: 'none' }} />
-                </div>
-              </div>
-              <button type="submit" style={{ width: '100%', padding: '14px', backgroundColor: '#D4A017', color: '#000', border: 'none', borderRadius: '12px', fontWeight: '700', fontSize: '15px', cursor: 'pointer', marginTop: '8px' }}>
-                Guardar Ítem
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Movimiento Rápido */}
-      {isMoveModalOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-          <div style={{ backgroundColor: '#111111', width: '400px', borderRadius: '20px', border: '1px solid #222222', overflow: 'hidden' }}>
-            <div style={{ padding: '24px', borderBottom: '1px solid #222222', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: currentMove.movement_type === 'IN' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)' }}>
-              <h2 style={{ color: currentMove.movement_type === 'IN' ? '#4ADE80' : '#EF4444', margin: 0, fontSize: '20px' }}>
-                {currentMove.movement_type === 'IN' ? 'Entrada Rápida' : 'Salida de Inventario'}
-              </h2>
-              <button onClick={() => setIsMoveModalOpen(false)} style={{ background: 'none', border: 'none', color: '#BDBDBD', cursor: 'pointer' }}><X size={24} /></button>
-            </div>
-            <form onSubmit={handleSaveMovement} style={{ padding: '24px' }}>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ color: '#BDBDBD', display: 'block', marginBottom: '8px', fontSize: '14px' }}>Cantidad</label>
-                <input required type="number" step="0.01" value={currentMove.quantity} onChange={e => setCurrentMove({...currentMove, quantity: parseFloat(e.target.value) || 0})} style={{ width: '100%', backgroundColor: '#1A1A1A', border: '1px solid #333', padding: '16px', borderRadius: '10px', color: '#FFF', outline: 'none', fontSize: '20px', fontWeight: 'bold' }} />
-              </div>
-              <div style={{ marginBottom: '24px' }}>
-                <label style={{ color: '#BDBDBD', display: 'block', marginBottom: '8px', fontSize: '14px' }}>Notas / Motivo (Opcional)</label>
-                <input type="text" value={currentMove.notes} onChange={e => setCurrentMove({...currentMove, notes: e.target.value})} style={{ width: '100%', backgroundColor: '#1A1A1A', border: '1px solid #333', padding: '12px', borderRadius: '10px', color: '#FFF', outline: 'none' }} />
-              </div>
-              <button type="submit" style={{ width: '100%', padding: '14px', backgroundColor: currentMove.movement_type === 'IN' ? '#22C55E' : '#EF4444', color: '#FFF', border: 'none', borderRadius: '12px', fontWeight: '700', fontSize: '15px', cursor: 'pointer' }}>
-                Confirmar {currentMove.movement_type === 'IN' ? 'Entrada' : 'Salida'}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Registrar Compra Global */}
-      {isPurchaseModalOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-          <div style={{ backgroundColor: '#111111', width: '900px', maxHeight: '90vh', borderRadius: '20px', border: '1px solid #222222', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '24px', borderBottom: '1px solid #222222', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1A1A1A' }}>
-              <h2 style={{ color: '#D4A017', margin: 0, fontSize: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}><Receipt size={24} /> Registrar Nueva Compra (Factura)</h2>
-              <button onClick={() => setIsPurchaseModalOpen(false)} style={{ background: 'none', border: 'none', color: '#BDBDBD', cursor: 'pointer' }}><X size={24} /></button>
-            </div>
-            
-            <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-              {/* Buscador de ítems (Izquierda) */}
-              <div style={{ width: '350px', borderRight: '1px solid #222222', display: 'flex', flexDirection: 'column', backgroundColor: '#181818' }}>
-                <div style={{ padding: '16px' }}>
-                  <div style={{ position: 'relative' }}>
-                    <Search size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: '#6B7280' }} />
-                    <input 
-                      type="text" placeholder="Buscar insumo..." value={purchaseItemSearch} onChange={e => setPurchaseItemSearch(e.target.value)}
-                      style={{ width: '100%', backgroundColor: '#111', border: '1px solid #333', padding: '10px 10px 10px 36px', borderRadius: '8px', color: '#FFF', outline: 'none' }} 
-                    />
-                  </div>
-                </div>
-                <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px 16px 16px' }}>
-                  {items.filter(i => i.name.toLowerCase().includes(purchaseItemSearch.toLowerCase())).map(item => (
-                    <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', backgroundColor: '#111', borderRadius: '8px', marginBottom: '8px', border: '1px solid #222' }}>
-                      <div>
-                        <div style={{ color: '#FFF', fontWeight: '600', fontSize: '13px' }}>{item.name}</div>
-                        <div style={{ color: '#888', fontSize: '12px' }}>Actual: {item.stock} {item.unit}</div>
-                      </div>
-                      <button 
-                        onClick={() => {
-                          if (!newPurchase.items.find(i => i.inventory_id === item.id)) {
-                            setNewPurchase({
-                              ...newPurchase, 
-                              items: [...newPurchase.items, { inventory_id: item.id, name: item.name, unit: item.unit, quantity: 1, unit_cost: item.unit_cost, total_cost: item.unit_cost, iva_amount: 0 }]
-                            });
-                          }
-                        }}
-                        style={{ backgroundColor: '#D4A017', color: '#000', border: 'none', borderRadius: '6px', padding: '6px', cursor: 'pointer' }}
-                      >
-                        <Plus size={16} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Formulario Factura (Derecha) */}
-              <div style={{ flex: 1, padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '24px' }}>
-                  <div>
-                    <label style={{ color: '#BDBDBD', display: 'block', marginBottom: '8px', fontSize: '13px' }}>Fecha Compra</label>
-                    <input type="date" value={newPurchase.purchase_date} onChange={e => setNewPurchase({...newPurchase, purchase_date: e.target.value})} style={{ width: '100%', backgroundColor: '#1A1A1A', border: '1px solid #333', padding: '10px', borderRadius: '8px', color: '#FFF', outline: 'none' }} />
-                  </div>
-                  <div>
-                    <label style={{ color: '#BDBDBD', display: 'block', marginBottom: '8px', fontSize: '13px' }}>Proveedor</label>
-                    <input type="text" placeholder="Macro, D1..." value={newPurchase.supplier} onChange={e => setNewPurchase({...newPurchase, supplier: e.target.value})} style={{ width: '100%', backgroundColor: '#1A1A1A', border: '1px solid #333', padding: '10px', borderRadius: '8px', color: '#FFF', outline: 'none' }} />
-                  </div>
-                  <div>
-                    <label style={{ color: '#BDBDBD', display: 'block', marginBottom: '8px', fontSize: '13px' }}>Nº Factura (Opc.)</label>
-                    <input type="text" placeholder="FAC-1234" value={newPurchase.invoice_number} onChange={e => setNewPurchase({...newPurchase, invoice_number: e.target.value})} style={{ width: '100%', backgroundColor: '#1A1A1A', border: '1px solid #333', padding: '10px', borderRadius: '8px', color: '#FFF', outline: 'none' }} />
-                  </div>
-                </div>
-
-                <div style={{ flex: 1, backgroundColor: '#111', borderRadius: '12px', border: '1px solid #222', padding: '16px', marginBottom: '24px', overflowY: 'auto' }}>
-                  <div style={{ color: '#FFF', fontWeight: '600', marginBottom: '16px', borderBottom: '1px solid #222', paddingBottom: '8px' }}>Ítems en Factura</div>
-                  {newPurchase.items.length === 0 ? (
-                    <div style={{ color: '#666', textAlign: 'center', padding: '20px' }}>Agrega ítems desde la lista izquierda</div>
-                  ) : (
-                    newPurchase.items.map((item, idx) => (
-                      <div key={idx} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1.5fr auto', gap: '12px', alignItems: 'center', marginBottom: '12px', padding: '12px', backgroundColor: '#1A1A1A', borderRadius: '8px' }}>
-                        <div style={{ color: '#FFF', fontSize: '13px', fontWeight: '600' }}>{item.name}</div>
-                        <div>
-                          <label style={{ color: '#888', fontSize: '11px', display: 'block' }}>Cant. ({item.unit})</label>
-                          <input type="number" step="0.01" value={item.quantity} onChange={e => {
-                            const qty = parseFloat(e.target.value) || 0;
-                            const newItems = [...newPurchase.items];
-                            newItems[idx] = { ...item, quantity: qty, total_cost: Math.round(qty * item.unit_cost) };
-                            setNewPurchase({...newPurchase, items: newItems});
-                          }} style={{ width: '100%', backgroundColor: '#111', border: '1px solid #333', padding: '6px', borderRadius: '4px', color: '#FFF', boxSizing: 'border-box' }} />
-                        </div>
-                        <div>
-                          <label style={{ color: '#888', fontSize: '11px', display: 'block' }}>Rend. útil (opc.)</label>
-                          <input type="number" step="0.0001" value={item.usable_quantity || ''} onChange={e => {
-                            const newItems = [...newPurchase.items];
-                            newItems[idx] = { ...item, usable_quantity: e.target.value };
-                            setNewPurchase({...newPurchase, items: newItems});
-                          }} placeholder="Auto" style={{ width: '100%', backgroundColor: '#111', border: '1px solid #333', padding: '6px', borderRadius: '4px', color: '#FFF', boxSizing: 'border-box' }} />
-                        </div>
-                        <div>
-                          <label style={{ color: '#888', fontSize: '11px', display: 'block' }}>Costo Unit.</label>
-                          <input type="number" value={item.unit_cost} onChange={e => {
-                            const cost = parseInt(e.target.value) || 0;
-                            const newItems = [...newPurchase.items];
-                            newItems[idx] = { ...item, unit_cost: cost, total_cost: Math.round(item.quantity * cost) };
-                            setNewPurchase({...newPurchase, items: newItems});
-                          }} style={{ width: '100%', backgroundColor: '#111', border: '1px solid #333', padding: '6px', borderRadius: '4px', color: '#FFF', boxSizing: 'border-box' }} />
-                        </div>
-                        <div>
-                          <label style={{ color: '#888', fontSize: '11px', display: 'block' }}>IVA (%)</label>
-                          <input type="number" value={item.iva_amount || 0} onChange={e => {
-                            const iva = parseInt(e.target.value) || 0;
-                            const newItems = [...newPurchase.items];
-                            newItems[idx] = { ...item, iva_amount: iva };
-                            setNewPurchase({...newPurchase, items: newItems});
-                          }} style={{ width: '100%', backgroundColor: '#111', border: '1px solid #333', padding: '6px', borderRadius: '4px', color: '#FFF', boxSizing: 'border-box' }} />
-                        </div>
-                        <div style={{ color: '#D4A017', fontWeight: '700', fontSize: '14px', textAlign: 'right' }}>
-                          ${Math.round(((item.total_cost || 0) + ((item.total_cost || 0) * (item.iva_amount || 0) / 100))).toLocaleString()}
-                        </div>
-                        <button onClick={() => {
-                          const newItems = newPurchase.items.filter((_, i) => i !== idx);
-                          setNewPurchase({...newPurchase, items: newItems});
-                        }} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer' }}><Trash2 size={16} /></button>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1A1A1A', padding: '20px', borderRadius: '12px', border: '1px solid #333' }}>
-                  <div>
-                    <div style={{ color: '#BDBDBD', fontSize: '14px' }}>Total Factura (Subtotal + IVA)</div>
-                    <div style={{ color: '#FFF', fontSize: '28px', fontWeight: '800' }}>
-                      ${Math.round(newPurchase.items.reduce((s, i) => s + (i.total_cost || 0) + ((i.total_cost || 0) * (i.iva_amount || 0) / 100), 0)).toLocaleString()}
-                    </div>
-                  </div>
-                  <button onClick={handleSavePurchase} style={{ backgroundColor: '#D4A017', color: '#000', border: 'none', borderRadius: '12px', padding: '16px 32px', fontSize: '16px', fontWeight: '700', cursor: 'pointer' }}>
-                    Guardar Compra
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  return <div className="ds-page inventory-page"><header className="ds-page-header"><div><span className="ds-eyebrow">Catálogo vendible</span><h1 className="ds-page-title">Inventario de productos</h1><p className="ds-page-subtitle">Sin ingredientes ni recetas: cada existencia corresponde al producto que el cliente compra.</p></div><a className="ds-btn ds-btn-primary" href="/admin/productos"><Plus size={17} /> Crear producto</a></header>
+    {message.text && <div className={`ds-alert ds-alert-${message.type === 'error' ? 'danger' : 'success'}`}>{message.text}</div>}
+    <section className="inventory-kpis"><article className="ds-card"><Boxes /><div><strong>{stats.tracked}</strong><span>Productos controlados</span></div></article><article className="ds-card"><AlertTriangle /><div><strong>{stats.low}</strong><span>Stock bajo</span></div></article><article className="ds-card"><PackageX /><div><strong>{stats.out}</strong><span>Agotados</span></div></article><article className="ds-card"><PackageCheck /><div><strong>{products.length - stats.out}</strong><span>Disponibles en catálogo</span></div></article></section>
+    <section className="ds-card"><div className="inventory-toolbar"><div className="ds-search"><Search size={17} /><input placeholder="Buscar producto, categoría o código" value={query} onChange={(e) => setQuery(e.target.value)} /></div><div className="ds-filter-group"><button className={`ds-btn ds-btn-sm ${filter === 'all' ? 'ds-btn-primary' : 'ds-btn-secondary'}`} onClick={() => setFilter('all')}>Todos</button><button className={`ds-btn ds-btn-sm ${filter === 'low' ? 'ds-btn-primary' : 'ds-btn-secondary'}`} onClick={() => setFilter('low')}>Críticos</button><button className={`ds-btn ds-btn-sm ${filter === 'untracked' ? 'ds-btn-primary' : 'ds-btn-secondary'}`} onClick={() => setFilter('untracked')}>Sin control</button></div></div>
+      <div className="ds-table-container"><table className="ds-table"><thead><tr><th>Producto</th><th>Código</th><th>Existencias</th><th>Umbral</th><th>Estado</th><th>Acción</th></tr></thead><tbody>{filtered.map((product) => { const badge = stockBadge(product); return <tr key={product.id}><td><strong>{product.title}</strong><small>{product.category || 'General'} · costo ${Number(product.inventory_unit_cost || 0).toLocaleString('es-CO')}</small></td><td>{product.barcode || '—'}</td><td><strong>{product.track_stock ? `${Number(product.stock) || 0} ${product.inventory_unit || 'unidad'}` : 'No aplica'}</strong></td><td>{product.track_stock ? product.low_stock_threshold : '—'}</td><td><span className={`ds-badge ${badge[1]}`}>{badge[0]}</span></td><td><button className="ds-btn ds-btn-secondary ds-btn-sm" onClick={() => open(product)}><Edit3 size={15} /> Gestionar</button></td></tr>; })}</tbody></table></div>
+    </section>
+    {selected && <div className="ds-modal-overlay" onMouseDown={(e) => e.target === e.currentTarget && setSelected(undefined)}><div className="ds-modal ds-modal-lg inventory-modal"><div className="ds-modal-header"><div><h2 className="ds-modal-title">{selected.title}</h2><p className="ds-text-muted">Existencia actual: {selected.stock || 0} {selected.inventory_unit || 'unidad'}</p></div><button className="ds-icon-btn" onClick={() => setSelected(undefined)}><X /></button></div><div className="ds-modal-body inventory-modal-grid">
+      <section className="inventory-panel"><h3><Archive size={18} /> Configuración</h3><label className="ds-checkbox"><input type="checkbox" checked={settings.track_stock} onChange={(e) => setSettings({ ...settings, track_stock: e.target.checked })} /><span>Descontar stock al crear pedidos</span></label><div className="user-form-grid"><label className="ds-form-group"><span className="ds-form-label">Stock mínimo</span><input className="ds-input" type="number" min="0" value={settings.low_stock_threshold} onChange={(e) => setSettings({ ...settings, low_stock_threshold: e.target.value })} /></label><label className="ds-form-group"><span className="ds-form-label">Unidad</span><input className="ds-input" value={settings.inventory_unit} onChange={(e) => setSettings({ ...settings, inventory_unit: e.target.value })} /></label><label className="ds-form-group"><span className="ds-form-label">Costo unitario</span><input className="ds-input" type="number" min="0" value={settings.inventory_unit_cost} onChange={(e) => setSettings({ ...settings, inventory_unit_cost: e.target.value })} /></label></div><label className="ds-form-group"><span className="ds-form-label"><Barcode size={15} /> Código de barras</span><div className="inventory-barcode-row"><input className="ds-input" inputMode="numeric" value={settings.barcode} onChange={(e) => setSettings({ ...settings, barcode: e.target.value.replace(/\D/g, '') })} /><button className="ds-btn ds-btn-secondary" type="button" onClick={lookupBarcode} disabled={busy || settings.barcode.length < 8}>Consultar</button></div></label>{lookup && <div className="inventory-lookup"><strong>{lookup.title || 'Producto sin nombre'}</strong><span>{lookup.brand} {lookup.quantity}</span><small>Dato externo de referencia; el catálogo local sigue siendo la fuente oficial.</small></div>}<button className="ds-btn ds-btn-primary ds-w-full" onClick={saveSettings} disabled={busy}>Guardar configuración</button></section>
+      <section className="inventory-panel"><h3><ExternalLink size={18} /> Registrar movimiento</h3><label className="ds-form-group"><span className="ds-form-label">Tipo</span><select className="ds-select" value={movement.movement_type} onChange={(e) => setMovement({ ...movement, movement_type: e.target.value })}><option value="ENTRADA">Entrada</option><option value="SALIDA">Salida</option><option value="AJUSTE">Fijar cantidad exacta</option></select></label><label className="ds-form-group"><span className="ds-form-label">Cantidad</span><input className="ds-input" type="number" min="0" value={movement.quantity} onChange={(e) => setMovement({ ...movement, quantity: Number(e.target.value) })} /></label><label className="ds-form-group"><span className="ds-form-label">Motivo</span><textarea className="ds-textarea" rows="3" value={movement.reason} onChange={(e) => setMovement({ ...movement, reason: e.target.value })} placeholder="Compra, conteo físico, pérdida…" /></label><button className="ds-btn ds-btn-primary ds-w-full" onClick={registerMovement} disabled={busy}>Registrar movimiento</button></section>
+    </div></div></div>}
+  </div>;
 }

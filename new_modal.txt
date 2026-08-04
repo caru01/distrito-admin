@@ -1,0 +1,278 @@
+﻿      {/* Modal Nuevo Pedido (POS) */}
+      {isNewOrderOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', zIndex: 1000 }}>
+          
+          <div style={{ display: 'flex', flex: 1, backgroundColor: '#0D0D0D', color: '#fff', fontFamily: "'Montserrat', sans-serif", overflow: 'hidden' }}>
+            {/* ── LEFT: Product catalog ── */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRight: '1px solid #1E1E1E' }}>
+
+              {/* Header with Title and Close Button */}
+              <div style={{ padding: '16px 24px', borderBottom: '1px solid #1E1E1E', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0 }}>
+                      {editingOrderId ? "Editar Pedido # + "" + " : 'Nuevo Pedido'}
+                    </h1>
+                    <Zap size={22} color="#D4A017" fill="#D4A017" />
+                  </div>
+                </div>
+                <button onClick={() => { setIsNewOrderOpen(false); setEditingOrderId(null); }} style={{ background: 'none', border: 'none', color: '#BDBDBD', cursor: 'pointer' }}><X size={24} /></button>
+              </div>
+
+              {/* Search + Category filters */}
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid #1E1E1E', flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                  <div style={{ position: 'relative', width: 220 }}>
+                    <Search size={13} style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: '#666' }} />
+                    <input
+                      value={posSearch}
+                      onChange={e => setPosSearch(e.target.value)}
+                      placeholder="Buscar...  Ctrl+K"
+                      style={{ width: '100%', backgroundColor: '#1A1A1A', border: '1px solid #2A2A2A', borderRadius: 8, padding: '6px 8px 6px 28px', color: '#fff', fontSize: 12, outline: 'none', boxSizing: 'border-box' }}
+                    />
+                    {posSearch && (
+                      <button onClick={() => setPosSearch('')} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#666', cursor: 'pointer', padding: 0 }}>
+                        <X size={13} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => setPosCategory('Todas')}
+                    style={{ padding: '6px 16px', borderRadius: 20, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 13, backgroundColor: posCategory === 'Todas' ? '#D4A017' : '#1A1A1A', color: posCategory === 'Todas' ? '#000' : '#aaa', transition: 'all 0.2s' }}
+                  >Todas</button>
+                  {[...new Set(products.map(p => p.category || 'General'))].map(cat => (
+                    <button
+                      key={cat}
+                      onClick={() => setPosCategory(cat)}
+                      style={{ padding: '5px 14px', borderRadius: 20, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 12, backgroundColor: posCategory === cat ? '#D4A017' : '#1A1A1A', color: posCategory === cat ? '#000' : '#aaa', transition: 'all 0.2s' }}
+                    >{cat}</button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Product Grid */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                  {products
+                    .filter(p => posCategory === 'Todas' || (p.category || 'General') === posCategory)
+                    .filter(p => p.title.toLowerCase().includes(posSearch.toLowerCase()))
+                    .map(p => {
+                      const inCart = newOrderCart.find(i => i.id === p.id);
+                      return (
+                        <div
+                          key={p.id}
+                          onClick={() => addToCart(p)}
+                          style={{
+                            backgroundColor: '#141414', borderRadius: 14, overflow: 'hidden',
+                            border: inCart ? '2px solid #D4A017' : '2px solid transparent',
+                            cursor: 'pointer', transition: 'all 0.2s', position: 'relative'
+                          }}
+                          onMouseEnter={e => { if (!inCart) e.currentTarget.style.borderColor = '#444'; }}
+                          onMouseLeave={e => { if (!inCart) e.currentTarget.style.borderColor = 'transparent'; }}
+                        >
+                          {inCart && (
+                            <div style={{ position: 'absolute', top: 8, right: 8, backgroundColor: '#D4A017', color: '#000', borderRadius: '50%', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 12, zIndex: 3, boxShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>
+                              {inCart.quantity}
+                            </div>
+                          )}
+                          {p.is_featured && (
+                            <div style={{ position: 'absolute', top: 8, left: 8, backgroundColor: '#10B981', color: '#fff', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700, zIndex: 3 }}>Popular</div>
+                          )}
+                          <div style={{ position: 'relative', width: '100%', height: 150, overflow: 'hidden' }}>
+                            {p.image ? (
+                              <>
+                                <img src={p.image} alt={p.title} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', transition: 'transform 0.3s ease' }}
+                                  onMouseEnter={e => e.target.style.transform = 'scale(1.05)'}
+                                  onMouseLeave={e => e.target.style.transform = 'scale(1)'}
+                                />
+                                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 50, background: 'linear-gradient(to top, rgba(20,20,20,0.9), transparent)' }} />
+                              </>
+                            ) : (
+                              <div style={{ width: '100%', height: '100%', backgroundColor: '#1E1E1E', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <Package size={36} color="#333" />
+                              </div>
+                            )}
+                          </div>
+                          <div style={{ padding: '10px 12px' }}>
+                            <p style={{ fontWeight: 700, fontSize: 13, margin: '0 0 6px', color: '#fff', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.title}</p>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <span style={{ color: '#D4A017', fontWeight: 800, fontSize: 14 }}>{formatter.format(p.price)}</span>
+                              <div style={{ width: 28, height: 28, backgroundColor: '#D4A017', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <Plus size={16} color="#000" />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* ── RIGHT: Order panel ── */}
+            <div style={{ width: 480, display: 'flex', flexDirection: 'column', backgroundColor: '#0D0D0D', overflow: 'hidden', flexShrink: 0 }}>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '16px 18px' }}>
+
+                {/* Cart header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontWeight: 800, fontSize: 16 }}>Pedido Actual</h3>
+                  </div>
+                  {newOrderCart.length > 0 && (
+                    <button onClick={() => setNewOrderCart([])} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, fontWeight: 600 }}>
+                      <Trash2 size={14} /> Vaciar
+                    </button>
+                  )}
+                </div>
+
+                {/* Cart items */}
+                {newOrderCart.length === 0 ? (
+                  <div style={{ textAlign: 'center', color: '#888', padding: '30px 0' }}>
+                    <ShoppingCart size={40} color="#333" style={{ marginBottom: 10 }} />
+                    <p style={{ fontSize: 13, color: '#aaa' }}>Toca un producto para agregarlo</p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+                    {newOrderCart.map(item => (
+                      <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, backgroundColor: '#141414', borderRadius: 12, padding: '10px 12px' }}>
+                        {item.image ? <img src={item.image} alt="" style={{ width: 40, height: 40, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} /> : <div style={{ width: 40, height: 40, borderRadius: 8, backgroundColor: '#1E1E1E', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Package size={18} color="#333" /></div>}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ margin: 0, fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.title}</p>
+                          <p style={{ margin: 0, color: '#D4A017', fontSize: 13, fontWeight: 600 }}>{formatter.format(item.price)}</p>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                          <button onClick={() => updateCartQty(item.id, -1)} style={{ width: 26, height: 26, borderRadius: '50%', border: '1px solid #333', background: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Minus size={12} /></button>
+                          <span style={{ fontWeight: 700, minWidth: 18, textAlign: 'center', fontSize: 14 }}>{item.quantity}</span>
+                          <button onClick={() => updateCartQty(item.id, 1)} style={{ width: 26, height: 26, borderRadius: '50%', border: '1px solid #333', background: '#D4A017', color: '#000', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Plus size={12} /></button>
+                          <button onClick={() => setNewOrderCart(c => c.filter(i => i.id !== item.id))} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', padding: 2 }}><X size={14} /></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Totals */}
+                {newOrderCart.length > 0 && (
+                  <div style={{ backgroundColor: '#141414', borderRadius: 12, padding: '12px 14px', marginBottom: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#aaa', marginBottom: 6 }}>
+                      <span>Subtotal</span><span style={{ color: '#fff' }}>{formatter.format(newOrderCart.reduce((s, i) => s + (i.price || 0) * i.quantity, 0))}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#aaa', marginBottom: 8 }}>
+                      <span>Domicilio</span><span style={{ color: '#fff' }}>{newOrderCustomer.deliveryType === 'domicilio' ? formatter.format(DELIVERY_COST) : ''}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 16 }}>
+                      <span>Total</span><span style={{ color: '#D4A017' }}>{formatter.format(newOrderCart.reduce((s, i) => s + (i.price || 0) * i.quantity, 0) + (newOrderCustomer.deliveryType === 'domicilio' ? DELIVERY_COST : 0))}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Customer data */}
+                <div style={{ marginBottom: 14 }}>
+                  <p style={{ fontWeight: 700, fontSize: 14, marginBottom: 10, color: '#ddd' }}>Datos del Cliente</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                    <div style={{ position: 'relative' }}>
+                      <User size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#555' }} />
+                      <input
+                        placeholder="Nombre"
+                        value={newOrderCustomer.name}
+                        onChange={e => setNewOrderCustomer(c => ({ ...c, name: e.target.value }))}
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div style={{ position: 'relative' }}>
+                      <Phone size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#555' }} />
+                      <input
+                        placeholder="Teléfono"
+                        value={newOrderCustomer.phone}
+                        onChange={e => setNewOrderCustomer(c => ({ ...c, phone: e.target.value }))}
+                        style={inputStyle}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ position: 'relative', marginBottom: 10 }}>
+                    <MapPin size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#555' }} />
+                    <input
+                      placeholder="Dirección"
+                      value={newOrderCustomer.address}
+                      onChange={e => setNewOrderCustomer(c => ({ ...c, address: e.target.value }))}
+                      style={{ ...inputStyle, paddingLeft: 32 }}
+                    />
+                  </div>
+                  <div style={{ position: 'relative', marginBottom: 10 }}>
+                    <input
+                      placeholder="Barrio"
+                      value={newOrderCustomer.barrio}
+                      onChange={e => setNewOrderCustomer(c => ({ ...c, barrio: e.target.value }))}
+                      style={{ ...inputStyle, paddingLeft: 14 }}
+                    />
+                  </div>
+                  <textarea
+                    placeholder="Observaciones / Notas"
+                    value={newOrderCustomer.notes}
+                    onChange={e => setNewOrderCustomer(c => ({ ...c, notes: e.target.value }))}
+                    rows={2}
+                    style={{ width: '100%', backgroundColor: '#1A1A1A', border: '1px solid #2A2A2A', borderRadius: 10, padding: '10px 14px', color: '#fff', fontSize: 13, outline: 'none', resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
+                  />
+                </div>
+
+                {/* Delivery type */}
+                <div style={{ marginBottom: 14 }}>
+                  <p style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: '#ddd' }}>Tipo de Entrega</p>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {[{ key: 'domicilio', label: 'Domicilio' }, { key: 'presencial', label: 'Mostrador' }].map(d => (
+                      <button key={d.key} onClick={() => setNewOrderCustomer(c => ({ ...c, deliveryType: d.key }))}
+                        style={{ flex: 1, padding: '8px 0', borderRadius: 10, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 13, backgroundColor: newOrderCustomer.deliveryType === d.key ? '#D4A017' : '#1A1A1A', color: newOrderCustomer.deliveryType === d.key ? '#000' : '#aaa', transition: 'all 0.2s' }}
+                      >{d.label}</button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Source */}
+                <div style={{ marginBottom: 14 }}>
+                  <p style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: '#ddd' }}>Origen del Pedido</p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {SOURCE_OPTIONS.map(s => (
+                      <button key={s.key} onClick={() => setNewOrderCustomer(c => ({ ...c, source: s.key }))}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 20, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 13, backgroundColor: newOrderCustomer.source === s.key ? s.color : '#1A1A1A', color: newOrderCustomer.source === s.key ? '#fff' : '#aaa', transition: 'all 0.2s' }}
+                      >{s.icon} {s.label}</button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Payment */}
+                <div style={{ marginBottom: 16 }}>
+                  <p style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: '#ddd' }}>Método de Pago</p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {PAYMENT_OPTIONS.map(pay => (
+                      <button key={pay.key} onClick={() => setNewOrderCustomer(c => ({ ...c, paymentMethod: pay.key }))}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 20, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 13, backgroundColor: newOrderCustomer.paymentMethod === pay.key ? pay.color : '#1A1A1A', color: newOrderCustomer.paymentMethod === pay.key ? '#fff' : '#aaa', transition: 'all 0.2s' }}
+                      >{pay.icon} {pay.label}</button>
+                    ))}
+                  </div>
+                  {newOrderCustomer.paymentMethod === 'transferencia' && (
+                    <div style={{ marginTop: '10px' }}>
+                      <input type="text" placeholder="Referencia de comprobante" value={newOrderCustomer.voucher_reference || ''} onChange={e => setNewOrderCustomer(c => ({...c, voucher_reference: e.target.value}))} style={inputStyle} />
+                    </div>
+                  )}
+                </div>
+
+              </div>
+
+              {/* Action buttons */}
+              <div style={{ padding: '12px 18px', borderTop: '1px solid #1E1E1E', flexShrink: 0 }}>
+                <button
+                  onClick={handleCreateOrder}
+                  disabled={newOrderCart.length === 0}
+                  style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', backgroundColor: newOrderCart.length === 0 ? '#333' : '#D4A017', color: newOrderCart.length === 0 ? '#666' : '#000', fontWeight: 800, fontSize: 15, cursor: newOrderCart.length === 0 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, transition: 'all 0.2s' }}
+                >
+                  <CheckCircle size={18} />
+                  {editingOrderId ? 'Guardar Cambios' : 'Confirmar Orden'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      )}

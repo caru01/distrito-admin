@@ -131,100 +131,150 @@ export default function AdminRendimientos() {
     ? (formData.costo_compra / rendimientoTotalCalculado).toFixed(2)
     : 0;
 
-  if (loading) return <div style={{ color: '#FFF', padding: '40px' }}>Cargando módulo de rendimientos...</div>;
+  if (loading) return (
+    <div className="ds-loader-container">
+      <div className="ds-loader"></div>
+      <p>Cargando módulo de rendimientos...</p>
+    </div>
+  );
 
   return (
-    <div style={{ backgroundColor: '#0D0D0D', minHeight: '100vh', padding: '40px', fontFamily: 'Montserrat, sans-serif' }}>
+    <div className="ds-page">
       
       {/* Encabezado */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '32px' }}>
+      <div className="ds-page-header">
         <div>
-          <div style={{ color: '#BDBDBD', fontSize: '13px', marginBottom: '8px' }}>
-            Dashboard &gt; <span style={{ color: '#FFF' }}>Rendimientos</span>
-          </div>
-          <h1 style={{ color: '#FFF', fontSize: '36px', fontWeight: '800', margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <h1 className="ds-page-title" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <Scale size={32} color="#D4A017" />
             Rendimientos
           </h1>
-          <p style={{ color: '#BDBDBD', margin: 0, fontSize: '14px', maxWidth: '600px' }}>
+          <p className="ds-page-subtitle">
             Configura cómo se consume cada ingrediente comprado para calcular automáticamente los costos de producción y descontar el inventario.
           </p>
         </div>
-        <button 
-          onClick={() => {
-            setFormData({
-              ingrediente_id: '', ingrediente_name: '', unidad_compra: 'Kilogramos', 
-              cantidad_comprada: '', costo_compra: '', unidad_consumo: 'Gramos', rendimiento_obtenido: ''
-            });
-            setIsModalOpen(true);
-          }}
-          style={{ display: 'flex', alignItems: 'center', backgroundColor: '#D4A017', color: '#000', border: 'none', padding: '12px 24px', borderRadius: '8px', fontSize: '15px', fontWeight: '700', gap: '8px', cursor: 'pointer' }}
-        >
-          <Plus size={20} />
-          Nuevo Rendimiento
-        </button>
+        <div className="ds-page-actions">
+          <button 
+            onClick={() => {
+              setFormData({
+                ingrediente_id: '', ingrediente_name: '', unidad_compra: 'Kilogramos', 
+                cantidad_comprada: '', costo_compra: '', unidad_consumo: 'Gramos', rendimiento_obtenido: ''
+              });
+              setIsModalOpen(true);
+            }}
+            className="ds-btn ds-btn-primary"
+          >
+            <Plus size={20} />
+            Nuevo Rendimiento
+          </button>
+        </div>
       </div>
 
       {/* Tabla Principal */}
-      <div style={{ backgroundColor: '#111', borderRadius: '16px', border: '1px solid #222', overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', color: '#FFF' }}>
-          <thead>
-            <tr style={{ backgroundColor: '#1A1A1A', borderBottom: '1px solid #222' }}>
-              <th style={{ padding: '16px', fontSize: '14px', fontWeight: '600', color: '#BDBDBD' }}>Ingrediente</th>
-              <th style={{ padding: '16px', fontSize: '14px', fontWeight: '600', color: '#BDBDBD' }}>Compra</th>
-              <th style={{ padding: '16px', fontSize: '14px', fontWeight: '600', color: '#BDBDBD' }}>Rendimiento</th>
-              <th style={{ padding: '16px', fontSize: '14px', fontWeight: '600', color: '#BDBDBD' }}>Costo Unidad</th>
-              <th style={{ padding: '16px', fontSize: '14px', fontWeight: '600', color: '#BDBDBD' }}>Estado</th>
-              <th style={{ padding: '16px', fontSize: '14px', fontWeight: '600', color: '#BDBDBD', textAlign: 'right' }}>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rendimientos.map(r => (
-              <tr key={r.id} style={{ borderBottom: '1px solid #222' }}>
-                <td style={{ padding: '16px', fontWeight: '600' }}>{r.ingrediente_name}</td>
-                <td style={{ padding: '16px', color: '#BDBDBD', fontSize: '14px' }}>
+      <div className="ds-card">
+        <div className="ds-table-container hide-on-mobile">
+          <table className="ds-table">
+            <thead>
+              <tr>
+                <th>Ingrediente</th>
+                <th>Compra</th>
+                <th>Rendimiento</th>
+                <th>Costo Unidad</th>
+                <th>Estado</th>
+                <th style={{ textAlign: 'right' }}>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rendimientos.map(r => (
+                <tr key={r.id}>
+                  <td style={{ fontWeight: '600' }}>{r.ingrediente_name}</td>
+                  <td>
+                    {r.cantidad_comprada} {r.unidad_compra}
+                    <div style={{ fontSize: '12px', color: '#666' }}>${Number(r.costo_compra).toLocaleString()}</div>
+                  </td>
+                  <td>
+                    {r.rendimiento_obtenido} {r.unidad_consumo}
+                  </td>
+                  <td style={{ color: '#D4A017', fontWeight: '700' }}>
+                    ${Number(r.costo_por_unidad).toLocaleString()} <span style={{color: '#666', fontWeight: '500', fontSize: '12px'}}>/ {r.unidad_consumo.toLowerCase()}</span>
+                  </td>
+                  <td>
+                    <span className={`ds-badge ${r.estado === 'Activo' ? 'ds-badge-success' : 'ds-badge-danger'}`}>
+                      {r.estado}
+                    </span>
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    <button className="ds-btn-icon ds-btn-ghost"><Edit2 size={16} /></button>
+                    <button onClick={() => handleDelete(r.id)} className="ds-btn-icon ds-btn-ghost ds-btn-danger"><Trash2 size={16} /></button>
+                  </td>
+                </tr>
+              ))}
+              {rendimientos.length === 0 && (
+                <tr>
+                  <td colSpan="6" className="ds-empty-state">No hay rendimientos configurados. Presiona "Nuevo Rendimiento".</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile table cards view */}
+        <div className="ds-table-cards show-on-mobile">
+          {rendimientos.map(r => (
+            <div key={r.id} className="ds-table-card">
+              <div className="ds-table-card-row">
+                <span className="ds-table-card-label">Ingrediente</span>
+                <span className="ds-table-card-value" style={{ fontWeight: '600' }}>{r.ingrediente_name}</span>
+              </div>
+              <div className="ds-table-card-row">
+                <span className="ds-table-card-label">Compra</span>
+                <span className="ds-table-card-value">
                   {r.cantidad_comprada} {r.unidad_compra}
-                  <div style={{ fontSize: '12px', color: '#666' }}>${Number(r.costo_compra).toLocaleString()}</div>
-                </td>
-                <td style={{ padding: '16px', color: '#BDBDBD', fontSize: '14px' }}>
-                  {r.rendimiento_obtenido} {r.unidad_consumo}
-                </td>
-                <td style={{ padding: '16px', color: '#D4A017', fontWeight: '700' }}>
+                  <span style={{ display: 'block', fontSize: '12px', color: '#666' }}>${Number(r.costo_compra).toLocaleString()}</span>
+                </span>
+              </div>
+              <div className="ds-table-card-row">
+                <span className="ds-table-card-label">Rendimiento</span>
+                <span className="ds-table-card-value">{r.rendimiento_obtenido} {r.unidad_consumo}</span>
+              </div>
+              <div className="ds-table-card-row">
+                <span className="ds-table-card-label">Costo Unidad</span>
+                <span className="ds-table-card-value" style={{ color: '#D4A017', fontWeight: '700' }}>
                   ${Number(r.costo_por_unidad).toLocaleString()} <span style={{color: '#666', fontWeight: '500', fontSize: '12px'}}>/ {r.unidad_consumo.toLowerCase()}</span>
-                </td>
-                <td style={{ padding: '16px' }}>
-                  <span style={{ backgroundColor: r.estado === 'Activo' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.2)', color: r.estado === 'Activo' ? '#22C55E' : '#EF4444', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '600' }}>
+                </span>
+              </div>
+              <div className="ds-table-card-row">
+                <span className="ds-table-card-label">Estado</span>
+                <span className="ds-table-card-value">
+                  <span className={`ds-badge ${r.estado === 'Activo' ? 'ds-badge-success' : 'ds-badge-danger'}`}>
                     {r.estado}
                   </span>
-                </td>
-                <td style={{ padding: '16px', textAlign: 'right' }}>
-                  <button style={{ background: 'transparent', border: 'none', color: '#BDBDBD', cursor: 'pointer', padding: '4px 8px' }}><Edit2 size={16} /></button>
-                  <button onClick={() => handleDelete(r.id)} style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '4px 8px' }}><Trash2 size={16} /></button>
-                </td>
-              </tr>
-            ))}
-            {rendimientos.length === 0 && (
-              <tr>
-                <td colSpan="6" style={{ padding: '40px', textAlign: 'center', color: '#666' }}>No hay rendimientos configurados. Presiona "Nuevo Rendimiento".</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                </span>
+              </div>
+              <div className="ds-table-card-actions">
+                <button className="ds-btn ds-btn-secondary ds-btn-sm"><Edit2 size={16} /> Editar</button>
+                <button onClick={() => handleDelete(r.id)} className="ds-btn ds-btn-danger ds-btn-sm"><Trash2 size={16} /> Eliminar</button>
+              </div>
+            </div>
+          ))}
+          {rendimientos.length === 0 && (
+            <div className="ds-empty-state">No hay rendimientos configurados. Presiona "Nuevo Rendimiento".</div>
+          )}
+        </div>
       </div>
 
       {/* Modal Nuevo Rendimiento */}
       {isModalOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-          <div style={{ backgroundColor: '#111', border: '1px solid #333', borderRadius: '16px', width: '100%', maxWidth: '800px', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '24px', borderBottom: '1px solid #222' }}>
-              <h2 style={{ margin: 0, color: '#FFF', fontSize: '24px', fontWeight: '800' }}>Nuevo Rendimiento</h2>
+        <div className="ds-modal-overlay">
+          <div className="ds-modal ds-modal-lg">
+            <div className="ds-modal-header">
+              <h2 className="ds-modal-title">Nuevo Rendimiento</h2>
             </div>
             
-            <form onSubmit={handleSubmit} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <form onSubmit={handleSubmit} className="ds-modal-body ds-form">
               
               {/* Sección Ingrediente */}
-              <div>
-                <label style={{ display: 'block', color: '#FFF', marginBottom: '8px', fontWeight: '600' }}>Seleccionar Ingrediente</label>
+              <div className="ds-form-group">
+                <label className="ds-form-label">Seleccionar Ingrediente</label>
                 {!showNewIngredientInput ? (
                   <div style={{ display: 'flex', gap: '12px' }}>
                     <select 
@@ -234,12 +284,13 @@ export default function AdminRendimientos() {
                         setFormData({...formData, ingrediente_id: e.target.value, ingrediente_name: ing ? ing.name : ''});
                       }}
                       required
-                      style={{ flex: 1, backgroundColor: '#1A1A1A', border: '1px solid #333', color: '#FFF', padding: '12px', borderRadius: '8px', fontSize: '15px' }}
+                      className="ds-select"
+                      style={{ flex: 1 }}
                     >
                       <option value="">-- Selecciona del Inventario --</option>
                       {inventory.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
                     </select>
-                    <button type="button" onClick={() => setShowNewIngredientInput(true)} style={{ backgroundColor: '#333', color: '#FFF', border: 'none', padding: '0 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>Nuevo</button>
+                    <button type="button" onClick={() => setShowNewIngredientInput(true)} className="ds-btn ds-btn-secondary">Nuevo</button>
                   </div>
                 ) : (
                   <div style={{ display: 'flex', gap: '12px' }}>
@@ -248,80 +299,81 @@ export default function AdminRendimientos() {
                       value={newIngredientName}
                       onChange={(e) => setNewIngredientName(e.target.value)}
                       placeholder="Nombre del nuevo ingrediente..."
-                      style={{ flex: 1, backgroundColor: '#1A1A1A', border: '1px solid #333', color: '#FFF', padding: '12px', borderRadius: '8px', fontSize: '15px' }}
+                      className="ds-input"
+                      style={{ flex: 1 }}
                     />
-                    <button type="button" onClick={handleCreateIngredient} style={{ backgroundColor: '#D4A017', color: '#000', border: 'none', padding: '0 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: '700' }}>Crear</button>
-                    <button type="button" onClick={() => setShowNewIngredientInput(false)} style={{ backgroundColor: '#333', color: '#FFF', border: 'none', padding: '0 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>Cancelar</button>
+                    <button type="button" onClick={handleCreateIngredient} className="ds-btn ds-btn-primary">Crear</button>
+                    <button type="button" onClick={() => setShowNewIngredientInput(false)} className="ds-btn ds-btn-secondary">Cancelar</button>
                   </div>
                 )}
               </div>
 
               {/* Flex Grid 2 columnas */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+              <div className="ds-form-grid admin-rendimientos-grid">
                 
                 {/* Columna Izquierda: COMPRA */}
-                <div style={{ backgroundColor: '#1A1A1A', padding: '20px', borderRadius: '12px', border: '1px solid #333' }}>
+                <div className="admin-rendimientos-box">
                   <h3 style={{ margin: '0 0 16px 0', color: '#D4A017', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <ShoppingCart size={18} /> Datos de Compra
                   </h3>
                   
-                  <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
-                    <div style={{ flex: 1 }}>
-                      <label style={{ display: 'block', color: '#BDBDBD', fontSize: '13px', marginBottom: '4px' }}>Unidad de compra</label>
-                      <select value={formData.unidad_compra} onChange={e => setFormData({...formData, unidad_compra: e.target.value})} style={{ width: '100%', backgroundColor: '#0D0D0D', border: '1px solid #333', color: '#FFF', padding: '10px', borderRadius: '6px' }}>
+                  <div className="ds-form-grid" style={{ marginBottom: '16px' }}>
+                    <div className="ds-form-group">
+                      <label className="ds-form-label">Unidad de compra</label>
+                      <select value={formData.unidad_compra} onChange={e => setFormData({...formData, unidad_compra: e.target.value})} className="ds-select">
                         <option>Kilogramos</option><option>Gramos</option><option>Libras</option>
                         <option>Litros</option><option>Galón</option>
                         <option>Unidad</option><option>Caja</option><option>Bolsa</option>
                       </select>
                     </div>
-                    <div style={{ flex: 1 }}>
-                      <label style={{ display: 'block', color: '#BDBDBD', fontSize: '13px', marginBottom: '4px' }}>Cant. comprada</label>
-                      <input type="number" required value={formData.cantidad_comprada} onChange={e => setFormData({...formData, cantidad_comprada: e.target.value})} placeholder="Ej: 10" style={{ width: '100%', backgroundColor: '#0D0D0D', border: '1px solid #333', color: '#FFF', padding: '10px', borderRadius: '6px', boxSizing: 'border-box' }} />
+                    <div className="ds-form-group">
+                      <label className="ds-form-label">Cant. comprada</label>
+                      <input type="number" required value={formData.cantidad_comprada} onChange={e => setFormData({...formData, cantidad_comprada: e.target.value})} placeholder="Ej: 10" className="ds-input" />
                     </div>
                   </div>
                   
-                  <div>
-                    <label style={{ display: 'block', color: '#BDBDBD', fontSize: '13px', marginBottom: '4px' }}>Costo total de la compra ($)</label>
-                    <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#0D0D0D', border: '1px solid #333', borderRadius: '6px', padding: '0 10px' }}>
-                      <DollarSign size={16} color="#666" />
-                      <input type="number" required value={formData.costo_compra} onChange={e => setFormData({...formData, costo_compra: e.target.value})} placeholder="Ej: 380000" style={{ width: '100%', backgroundColor: 'transparent', border: 'none', color: '#FFF', padding: '10px', outline: 'none' }} />
+                  <div className="ds-form-group">
+                    <label className="ds-form-label">Costo total de la compra ($)</label>
+                    <div className="admin-rendimientos-input-group">
+                      <DollarSign size={16} color="#666" className="input-group-icon" />
+                      <input type="number" required value={formData.costo_compra} onChange={e => setFormData({...formData, costo_compra: e.target.value})} placeholder="Ej: 380000" className="ds-input" style={{ paddingLeft: '32px' }} />
                     </div>
                   </div>
                 </div>
 
                 {/* Columna Derecha: CONSUMO */}
-                <div style={{ backgroundColor: '#1A1A1A', padding: '20px', borderRadius: '12px', border: '1px solid #333' }}>
+                <div className="admin-rendimientos-box">
                   <h3 style={{ margin: '0 0 16px 0', color: '#22C55E', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Scale size={18} /> Datos de Consumo
                   </h3>
-                  <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
-                    <div style={{ flex: 1 }}>
-                      <label style={{ display: 'block', color: '#BDBDBD', fontSize: '13px', marginBottom: '4px' }}>Unidad de consumo</label>
-                      <select value={formData.unidad_consumo} onChange={e => setFormData({...formData, unidad_consumo: e.target.value})} style={{ width: '100%', backgroundColor: '#0D0D0D', border: '1px solid #333', color: '#FFF', padding: '10px', borderRadius: '6px' }}>
+                  <div className="ds-form-grid" style={{ marginBottom: '16px' }}>
+                    <div className="ds-form-group">
+                      <label className="ds-form-label">Unidad de consumo</label>
+                      <select value={formData.unidad_consumo} onChange={e => setFormData({...formData, unidad_consumo: e.target.value})} className="ds-select">
                         <option>Gramos</option><option>Mililitros</option><option>Unidad</option>
                         <option>Tajada</option><option>Torreja</option><option>Rebanada</option>
                         <option>Porción</option><option>Cucharada</option><option>Onza</option>
                       </select>
                     </div>
                     {!isStandard && (
-                      <div style={{ flex: 1 }}>
-                        <label style={{ display: 'block', color: '#BDBDBD', fontSize: '13px', marginBottom: '4px' }}>Conversión Manual</label>
-                        <input type="number" required value={formData.conversion_definida} onChange={e => setFormData({...formData, conversion_definida: e.target.value})} placeholder="Ej: 10" style={{ width: '100%', backgroundColor: '#0D0D0D', border: '1px solid #333', color: '#FFF', padding: '10px', borderRadius: '6px', boxSizing: 'border-box' }} />
+                      <div className="ds-form-group">
+                        <label className="ds-form-label">Conversión Manual</label>
+                        <input type="number" required value={formData.conversion_definida} onChange={e => setFormData({...formData, conversion_definida: e.target.value})} placeholder="Ej: 10" className="ds-input" />
                         <div style={{fontSize: '11px', color: '#888', marginTop: '4px'}}>1 {formData.unidad_compra} = X {formData.unidad_consumo}</div>
                       </div>
                     )}
                     {isStandard && (
-                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <div style={{ backgroundColor: '#22C55E20', color: '#22C55E', padding: '10px', borderRadius: '6px', fontSize: '12px', border: '1px solid #22C55E40', textAlign: 'center', width: '100%' }}>
+                      <div className="ds-form-group" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ backgroundColor: 'rgba(34,197,94,0.1)', color: '#22C55E', padding: '10px', borderRadius: '8px', fontSize: '12px', border: '1px solid rgba(34,197,94,0.3)', textAlign: 'center', width: '100%', marginTop: '24px' }}>
                           Conversión automática: 1 {formData.unidad_compra} = {standardFactor} {formData.unidad_consumo}
                         </div>
                       </div>
                     )}
                   </div>
 
-                  <div>
-                    <label style={{ display: 'block', color: '#BDBDBD', fontSize: '13px', marginBottom: '4px' }}>Costo por {formData.unidad_consumo.toLowerCase()} (Automático)</label>
-                    <div style={{ backgroundColor: '#0D0D0D', border: '1px solid #D4A017', borderRadius: '6px', padding: '10px', color: '#D4A017', fontWeight: '800', fontSize: '18px', textAlign: 'center' }}>
+                  <div className="ds-form-group">
+                    <label className="ds-form-label">Costo por {formData.unidad_consumo.toLowerCase()} (Automático)</label>
+                    <div style={{ backgroundColor: '#0D0D0D', border: '1px solid #D4A017', borderRadius: '8px', padding: '10px', color: '#D4A017', fontWeight: '800', fontSize: '18px', textAlign: 'center' }}>
                       ${calculatedCost}
                     </div>
                   </div>
@@ -330,38 +382,37 @@ export default function AdminRendimientos() {
               </div>
 
               {/* Vista Previa Lineal */}
-              <div style={{ backgroundColor: 'rgba(212, 160, 23, 0.05)', border: '1px dashed #D4A017', padding: '20px', borderRadius: '12px' }}>
+              <div className="admin-rendimientos-preview">
                 <h4 style={{ margin: '0 0 16px 0', color: '#D4A017', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px', textAlign: 'center' }}>Vista Previa</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', color: '#FFF' }}>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '12px', color: '#BDBDBD', marginBottom: '2px' }}>Compra registrada</div>
-                    <div style={{ fontWeight: '700', fontSize: '15px' }}>{formData.cantidad_comprada || 0} {formData.unidad_compra} {formData.ingrediente_name ? `de ${formData.ingrediente_name}` : ''}</div>
+                <div className="preview-steps">
+                  <div className="preview-step">
+                    <div className="step-label">Compra registrada</div>
+                    <div className="step-value">{formData.cantidad_comprada || 0} {formData.unidad_compra} {formData.ingrediente_name ? `de ${formData.ingrediente_name}` : ''}</div>
                   </div>
-                  <ArrowRight color="#D4A017" style={{ transform: 'rotate(90deg)' }} size={16} />
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '12px', color: '#BDBDBD', marginBottom: '2px' }}>Conversión automática</div>
-                    <div style={{ fontWeight: '700', fontSize: '15px' }}>{rendimientoTotalCalculado} {formData.unidad_consumo} disponibles</div>
+                  <ArrowRight color="#D4A017" className="step-arrow" size={16} />
+                  <div className="preview-step">
+                    <div className="step-label">Conversión automática</div>
+                    <div className="step-value">{rendimientoTotalCalculado} {formData.unidad_consumo} disponibles</div>
                   </div>
-                  <ArrowRight color="#D4A017" style={{ transform: 'rotate(90deg)' }} size={16} />
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '12px', color: '#BDBDBD', marginBottom: '2px' }}>Costo total</div>
-                    <div style={{ fontWeight: '700', fontSize: '15px' }}>${Number(formData.costo_compra || 0).toLocaleString()}</div>
+                  <ArrowRight color="#D4A017" className="step-arrow" size={16} />
+                  <div className="preview-step">
+                    <div className="step-label">Costo total</div>
+                    <div className="step-value">${Number(formData.costo_compra || 0).toLocaleString()}</div>
                   </div>
-                  <ArrowRight color="#D4A017" style={{ transform: 'rotate(90deg)' }} size={16} />
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '12px', color: '#BDBDBD', marginBottom: '2px' }}>Costo unitario</div>
-                    <div style={{ fontWeight: '800', color: '#22C55E', fontSize: '18px' }}>${calculatedCost}</div>
-                    <div style={{ fontSize: '12px', color: '#BDBDBD' }}>por {formData.unidad_consumo.toLowerCase()}</div>
+                  <ArrowRight color="#D4A017" className="step-arrow" size={16} />
+                  <div className="preview-step">
+                    <div className="step-label">Costo unitario</div>
+                    <div className="step-value" style={{ color: '#22C55E', fontSize: '18px' }}>${calculatedCost}</div>
+                    <div className="step-sublabel">por {formData.unidad_consumo.toLowerCase()}</div>
                   </div>
                 </div>
               </div>
 
-              {/* Botones */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '16px', marginTop: '12px' }}>
-                <button type="button" onClick={() => setIsModalOpen(false)} style={{ backgroundColor: 'transparent', color: '#BDBDBD', border: '1px solid #333', padding: '12px 24px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>
+              <div className="ds-modal-footer">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="ds-btn ds-btn-ghost">
                   Cancelar
                 </button>
-                <button type="submit" disabled={!formData.ingrediente_id} style={{ backgroundColor: '#D4A017', color: '#000', border: 'none', padding: '12px 24px', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', opacity: formData.ingrediente_id ? 1 : 0.5 }}>
+                <button type="submit" disabled={!formData.ingrediente_id} className="ds-btn ds-btn-primary">
                   Guardar Rendimiento
                 </button>
               </div>
@@ -371,6 +422,27 @@ export default function AdminRendimientos() {
         </div>
       )}
 
+      <style>{`
+        @media (max-width: 768px) {
+          .hide-on-mobile { display: none !important; }
+          .show-on-mobile { display: flex !important; flex-direction: column; gap: 16px; padding: 16px; }
+          .admin-rendimientos-grid { grid-template-columns: 1fr; }
+        }
+        @media (min-width: 769px) {
+          .show-on-mobile { display: none !important; }
+        }
+        .admin-rendimientos-box { background-color: #1A1A1A; padding: 20px; border-radius: 12px; border: 1px solid #333; }
+        .admin-rendimientos-input-group { position: relative; }
+        .admin-rendimientos-input-group .input-group-icon { position: absolute; left: 10px; top: 16px; pointer-events: none; }
+        
+        .admin-rendimientos-preview { background-color: rgba(212, 160, 23, 0.05); border: 1px dashed #D4A017; padding: 20px; border-radius: 12px; margin-top: 16px; }
+        .preview-steps { display: flex; flex-direction: column; align-items: center; gap: 8px; color: #FFF; }
+        .preview-step { text-align: center; }
+        .step-label { font-size: 12px; color: #BDBDBD; margin-bottom: 2px; }
+        .step-value { font-weight: 700; font-size: 15px; }
+        .step-sublabel { font-size: 12px; color: #BDBDBD; }
+        .step-arrow { transform: rotate(90deg); }
+      `}</style>
     </div>
   );
 }

@@ -1,145 +1,195 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useContext } from 'react';
 import { Outlet, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ShoppingBag, Package, List, Users, Archive, BarChart3, Settings, LogOut, Megaphone, Menu, X, Scale, ChefHat, DollarSign, FileSpreadsheet, Clock } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Package, List, Users, Archive, BarChart3, Settings, LogOut, Megaphone, Menu, X, DollarSign, FileSpreadsheet, Clock, Zap, MapPin } from 'lucide-react';
+import { API_URL } from '../config/api';
+import { AuthContext } from '../context/AuthContext';
 
 export default function AdminLayout() {
   const token = sessionStorage.getItem('distrito_admin_token');
   const location = useLocation();
   const navigate = useNavigate();
-  const timeoutRef = useRef(null);
+  const { hasPermission, logout: contextLogout, isAuthenticated, loading, settings } = useContext(AuthContext);
+  // Los hooks deben ejecutarse siempre en el mismo orden, incluso mientras se
+  // restaura una sesión guardada. Si quedan después de los retornos de carga o
+  // redirección, React detiene el render al pasar de "cargando" a autenticado.
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const mainContentRef = useRef(null);
 
-  const handleLogout = () => {
-    sessionStorage.removeItem('distrito_admin_token');
+  const handleLogout = async () => {
+    const token = sessionStorage.getItem('distrito_admin_token');
+    if (token) {
+      try {
+        await fetch(`${API_URL}/admin/logout`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+      } catch (err) {}
+    }
+    contextLogout();
     window.location.href = '/admin/login';
   };
 
-  const resetTimer = () => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => {
-      // Auto logout after 10 min (600000 ms)
-      handleLogout();
-    }, 600000);
-  };
+  useEffect(() => {
+    if (sessionStorage.getItem('must_change_password') === 'true' && location.pathname !== '/admin/perfil') {
+      navigate('/admin/perfil?force_password_change=true');
+    }
+  }, [location.pathname, navigate]);
 
   useEffect(() => {
-    if (!token) return;
-    
-    // Set up listeners for activity
-    window.addEventListener('mousemove', resetTimer);
-    window.addEventListener('keydown', resetTimer);
-    window.addEventListener('click', resetTimer);
-    window.addEventListener('scroll', resetTimer);
-    
-    // Init timer
-    resetTimer();
-    
-    return () => {
-      window.removeEventListener('mousemove', resetTimer);
-      window.removeEventListener('keydown', resetTimer);
-      window.removeEventListener('click', resetTimer);
-      window.removeEventListener('scroll', resetTimer);
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    };
-  }, [token]);
+    mainContentRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+    setIsMobileMenuOpen(false);
+  }, [location.pathname]);
 
-  if (!token) {
+  if (loading) {
+    return <div className="admin-route-loading">Verificando sesión…</div>;
+  }
+
+  if (!token || !isAuthenticated) {
     return <Navigate to="/admin/login" replace />;
   }
 
   const navItems = [
-    { name: 'Dashboard', path: '/admin', icon: <LayoutDashboard size={20} /> },
-    { name: 'Pedidos', path: '/admin/pedidos', icon: <ShoppingBag size={20} /> },
-    { name: 'Productos', path: '/admin/productos', icon: <Package size={20} /> },
-    { name: 'Categorías', path: '/admin/categorias', icon: <List size={20} /> },
-    { name: 'Clientes', path: '/admin/clientes', icon: <Users size={20} /> },
-    { name: 'Inventario', path: '/admin/inventario', icon: <Archive size={20} /> },
-    { name: 'Rendimientos', path: '/admin/rendimientos', icon: <Scale size={20} /> },
-    { name: 'Recetas', path: '/admin/recetas', icon: <ChefHat size={20} /> },
-    { name: 'Gastos', path: '/admin/gastos', icon: <DollarSign size={20} /> },
-    { name: 'Cierre Contable', path: '/admin/cierre-contable', icon: <FileSpreadsheet size={20} /> },
-    { name: 'Reportes', path: '/admin/reportes', icon: <BarChart3 size={20} /> },
-    { name: 'Anuncios', path: '/admin/anuncios', icon: <Megaphone size={20} /> },
-    { name: 'Configuración', path: '/admin/configuracion', icon: <Settings size={20} /> },
-    { name: 'Horarios', path: '/admin/horarios', icon: <Clock size={20} /> },
+    { name: 'Dashboard', path: '/admin', icon: <LayoutDashboard size={20} />, module: 'Dashboard' },
+    { name: 'Tomar Pedido', path: '/admin/tomar-pedido', icon: <Zap size={20} />, module: 'Pedidos' },
+    { name: 'Pedidos', path: '/admin/pedidos', icon: <ShoppingBag size={20} />, module: 'Pedidos' },
+    { name: 'Mapa de Domicilios', path: '/admin/mapa-domicilios', icon: <MapPin size={20} />, module: 'Domicilios' },
+    { name: 'Categorías', path: '/admin/categorias', icon: <List size={20} />, module: 'Categorias' },
+    { name: 'Productos', path: '/admin/productos', icon: <Package size={20} />, module: 'Productos' },
+    { name: 'Clientes', path: '/admin/clientes', icon: <Users size={20} />, module: 'Clientes' },
+    { name: 'Inventario', path: '/admin/inventario', icon: <Archive size={20} />, module: 'Inventario' },
+    { name: 'Gastos', path: '/admin/gastos', icon: <DollarSign size={20} />, module: 'Gastos' },
+    { name: 'Cierre Contable', path: '/admin/cierre-contable', icon: <FileSpreadsheet size={20} />, module: 'Cierre Contable' },
+    { name: 'Reportes', path: '/admin/reportes', icon: <BarChart3 size={20} />, module: 'Reportes' },
+    { name: 'Anuncios', path: '/admin/anuncios', icon: <Megaphone size={20} />, module: 'Configuracion' },
+    { name: 'Configuración', path: '/admin/configuracion', icon: <Settings size={20} />, module: 'Configuracion' },
+    { name: 'Horarios', path: '/admin/horarios', icon: <Clock size={20} />, module: 'Configuracion' },
   ];
 
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const profileItems = [
+    { name: 'Mi Perfil', path: '/admin/perfil', icon: <Users size={20} />, module: 'Perfil' },
+    { name: 'Usuarios', path: '/admin/usuarios', icon: <Users size={20} />, module: 'Usuarios' },
+    { name: 'Roles', path: '/admin/roles', icon: <Settings size={20} />, module: 'Roles' },
+    { name: 'Auditoría', path: '/admin/auditoria', icon: <Settings size={20} />, module: 'Auditoria' },
+  ];
 
   return (
-    <div style={{ display: 'flex', height: '100vh', backgroundColor: '#0D0D0D', color: '#FFFFFF', fontFamily: "'Montserrat', 'Poppins', sans-serif", flexDirection: 'column' }}>
-      
+    <div className="admin-layout-root">
+
       {/* Mobile Header */}
       <div className="admin-mobile-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '18px', fontWeight: '800' }}>
-          <div style={{ width: '28px', height: '28px', backgroundColor: '#D4A017', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000' }}>
-            <span style={{ fontWeight: '900', fontSize: '16px' }}>D</span>
-          </div>
-          Distrito Admin
+        <div className="admin-mobile-logo">
+          <div className="admin-mobile-logo-icon">D</div>
+          {settings?.restaurant_name || 'Distrito Admin'}
         </div>
-        <button 
+        <button
+          className="admin-hamburger"
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          style={{ background: 'none', border: 'none', color: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+          aria-label={isMobileMenuOpen ? 'Cerrar menú principal' : 'Abrir menú principal'}
+          aria-expanded={isMobileMenuOpen}
+          aria-controls="admin-sidebar"
         >
           {isMobileMenuOpen ? <X size={28} /> : <Menu size={28} />}
         </button>
       </div>
 
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
-        
+      <div className="admin-layout-body">
+
         {/* Overlay for mobile sidebar */}
-        <div 
+        <div
           className={`admin-overlay ${isMobileMenuOpen ? 'open' : ''}`}
           onClick={() => setIsMobileMenuOpen(false)}
         ></div>
 
         {/* Sidebar */}
-        <div className={`admin-sidebar ${isMobileMenuOpen ? 'open' : ''}`}>
-          <div style={{ padding: '24px 20px', fontSize: '20px', fontWeight: '800', borderBottom: '1px solid #222222', color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{ width: '32px', height: '32px', backgroundColor: '#D4A017', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000' }}>
-              <span style={{ fontWeight: '900', fontSize: '18px' }}>D</span>
+        <div
+          id="admin-sidebar"
+          className={`admin-sidebar ${isMobileMenuOpen ? 'open' : ''} ${isSidebarCollapsed ? 'collapsed' : ''}`}
+          style={{ width: isSidebarCollapsed ? '72px' : undefined }}
+        >
+          <div className="admin-sidebar-logo" style={{ justifyContent: isSidebarCollapsed ? 'center' : 'space-between', padding: isSidebarCollapsed ? '16px 8px' : undefined }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div className="admin-sidebar-logo-icon">D</div>
+              {!isSidebarCollapsed && <span className="admin-sidebar-logo-text">{settings?.restaurant_name || 'Distrito Admin'}</span>}
             </div>
-            Distrito Admin
+            <button
+              className="admin-sidebar-toggle"
+              onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+              aria-label={isSidebarCollapsed ? 'Expandir menú' : 'Contraer menú'}
+              title={isSidebarCollapsed ? "Expandir menú" : "Ocultar menú"}
+              style={{ background: 'none', border: 'none', color: 'var(--ds-text-muted)', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              {isSidebarCollapsed ? <Menu size={18} /> : <X size={18} />}
+            </button>
           </div>
-          <nav style={{ flex: 1, padding: '20px 10px' }}>
-            {navItems.map(item => {
+
+          <nav className="admin-sidebar-nav" style={{ padding: isSidebarCollapsed ? '12px 6px' : undefined }}>
+            {navItems.filter(item => hasPermission(item.module, 'ver')).map(item => {
               const isActive = location.pathname === item.path;
               return (
-                <Link 
-                  key={item.path} 
+                <Link
+                  key={item.path}
                   to={item.path}
                   onClick={() => setIsMobileMenuOpen(false)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px',
-                    color: isActive ? '#000000' : '#BDBDBD',
-                    backgroundColor: isActive ? '#D4A017' : 'transparent',
-                    borderRadius: '12px',
-                    textDecoration: 'none',
-                    fontWeight: isActive ? '700' : '500',
-                    marginBottom: '4px',
-                    transition: 'all 0.2s ease'
-                  }}
+                  title={isSidebarCollapsed ? item.name : undefined}
+                  className={`admin-nav-link ${isActive ? 'active' : ''}`}
+                  style={{ justifyContent: isSidebarCollapsed ? 'center' : 'flex-start', padding: isSidebarCollapsed ? '10px' : undefined }}
                 >
-                  {item.icon}
-                  {item.name}
+                  <span className="admin-nav-link-icon">{item.icon}</span>
+                  {!isSidebarCollapsed && <span className="admin-nav-link-text">{item.name}</span>}
                 </Link>
               )
             })}
           </nav>
-          <div style={{ padding: '20px', borderTop: '1px solid #222222' }}>
-            <button 
-              onClick={handleLogout}
-              style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer', width: '100%', padding: '12px 16px', borderRadius: '12px', fontWeight: '600' }}
-            >
-              <LogOut size={20} /> Cerrar Sesión
-            </button>
+
+          <div className="admin-sidebar-footer" style={{ padding: isSidebarCollapsed ? '12px 6px' : undefined }}>
+            {!isSidebarCollapsed && (
+              <div className="admin-sidebar-section-label">
+                Seguridad
+              </div>
+            )}
+            {profileItems.filter(item => hasPermission(item.module, 'ver')).map(item => {
+              const isActive = location.pathname === item.path;
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  title={isSidebarCollapsed ? item.name : undefined}
+                  className={`admin-nav-link ${isActive ? 'active' : ''}`}
+                  style={{ justifyContent: isSidebarCollapsed ? 'center' : 'flex-start', padding: isSidebarCollapsed ? '10px' : undefined }}
+                >
+                  <span className="admin-nav-link-icon">{item.icon}</span>
+                  {!isSidebarCollapsed && <span className="admin-nav-link-text">{item.name}</span>}
+                </Link>
+              )
+            })}
+
+            <div className="ds-mt-md">
+              <button
+                className="admin-logout-btn"
+                onClick={handleLogout}
+                title={isSidebarCollapsed ? "Cerrar Sesión" : undefined}
+                style={{ justifyContent: isSidebarCollapsed ? 'center' : 'flex-start', padding: isSidebarCollapsed ? '10px' : undefined }}
+              >
+                <LogOut size={20} />
+                {!isSidebarCollapsed && <span className="admin-logout-btn-text">Cerrar Sesión</span>}
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Main Content */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0', display: 'flex', flexDirection: 'column' }}>
+        <main
+          id="admin-main-content"
+          ref={mainContentRef}
+          className="admin-main-content"
+          style={{ marginLeft: isSidebarCollapsed ? '72px' : undefined, transition: 'margin-left 0.3s ease' }}
+        >
           <Outlet />
-        </div>
+        </main>
       </div>
+
     </div>
   );
 }

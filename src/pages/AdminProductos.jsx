@@ -1,480 +1,266 @@
-import { API_URL } from '../config/api';
-import React, { useState, useEffect } from 'react';
-import { 
-  Package, Plus, Search, Filter, Tag, DollarSign, Star, Boxes, 
-  Image as ImageIcon, Eye, Pencil, Copy, Trash2, ChevronLeft, ChevronRight, X
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  AlertTriangle, Boxes, CheckCircle, ChevronLeft, ChevronRight, Copy,
+  Eye, Image as ImageIcon, Package, Pencil, Plus, RefreshCw, Search,
+  Star, Trash2, Upload, X, XCircle,
 } from 'lucide-react';
+import { API_URL } from '../config/api';
+import { formatCurrency, formatNumber } from '../utils/formatters';
 
+const PAGE_SIZE = 10;
+const EMPTY_PRODUCT = {
+  id: null, title: '', description: '', price: '', category: '', image: '',
+  status: 'Activo', is_featured: false, stock: 0, barcode: '', track_stock: false,
+  low_stock_threshold: 5, inventory_unit: 'unidad', inventory_unit_cost: 0,
+};
+
+function productStockState(product) {
+  if (!product.track_stock) return { label: 'Sin control', tone: 'neutral' };
+  const stock = Number(product.stock || 0);
+  if (stock <= 0) return { label: 'Agotado', tone: 'danger' };
+  if (stock <= Number(product.low_stock_threshold || 5)) return { label: `${formatNumber(stock)} · Bajo`, tone: 'warning' };
+  return { label: `${formatNumber(stock)} ${product.inventory_unit || 'unid.'}`, tone: 'success' };
+}
+
+function ProductImage({ product, size = 'table' }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [product.image]);
+  return product.image && !failed
+    ? <img className={`product-image product-image-${size}`} src={product.image} alt={product.title} loading="lazy" decoding="async" onError={() => setFailed(true)} />
+    : <span className={`product-image product-image-${size} product-image-empty`}><ImageIcon size={size === 'preview' ? 42 : 20} /></span>;
+}
 
 export default function AdminProductos() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
-  
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterCategory, setFilterCategory] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  const [filterFeatured, setFilterFeatured] = useState('');
-  const [sortBy, setSortBy] = useState('');
-
-  // Modal State
+  const [filters, setFilters] = useState({ search: '', category: '', status: '', featured: '', stock: '', sort: 'updated_desc' });
+  const [page, setPage] = useState(1);
+  const [currentProduct, setCurrentProduct] = useState(EMPTY_PRODUCT);
+  const [previewProduct, setPreviewProduct] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [currentProduct, setCurrentProduct] = useState({
-    id: null, title: '', description: '', price: '', category: '', 
-    image: '', status: 'Activo', is_featured: false, stock: ''
-  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [busyId, setBusyId] = useState(null);
+  const [notice, setNotice] = useState(null);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
+    setNotice(null);
     try {
       const token = sessionStorage.getItem('distrito_admin_token');
-      // Fetch Products
-      const resP = await fetch(`${API_URL}/admin/products`, { headers: { 'Authorization': `Bearer ${token}` } });
-      const dataP = await resP.json();
-      if (dataP.status === 'ok') setProducts(dataP.products);
-
-      // Fetch Categories for the dropdown
-      const resC = await fetch(`${API_URL}/admin/categories`, { headers: { 'Authorization': `Bearer ${token}` } });
-      const dataC = await resC.json();
-      if (dataC.status === 'ok') setCategories(dataC.categories);
-      
-    } catch (err) {
-      console.error(err);
+      const headers = { Authorization: `Bearer ${token}` };
+      const [productsResponse, categoriesResponse] = await Promise.all([
+        fetch(`${API_URL}/admin/products`, { headers }),
+        fetch(`${API_URL}/admin/categories`, { headers }),
+      ]);
+      const [productsData, categoriesData] = await Promise.all([productsResponse.json(), categoriesResponse.json()]);
+      if (!productsResponse.ok || productsData.status !== 'ok') throw new Error(productsData.error || 'No fue posible cargar los productos.');
+      if (!categoriesResponse.ok || categoriesData.status !== 'ok') throw new Error(categoriesData.error || 'No fue posible cargar las categorías.');
+      setProducts(productsData.products || []);
+      setCategories(categoriesData.categories || []);
+    } catch (error) {
+      setNotice({ type: 'error', text: error.message || 'No fue posible cargar el catálogo.' });
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchData();
   }, []);
 
-  const handleOpenModal = (prod = null, isDuplicate = false) => {
-    if (prod) {
-      if (isDuplicate) {
-        setCurrentProduct({ ...prod, id: null, title: `${prod.title} (Copia)` });
-      } else {
-        setCurrentProduct(prod);
-      }
-    } else {
-      setCurrentProduct({ id: null, title: '', description: '', price: '', category: '', image: '', status: 'Activo', is_featured: false, stock: '' });
-    }
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const filteredProducts = useMemo(() => {
+    const query = filters.search.trim().toLocaleLowerCase('es');
+    return products.filter((product) => {
+      if (query && ![product.title, product.description, product.barcode, product.category].some((value) => String(value || '').toLocaleLowerCase('es').includes(query))) return false;
+      if (filters.category && product.category !== filters.category) return false;
+      if (filters.status && product.status !== filters.status) return false;
+      if (filters.featured === 'yes' && !product.is_featured) return false;
+      if (filters.featured === 'no' && product.is_featured) return false;
+      const stock = Number(product.stock || 0);
+      const threshold = Number(product.low_stock_threshold || 5);
+      if (filters.stock === 'out' && (!product.track_stock || stock > 0)) return false;
+      if (filters.stock === 'low' && (!product.track_stock || stock <= 0 || stock > threshold)) return false;
+      if (filters.stock === 'controlled' && !product.track_stock) return false;
+      return true;
+    }).sort((a, b) => {
+      if (filters.sort === 'name_asc') return a.title.localeCompare(b.title, 'es');
+      if (filters.sort === 'name_desc') return b.title.localeCompare(a.title, 'es');
+      if (filters.sort === 'price_asc') return Number(a.price) - Number(b.price);
+      if (filters.sort === 'price_desc') return Number(b.price) - Number(a.price);
+      if (filters.sort === 'stock_asc') return Number(a.stock || 0) - Number(b.stock || 0);
+      return new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0);
+    });
+  }, [filters, products]);
+
+  useEffect(() => { setPage(1); }, [filters]);
+  const pageCount = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
+  useEffect(() => { if (page > pageCount) setPage(pageCount); }, [page, pageCount]);
+  const visibleProducts = filteredProducts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const stats = useMemo(() => ({
+    total: products.length,
+    active: products.filter((product) => product.status === 'Activo').length,
+    low: products.filter((product) => product.track_stock && Number(product.stock || 0) > 0 && Number(product.stock || 0) <= Number(product.low_stock_threshold || 5)).length,
+    out: products.filter((product) => product.track_stock && Number(product.stock || 0) <= 0).length,
+  }), [products]);
+
+  const openProduct = (product = null, duplicate = false) => {
+    if (!product) setCurrentProduct(EMPTY_PRODUCT);
+    else setCurrentProduct({ ...EMPTY_PRODUCT, ...product, id: duplicate ? null : product.id, title: duplicate ? `${product.title} (copia)` : product.title, barcode: duplicate ? '' : (product.barcode || '') });
     setIsModalOpen(true);
   };
 
-  const handleSave = async (e) => {
-    e.preventDefault();
-    if (!currentProduct.title || !currentProduct.price) {
-      return alert('Por favor, ingresa el nombre y el precio del producto.');
+  const updateProduct = (field, value) => setCurrentProduct((current) => ({ ...current, [field]: value }));
+
+  const uploadImage = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) return setNotice({ type: 'error', text: 'Selecciona una imagen válida.' });
+    if (file.size > 4 * 1024 * 1024) return setNotice({ type: 'error', text: 'La imagen supera el máximo de 4 MB.' });
+    const reader = new FileReader();
+    reader.onload = () => updateProduct('image', reader.result);
+    reader.readAsDataURL(file);
+  };
+
+  const handleSave = async (event) => {
+    event.preventDefault();
+    setNotice(null);
+    const price = Number(currentProduct.price);
+    if (!currentProduct.title.trim() || !Number.isFinite(price) || price < 0 || !currentProduct.category) {
+      setNotice({ type: 'error', text: 'Completa nombre, categoría y un precio válido.' });
+      return;
     }
-
-    const token = sessionStorage.getItem('distrito_admin_token');
-    const method = currentProduct.id ? 'PUT' : 'POST';
-    const url = currentProduct.id ? `${API_URL}/admin/products/${currentProduct.id}` : `${API_URL}/admin/products`;
-
+    setSaving(true);
     try {
-      const payload = {
-        ...currentProduct,
-        price: parseInt(currentProduct.price) || 0,
-        stock: currentProduct.stock ? parseInt(currentProduct.stock) : null
-      };
-
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(payload)
+      const token = sessionStorage.getItem('distrito_admin_token');
+      const response = await fetch(currentProduct.id ? `${API_URL}/admin/products/${currentProduct.id}` : `${API_URL}/admin/products`, {
+        method: currentProduct.id ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          ...currentProduct,
+          title: currentProduct.title.trim(), description: currentProduct.description.trim(),
+          price, stock: Number(currentProduct.stock || 0),
+          low_stock_threshold: Number(currentProduct.low_stock_threshold || 0),
+          inventory_unit_cost: Number(currentProduct.inventory_unit_cost || 0),
+          barcode: currentProduct.barcode.trim(),
+        }),
       });
-
-      if (res.ok) {
-        setIsModalOpen(false);
-        fetchData();
-      } else {
-        const errData = await res.json().catch(() => ({}));
-        console.error('Error del servidor:', errData);
-        alert(`Error al guardar producto: ${errData.error || res.statusText || 'Verifica que la imagen no sea muy pesada.'}`);
-      }
-    } catch (err) {
-      console.error(err);
-      alert('Error de conexión guardando el producto. Verifica tu servidor.');
+      const data = await response.json();
+      if (!response.ok || data.status !== 'ok') throw new Error(data.error || 'No fue posible guardar el producto.');
+      setProducts((current) => currentProduct.id ? current.map((product) => product.id === data.product.id ? data.product : product) : [data.product, ...current]);
+      setIsModalOpen(false);
+      setNotice({ type: 'success', text: `${currentProduct.title} se guardó correctamente.` });
+    } catch (error) {
+      setNotice({ type: 'error', text: error.message || 'No fue posible guardar el producto.' });
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('¿Eliminar este producto?')) return;
-    const token = sessionStorage.getItem('distrito_admin_token');
+  const quickUpdate = async (product, changes) => {
+    setBusyId(product.id);
+    setNotice(null);
     try {
-      await fetch(`${API_URL}/admin/products/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
-      fetchData();
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const toggleStatus = async (prod) => {
-    const newStatus = prod.status === 'Activo' ? 'Inactivo' : 'Activo';
-    const token = sessionStorage.getItem('distrito_admin_token');
-    try {
-      await fetch(`${API_URL}/admin/products/${prod.id}`, {
+      const token = sessionStorage.getItem('distrito_admin_token');
+      const response = await fetch(`${API_URL}/admin/products/${product.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ ...prod, status: newStatus })
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ...product, ...changes }),
       });
-      fetchData();
-    } catch (err) { console.error(err); }
+      const data = await response.json();
+      if (!response.ok || data.status !== 'ok') throw new Error(data.error || 'No fue posible actualizar el producto.');
+      setProducts((current) => current.map((item) => item.id === product.id ? data.product : item));
+    } catch (error) {
+      setNotice({ type: 'error', text: error.message || 'No fue posible actualizar el producto.' });
+    } finally {
+      setBusyId(null);
+    }
   };
 
-  const toggleFeatured = async (prod) => {
-    const token = sessionStorage.getItem('distrito_admin_token');
+  const handleDelete = async (product) => {
+    if (!window.confirm(`¿Eliminar “${product.title}”? Esta acción no se puede deshacer.`)) return;
+    setBusyId(product.id);
     try {
-      await fetch(`${API_URL}/admin/products/${prod.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ ...prod, is_featured: !prod.is_featured })
-      });
-      fetchData();
-    } catch (err) { console.error(err); }
+      const token = sessionStorage.getItem('distrito_admin_token');
+      const response = await fetch(`${API_URL}/admin/products/${product.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+      const data = await response.json();
+      if (!response.ok || data.status !== 'ok') throw new Error(data.error || 'No fue posible eliminar el producto.');
+      setProducts((current) => current.filter((item) => item.id !== product.id));
+      setNotice({ type: 'success', text: `${product.title} fue eliminado.` });
+    } catch (error) {
+      setNotice({ type: 'error', text: error.message || 'No fue posible eliminar el producto.' });
+    } finally {
+      setBusyId(null);
+    }
   };
 
-  const filteredProducts = products
-    .filter(p => {
-      if (searchQuery && !p.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-      if (filterCategory && p.category !== filterCategory) return false;
-      if (filterStatus && p.status !== filterStatus) return false;
-      if (filterFeatured === 'Destacado' && !p.is_featured) return false;
-      if (filterFeatured === 'No Destacado' && p.is_featured) return false;
-      return true;
-    })
-    .sort((a, b) => {
-      if (sortBy === 'nombre_asc') return a.title.localeCompare(b.title);
-      if (sortBy === 'nombre_desc') return b.title.localeCompare(a.title);
-      if (sortBy === 'precio_asc') return a.price - b.price;
-      if (sortBy === 'precio_desc') return b.price - a.price;
-      return 0; // Default order
-    });
+  if (loading) return <div className="ds-loader-container"><div className="ds-loader" /><p>Cargando catálogo…</p></div>;
 
-  const statActivos = products.filter(p => p.status === 'Activo').length;
-  const statInactivos = products.filter(p => p.status !== 'Activo').length;
-  const statDestacados = products.filter(p => p.is_featured).length;
+  const start = filteredProducts.length ? (page - 1) * PAGE_SIZE + 1 : 0;
+  const end = Math.min(page * PAGE_SIZE, filteredProducts.length);
+  const hasFilters = Object.entries(filters).some(([key, value]) => key !== 'sort' && value);
 
   return (
-    <div style={{ padding: '40px', fontFamily: "'Montserrat', 'Poppins', sans-serif", backgroundColor: '#0D0D0D', minHeight: '100%' }}>
-      
-      {/* Encabezado */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '40px' }}>
-        <div>
-          <div style={{ color: '#BDBDBD', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
-            Dashboard <span style={{ margin: '0 8px' }}>/</span> <span style={{ color: '#FFFFFF' }}>Productos</span>
-          </div>
-          <h1 style={{ color: '#FFFFFF', fontSize: '36px', fontWeight: '800', margin: '0 0 8px 0' }}>Productos</h1>
-          <p style={{ color: '#BDBDBD', fontSize: '16px', margin: 0 }}>Administra todos los productos disponibles en tu menú.</p>
+    <div className="ds-page products-page">
+      <header className="ds-page-header">
+        <div><span className="ds-page-kicker">Catálogo e inventario</span><h1 className="ds-page-title">Productos</h1><p className="ds-page-subtitle">Administra disponibilidad, precios, imágenes y existencias desde un solo lugar.</p></div>
+        <div className="ds-page-actions"><button className="ds-btn ds-btn-secondary" onClick={() => fetchData({ silent: true })}><RefreshCw size={18} /> Actualizar</button><button className="ds-btn ds-btn-primary" onClick={() => openProduct()}><Plus size={19} /> Nuevo producto</button></div>
+      </header>
+
+      {notice && <div className={`ds-inline-alert ds-inline-alert-${notice.type === 'success' ? 'success' : 'danger'}`} role="alert">{notice.type === 'success' ? <CheckCircle size={19} /> : <XCircle size={19} />}<span>{notice.text}</span></div>}
+
+      <section className="product-kpi-grid">
+        <article><Package size={21} /><div><strong>{stats.total}</strong><span>Total</span></div></article>
+        <article><CheckCircle size={21} /><div><strong>{stats.active}</strong><span>Activos</span></div></article>
+        <article className={stats.low ? 'warning' : ''}><AlertTriangle size={21} /><div><strong>{stats.low}</strong><span>Stock bajo</span></div></article>
+        <article className={stats.out ? 'danger' : ''}><Boxes size={21} /><div><strong>{stats.out}</strong><span>Agotados</span></div></article>
+      </section>
+
+      <section className="ds-card product-catalog-card">
+        <div className="product-toolbar">
+          <div className="ds-search product-search"><Search className="ds-search-icon" size={18} /><input className="ds-search-input" value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} placeholder="Buscar por nombre, categoría o código…" /></div>
+          <select className="ds-select" value={filters.category} onChange={(event) => setFilters({ ...filters, category: event.target.value })}><option value="">Todas las categorías</option>{categories.map((category) => <option key={category.id} value={category.name}>{category.name}</option>)}</select>
+          <select className="ds-select" value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}><option value="">Todos los estados</option><option value="Activo">Activos</option><option value="Inactivo">Inactivos</option></select>
+          <select className="ds-select" value={filters.stock} onChange={(event) => setFilters({ ...filters, stock: event.target.value })}><option value="">Cualquier inventario</option><option value="controlled">Con control</option><option value="low">Stock bajo</option><option value="out">Agotados</option></select>
+          <select className="ds-select" value={filters.featured} onChange={(event) => setFilters({ ...filters, featured: event.target.value })}><option value="">Todos</option><option value="yes">Destacados</option><option value="no">No destacados</option></select>
+          <select className="ds-select" value={filters.sort} onChange={(event) => setFilters({ ...filters, sort: event.target.value })}><option value="updated_desc">Actualizados recientemente</option><option value="name_asc">Nombre A–Z</option><option value="name_desc">Nombre Z–A</option><option value="price_asc">Menor precio</option><option value="price_desc">Mayor precio</option><option value="stock_asc">Menor existencia</option></select>
+          {hasFilters && <button className="ds-btn ds-btn-ghost" onClick={() => setFilters({ search: '', category: '', status: '', featured: '', stock: '', sort: 'updated_desc' })}><X size={17} /> Limpiar</button>}
         </div>
-        
-        <button 
-          onClick={() => handleOpenModal()}
-          style={{ backgroundColor: '#D4A017', color: '#000000', border: 'none', borderRadius: '12px', height: '48px', padding: '0 24px', fontSize: '16px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', transition: 'background-color 0.2s' }}
-          onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F5C542'}
-          onMouseLeave={e => e.currentTarget.style.backgroundColor = '#D4A017'}
-        >
-          <Plus size={20} /> Nuevo Producto
-        </button>
-      </div>
 
-      {/* Tarjetas Estadísticas */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '24px', marginBottom: '40px' }}>
-        {[
-          { label: 'Total de productos', value: products.length, icon: <Package size={28} /> },
-          { label: 'Productos activos', value: statActivos, icon: <Package size={28} /> },
-          { label: 'Productos inactivos', value: statInactivos, icon: <Package size={28} /> },
-          { label: 'Productos destacados', value: statDestacados, icon: <Star size={28} /> }
-        ].map((stat, i) => (
-          <div key={i} style={{ backgroundColor: '#111111', borderRadius: '20px', padding: '24px', border: '1px solid #222222', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 15px rgba(0,0,0,0.2)' }}>
-            <div>
-              <div style={{ fontSize: '32px', fontWeight: '800', color: '#FFFFFF', marginBottom: '4px' }}>{stat.value}</div>
-              <div style={{ color: '#BDBDBD', fontSize: '14px', fontWeight: '500' }}>{stat.label}</div>
-            </div>
-            <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: 'rgba(212, 160, 23, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D4A017' }}>
-              {stat.icon}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Filtros */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', marginBottom: '24px' }}>
-        <div style={{ position: 'relative', flex: '1 1 300px' }}>
-          <Search size={20} style={{ position: 'absolute', left: '16px', top: '16px', color: '#6B7280' }} />
-          <input 
-            type="text" 
-            placeholder="Buscar producto..." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ width: '100%', height: '52px', backgroundColor: '#111111', border: '1px solid #2A2A2A', borderRadius: '12px', padding: '0 16px 0 48px', color: '#FFFFFF', fontSize: '15px', outline: 'none', boxSizing: 'border-box' }} 
-          />
-        </div>
-        
-        <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} style={{ backgroundColor: '#111111', border: '1px solid #2A2A2A', borderRadius: '12px', padding: '0 16px', color: '#FFFFFF', fontSize: '14px', height: '52px', outline: 'none', cursor: 'pointer' }}>
-          <option value="">Todas las categorías</option>
-          {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-        </select>
-        
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ backgroundColor: '#111111', border: '1px solid #2A2A2A', borderRadius: '12px', padding: '0 16px', color: '#FFFFFF', fontSize: '14px', height: '52px', outline: 'none', cursor: 'pointer' }}>
-          <option value="">Todos los estados</option>
-          <option value="Activo">Activos</option>
-          <option value="Inactivo">Inactivos</option>
-        </select>
-
-        <select value={filterFeatured} onChange={e => setFilterFeatured(e.target.value)} style={{ backgroundColor: '#111111', border: '1px solid #2A2A2A', borderRadius: '12px', padding: '0 16px', color: '#FFFFFF', fontSize: '14px', height: '52px', outline: 'none', cursor: 'pointer' }}>
-          <option value="">Cualquier destaque</option>
-          <option value="Destacado">Destacados</option>
-          <option value="No Destacado">No destacados</option>
-        </select>
-
-        <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ backgroundColor: '#111111', border: '1px solid #2A2A2A', borderRadius: '12px', padding: '0 16px', color: '#FFFFFF', fontSize: '14px', height: '52px', outline: 'none', cursor: 'pointer' }}>
-          <option value="">Ordenar por (Defecto)</option>
-          <option value="nombre_asc">Nombre (A-Z)</option>
-          <option value="nombre_desc">Nombre (Z-A)</option>
-          <option value="precio_asc">Precio (Menor a Mayor)</option>
-          <option value="precio_desc">Precio (Mayor a Menor)</option>
-        </select>
-      </div>
-
-      {/* Tabla */}
-      <div style={{ backgroundColor: '#111111', borderRadius: '20px', border: '1px solid #222222', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '900px' }}>
-            <thead>
-              <tr style={{ backgroundColor: '#181818', borderBottom: '1px solid #222222' }}>
-                <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '14px', width: '80px' }}>Imagen</th>
-                <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '14px' }}>Producto</th>
-                <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '14px' }}>Categoría</th>
-                <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '14px' }}>Precio</th>
-                <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '14px', textAlign: 'center' }}>Estado</th>
-                <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '14px', textAlign: 'center' }}>Destacado</th>
-                <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '14px' }}>Inventario</th>
-                <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '14px', textAlign: 'right' }}>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredProducts.map((prod, index) => (
-                <tr key={prod.id} style={{ borderBottom: index === filteredProducts.length - 1 ? 'none' : '1px solid #222222' }}>
-                  <td style={{ padding: '16px 24px' }}>
-                    <img src={prod.image} alt={prod.title} style={{ width: '60px', height: '60px', borderRadius: '12px', objectFit: 'cover', backgroundColor: '#1A1A1A' }} />
-                  </td>
-                  <td style={{ padding: '16px 24px' }}>
-                    <div style={{ color: '#FFFFFF', fontWeight: '700', fontSize: '15px' }}>{prod.title}</div>
-                    <div style={{ color: '#BDBDBD', fontSize: '13px', marginTop: '4px', maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {prod.description}
-                    </div>
-                  </td>
-                  <td style={{ padding: '16px 24px' }}>
-                    <span style={{ backgroundColor: '#1A1A1A', border: '1px solid #D4A017', color: '#D4A017', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '600' }}>
-                      {prod.category}
-                    </span>
-                  </td>
-                  <td style={{ padding: '16px 24px', color: '#FFFFFF', fontWeight: '700', fontSize: '16px' }}>
-                    ${(prod.price || 0).toLocaleString()}
-                  </td>
-                  <td style={{ padding: '16px 24px', textAlign: 'center' }}>
-                    <button 
-                      onClick={() => toggleStatus(prod)}
-                      style={{ 
-                        width: '44px', height: '24px', borderRadius: '12px', 
-                        backgroundColor: prod.status === 'Activo' ? '#22C55E' : '#333333', 
-                        border: 'none', position: 'relative', cursor: 'pointer', transition: 'background-color 0.3s'
-                      }}
-                    >
-                      <div style={{ 
-                        width: '20px', height: '20px', backgroundColor: '#FFFFFF', borderRadius: '50%', 
-                        position: 'absolute', top: '2px', left: prod.status === 'Activo' ? '22px' : '2px', 
-                        transition: 'left 0.3s' 
-                      }} />
-                    </button>
-                  </td>
-                  <td style={{ padding: '16px 24px', textAlign: 'center' }}>
-                    <button 
-                      onClick={() => toggleFeatured(prod)}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: prod.is_featured ? '#D4A017' : '#333333' }}
-                    >
-                      <Star size={22} fill={prod.is_featured ? '#D4A017' : 'none'} />
-                    </button>
-                  </td>
-                  <td style={{ padding: '16px 24px' }}>
-                    {prod.stock === null || prod.stock === undefined || prod.stock === '' ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#BDBDBD', fontSize: '13px' }}>
-                        <Boxes size={16} /> Sin control
-                      </div>
-                    ) : (
-                      <div style={{ 
-                        display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', fontWeight: '600',
-                        color: prod.stock > 10 ? '#22C55E' : (prod.stock > 0 ? '#F59E0B' : '#EF4444')
-                      }}>
-                        <Boxes size={16} /> {prod.stock} unid.
-                      </div>
-                    )}
-                  </td>
-                  <td style={{ padding: '16px 24px', textAlign: 'right' }}>
-                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                      <button onClick={() => alert('Vista previa')} style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#1A1A1A', border: '1px solid #333333', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFFFFF', cursor: 'pointer' }}>
-                        <Eye size={16} />
-                      </button>
-                      <button onClick={() => handleOpenModal(prod)} style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#1A1A1A', border: '1px solid #333333', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFFFFF', cursor: 'pointer' }}>
-                        <Pencil size={16} />
-                      </button>
-                      <button onClick={() => handleOpenModal(prod, true)} style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#1A1A1A', border: '1px solid #333333', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFFFFF', cursor: 'pointer' }}>
-                        <Copy size={16} />
-                      </button>
-                      <button onClick={() => handleDelete(prod.id)} style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#1A1A1A', border: '1px solid #333333', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#EF4444', cursor: 'pointer' }}>
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
+        <div className="ds-table-container product-table-container">
+          <table className="ds-table product-table">
+            <thead><tr><th>Producto</th><th>Categoría</th><th>Precio</th><th>Inventario</th><th>Visible</th><th>Destacado</th><th className="product-actions-heading">Acciones</th></tr></thead>
+            <tbody>{visibleProducts.map((product) => { const stockState = productStockState(product); return <tr key={product.id}>
+              <td><div className="product-name-cell"><ProductImage product={product} /><div><strong>{product.title}</strong><span>{product.description || 'Sin descripción'}</span>{product.barcode && <small>Cod. {product.barcode}</small>}</div></div></td>
+              <td><span className="ds-badge ds-badge-neutral">{product.category || 'Sin categoría'}</span></td>
+              <td><strong>{formatCurrency(product.price)}</strong>{Number(product.inventory_unit_cost) > 0 && <small className="product-cost">Costo {formatCurrency(product.inventory_unit_cost)}</small>}</td>
+              <td><span className={`ds-badge ds-badge-${stockState.tone}`}><Boxes size={13} /> {stockState.label}</span></td>
+              <td><button className={`ds-switch ${product.status === 'Activo' ? 'active' : ''}`} disabled={busyId === product.id} onClick={() => quickUpdate(product, { status: product.status === 'Activo' ? 'Inactivo' : 'Activo' })} aria-label={`${product.status === 'Activo' ? 'Ocultar' : 'Publicar'} ${product.title}`} aria-pressed={product.status === 'Activo'}><i /></button></td>
+              <td><button className={`product-feature-button ${product.is_featured ? 'active' : ''}`} disabled={busyId === product.id} onClick={() => quickUpdate(product, { is_featured: !product.is_featured })} aria-label={`${product.is_featured ? 'Quitar de' : 'Agregar a'} destacados`} aria-pressed={product.is_featured}><Star size={21} fill={product.is_featured ? 'currentColor' : 'none'} /></button></td>
+              <td><div className="product-row-actions"><button className="ds-btn-icon ds-btn-secondary" onClick={() => setPreviewProduct(product)} aria-label={`Ver ${product.title}`}><Eye size={16} /></button><button className="ds-btn-icon ds-btn-secondary" onClick={() => openProduct(product)} aria-label={`Editar ${product.title}`}><Pencil size={16} /></button><button className="ds-btn-icon ds-btn-secondary" onClick={() => openProduct(product, true)} aria-label={`Duplicar ${product.title}`}><Copy size={16} /></button><button className="ds-btn-icon ds-btn-danger" disabled={busyId === product.id} onClick={() => handleDelete(product)} aria-label={`Eliminar ${product.title}`}><Trash2 size={16} /></button></div></td>
+            </tr>; })}</tbody>
           </table>
+          {!visibleProducts.length && <div className="ds-empty-state"><Package size={38} /><strong>No encontramos productos</strong><span>Ajusta los filtros o crea un producto nuevo.</span></div>}
         </div>
-        <div style={{ padding: '20px 24px', borderTop: '1px solid #222222', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#111111' }}>
-          <div style={{ color: '#BDBDBD', fontSize: '14px', fontWeight: '500' }}>
-            Mostrando {filteredProducts.length > 0 ? 1 : 0} a {filteredProducts.length} de {filteredProducts.length} productos
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: '#1A1A1A', border: '1px solid #2A2A2A', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280', cursor: 'not-allowed' }}>
-              <ChevronLeft size={18} />
-            </button>
-            <button style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: '#D4A017', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000000', fontWeight: '700', fontSize: '14px', cursor: 'pointer' }}>
-              1
-            </button>
-            <button style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: '#1A1A1A', border: '1px solid #2A2A2A', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280', cursor: 'not-allowed' }}>
-              <ChevronRight size={18} />
-            </button>
-          </div>
-        </div>
-      </div>
 
-      {/* Modal Crear/Editar */}
-      {isModalOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-          <div style={{ backgroundColor: '#111111', padding: '32px', borderRadius: '20px', width: '100%', maxWidth: '800px', border: '1px solid #222222', maxHeight: '90vh', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-              <h2 style={{ color: '#FFFFFF', margin: 0, fontSize: '24px', fontWeight: '800' }}>{currentProduct.id ? 'Editar Producto' : 'Nuevo Producto'}</h2>
-              <button onClick={() => setIsModalOpen(false)} style={{ background: 'none', border: 'none', color: '#BDBDBD', cursor: 'pointer' }}><X size={24} /></button>
-            </div>
-            
-            <form onSubmit={handleSave}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
-                
-                {/* Columna Izquierda */}
-                <div>
-                  <div style={{ marginBottom: '20px' }}>
-                    <label style={{ display: 'block', color: '#BDBDBD', marginBottom: '8px', fontWeight: '500' }}>Nombre del producto</label>
-                    <input type="text" required value={currentProduct.title} onChange={e => setCurrentProduct({...currentProduct, title: e.target.value})} style={{ width: '100%', backgroundColor: '#1A1A1A', border: '1px solid #333333', padding: '14px', borderRadius: '10px', color: '#FFFFFF', boxSizing: 'border-box', outline: 'none' }} />
-                  </div>
-                  
-                  <div style={{ marginBottom: '20px' }}>
-                    <label style={{ display: 'block', color: '#BDBDBD', marginBottom: '8px', fontWeight: '500' }}>Descripción</label>
-                    <textarea value={currentProduct.description} onChange={e => setCurrentProduct({...currentProduct, description: e.target.value})} style={{ width: '100%', backgroundColor: '#1A1A1A', border: '1px solid #333333', padding: '14px', borderRadius: '10px', color: '#FFFFFF', minHeight: '100px', boxSizing: 'border-box', outline: 'none' }} />
-                  </div>
+        <div className="product-mobile-list">{visibleProducts.map((product) => { const stockState = productStockState(product); return <article key={product.id} className="product-mobile-card"><div className="product-mobile-heading"><ProductImage product={product} /><div><strong>{product.title}</strong><span>{product.category || 'Sin categoría'}</span></div><strong>{formatCurrency(product.price)}</strong></div><div className="product-mobile-meta"><span className={`ds-badge ds-badge-${product.status === 'Activo' ? 'success' : 'neutral'}`}>{product.status}</span><span className={`ds-badge ds-badge-${stockState.tone}`}>{stockState.label}</span>{product.is_featured && <span className="ds-badge ds-badge-primary"><Star size={12} /> Destacado</span>}</div><div className="product-mobile-actions"><button className="ds-btn ds-btn-secondary" onClick={() => setPreviewProduct(product)}><Eye size={16} /> Ver</button><button className="ds-btn ds-btn-secondary" onClick={() => openProduct(product)}><Pencil size={16} /> Editar</button><button className="ds-btn ds-btn-danger" onClick={() => handleDelete(product)}><Trash2 size={16} /></button></div></article>; })}{!visibleProducts.length && <div className="ds-empty-state"><Package size={38} /><strong>No encontramos productos</strong></div>}</div>
 
-                  <div style={{ display: 'flex', gap: '16px', marginBottom: '20px' }}>
-                    <div style={{ flex: 1 }}>
-                      <label style={{ display: 'block', color: '#BDBDBD', marginBottom: '8px', fontWeight: '500' }}>Precio ($)</label>
-                      <input type="number" required value={currentProduct.price} onChange={e => setCurrentProduct({...currentProduct, price: e.target.value})} style={{ width: '100%', backgroundColor: '#1A1A1A', border: '1px solid #333333', padding: '14px', borderRadius: '10px', color: '#FFFFFF', boxSizing: 'border-box', outline: 'none' }} />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <label style={{ display: 'block', color: '#BDBDBD', marginBottom: '8px', fontWeight: '500' }}>Categoría</label>
-                      <select required value={currentProduct.category} onChange={e => setCurrentProduct({...currentProduct, category: e.target.value})} style={{ width: '100%', backgroundColor: '#1A1A1A', border: '1px solid #333333', padding: '14px', borderRadius: '10px', color: '#FFFFFF', boxSizing: 'border-box', outline: 'none' }}>
-                        <option value="">Selecciona...</option>
-                        {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                </div>
+        <footer className="product-pagination"><span>Mostrando {start}–{end} de {filteredProducts.length}</span><div><button className="ds-btn-icon ds-btn-secondary" disabled={page === 1} onClick={() => setPage((value) => value - 1)} aria-label="Página anterior"><ChevronLeft size={18} /></button><strong>Página {page} de {pageCount}</strong><button className="ds-btn-icon ds-btn-secondary" disabled={page === pageCount} onClick={() => setPage((value) => value + 1)} aria-label="Página siguiente"><ChevronRight size={18} /></button></div></footer>
+      </section>
 
-                {/* Columna Derecha */}
-                <div>
-                  <div style={{ marginBottom: '20px' }}>
-                    <label style={{ display: 'block', color: '#BDBDBD', marginBottom: '8px', fontWeight: '500' }}>Imagen del Producto</label>
-                    <div style={{ border: '2px dashed #333333', borderRadius: '12px', padding: '24px', textAlign: 'center', backgroundColor: '#1A1A1A', position: 'relative', overflow: 'hidden', marginBottom: '12px' }}>
-                      {currentProduct.image ? (
-                        <>
-                          <img src={currentProduct.image} alt="preview" style={{ width: '100%', height: '180px', objectFit: 'contain', marginBottom: '12px' }} />
-                          <button 
-                            type="button" 
-                            onClick={() => setCurrentProduct({...currentProduct, image: ''})}
-                            style={{ position: 'absolute', top: '8px', right: '8px', background: 'rgba(0,0,0,0.7)', border: 'none', borderRadius: '50%', padding: '6px', cursor: 'pointer', color: '#FFF' }}
-                          >
-                            <X size={16} />
-                          </button>
-                        </>
-                      ) : (
-                        <div style={{ padding: '20px 0' }}>
-                          <ImageIcon size={40} color="#6B7280" style={{ marginBottom: '12px' }} />
-                          <div style={{ color: '#FFFFFF', fontWeight: '500', marginBottom: '4px' }}>Haz clic o arrastra una imagen aquí</div>
-                          <div style={{ color: '#BDBDBD', fontSize: '13px' }}>PNG, JPG hasta 2MB</div>
-                          <input 
-                            type="file" 
-                            accept="image/*"
-                            onChange={(e) => {
-                              const file = e.target.files[0];
-                              if (file) {
-                                const reader = new FileReader();
-                                reader.onloadend = () => {
-                                  setCurrentProduct({...currentProduct, image: reader.result});
-                                };
-                                reader.readAsDataURL(file);
-                              }
-                            }}
-                            style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
-                          />
-                        </div>
-                      )}
-                    </div>
-                    <input 
-                      type="text" 
-                      value={currentProduct.image && currentProduct.image.startsWith('data:') ? '' : currentProduct.image} 
-                      onChange={e => setCurrentProduct({...currentProduct, image: e.target.value})}
-                      placeholder="O pega una URL de imagen (https://...)" 
-                      style={{ width: '100%', backgroundColor: '#1A1A1A', border: '1px solid #333333', padding: '14px', borderRadius: '10px', color: '#FFFFFF', boxSizing: 'border-box', outline: 'none' }} 
-                    />
-                  </div>
+      {isModalOpen && <div className="ds-modal-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) setIsModalOpen(false); }}><div className="ds-modal ds-modal-xl product-modal" role="dialog" aria-modal="true" aria-labelledby="product-modal-title"><form onSubmit={handleSave}>
+        <div className="ds-modal-header"><div><span className="ds-page-kicker">{currentProduct.id ? 'Edición' : 'Nuevo registro'}</span><h2 id="product-modal-title" className="ds-modal-title">{currentProduct.id ? currentProduct.title : 'Crear producto'}</h2></div><button type="button" className="ds-modal-close" disabled={saving} onClick={() => setIsModalOpen(false)} aria-label="Cerrar"><X size={22} /></button></div>
+        <div className="ds-modal-body"><div className="product-form-layout">
+          <section className="ds-form"><div className="product-form-section"><strong>Información de venta</strong><span>Datos visibles en la tienda.</span></div><div className="ds-form-group"><label className="ds-form-label" htmlFor="product-name">Nombre</label><input id="product-name" className="ds-input" required maxLength={255} value={currentProduct.title} onChange={(event) => updateProduct('title', event.target.value)} /></div><div className="ds-form-group"><label className="ds-form-label" htmlFor="product-description">Descripción</label><textarea id="product-description" className="ds-textarea" maxLength={1000} value={currentProduct.description} onChange={(event) => updateProduct('description', event.target.value)} /></div><div className="ds-form-grid"><div className="ds-form-group"><label className="ds-form-label" htmlFor="product-price">Precio</label><input id="product-price" type="number" min="0" step="1" className="ds-input" required value={currentProduct.price} onChange={(event) => updateProduct('price', event.target.value)} /></div><div className="ds-form-group"><label className="ds-form-label" htmlFor="product-category">Categoría</label><select id="product-category" className="ds-select" required value={currentProduct.category} onChange={(event) => updateProduct('category', event.target.value)}><option value="">Selecciona…</option>{categories.map((category) => <option key={category.id} value={category.name}>{category.name}</option>)}</select></div></div><div className="ds-form-grid"><div className="ds-form-group"><label className="ds-form-label" htmlFor="product-status">Estado</label><select id="product-status" className="ds-select" value={currentProduct.status} onChange={(event) => updateProduct('status', event.target.value)}><option value="Activo">Activo</option><option value="Inactivo">Inactivo</option></select></div><label className="product-feature-field"><input type="checkbox" checked={currentProduct.is_featured} onChange={(event) => updateProduct('is_featured', event.target.checked)} /><Star size={20} fill={currentProduct.is_featured ? 'currentColor' : 'none'} /><span><strong>Producto destacado</strong><small>Aparece primero en la tienda.</small></span></label></div>
+          </section>
+          <section className="ds-form"><div className="product-form-section"><strong>Imagen</strong><span>Archivo o URL del producto.</span></div><div className="product-image-editor">{currentProduct.image ? <img key={currentProduct.image} src={currentProduct.image} alt="Vista previa" /> : <div><ImageIcon size={40} /><span>Sin imagen</span></div>}<div><label className="ds-btn ds-btn-secondary"><Upload size={17} /> Subir imagen<input type="file" accept="image/*" onChange={uploadImage} /></label>{currentProduct.image && <button type="button" className="ds-btn ds-btn-ghost" onClick={() => updateProduct('image', '')}><Trash2 size={17} /> Quitar</button>}</div></div><div className="ds-form-group"><label className="ds-form-label" htmlFor="product-image-url">URL de imagen</label><input id="product-image-url" className="ds-input" value={currentProduct.image?.startsWith('data:') ? '' : currentProduct.image} onChange={(event) => updateProduct('image', event.target.value)} placeholder="https://…" /></div>
+          </section>
+          <section className="ds-form product-inventory-section"><div className="product-form-section"><strong>Inventario</strong><span>La misma información usada por el módulo de existencias.</span></div><label className="announcement-publish-toggle"><input type="checkbox" checked={currentProduct.track_stock} onChange={(event) => updateProduct('track_stock', event.target.checked)} /><span className="ds-switch" aria-hidden="true"><i /></span><span><strong>Controlar existencias</strong><small>Impide vender cuando no hay stock.</small></span></label>{currentProduct.track_stock && <><div className="ds-form-grid-3"><div className="ds-form-group"><label className="ds-form-label" htmlFor="product-stock">Existencia</label><input id="product-stock" type="number" min="0" step="0.01" className="ds-input" value={currentProduct.stock} onChange={(event) => updateProduct('stock', event.target.value)} /></div><div className="ds-form-group"><label className="ds-form-label" htmlFor="product-threshold">Alerta mínima</label><input id="product-threshold" type="number" min="0" step="0.01" className="ds-input" value={currentProduct.low_stock_threshold} onChange={(event) => updateProduct('low_stock_threshold', event.target.value)} /></div><div className="ds-form-group"><label className="ds-form-label" htmlFor="product-unit">Unidad</label><select id="product-unit" className="ds-select" value={currentProduct.inventory_unit} onChange={(event) => updateProduct('inventory_unit', event.target.value)}><option value="unidad">Unidad</option><option value="porción">Porción</option><option value="gramo">Gramo</option><option value="mililitro">Mililitro</option></select></div></div><div className="ds-form-grid"><div className="ds-form-group"><label className="ds-form-label" htmlFor="product-cost">Costo unitario</label><input id="product-cost" type="number" min="0" step="1" className="ds-input" value={currentProduct.inventory_unit_cost} onChange={(event) => updateProduct('inventory_unit_cost', event.target.value)} /></div><div className="ds-form-group"><label className="ds-form-label" htmlFor="product-barcode">Código de barras</label><input id="product-barcode" inputMode="numeric" className="ds-input" value={currentProduct.barcode} onChange={(event) => updateProduct('barcode', event.target.value.replace(/\D/g, '').slice(0, 14))} placeholder="8 a 14 dígitos" /></div></div></>}
+          </section>
+        </div></div>
+        <div className="ds-modal-footer"><button type="button" className="ds-btn ds-btn-secondary" disabled={saving} onClick={() => setIsModalOpen(false)}>Cancelar</button><button className="ds-btn ds-btn-primary" disabled={saving}>{saving ? 'Guardando…' : 'Guardar producto'}</button></div>
+      </form></div></div>}
 
-                  <div style={{ marginBottom: '20px' }}>
-                    <label style={{ display: 'block', color: '#BDBDBD', marginBottom: '8px', fontWeight: '500' }}>Inventario (Dejar vacío si es ilimitado)</label>
-                    <input type="number" value={currentProduct.stock || ''} onChange={e => setCurrentProduct({...currentProduct, stock: e.target.value})} placeholder="Ej: 50" style={{ width: '100%', backgroundColor: '#1A1A1A', border: '1px solid #333333', padding: '14px', borderRadius: '10px', color: '#FFFFFF', boxSizing: 'border-box', outline: 'none' }} />
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', backgroundColor: '#1A1A1A', padding: '16px', borderRadius: '10px', marginBottom: '12px' }}>
-                    <div>
-                      <div style={{ color: '#FFFFFF', fontWeight: '600' }}>Estado del Producto</div>
-                      <div style={{ color: '#BDBDBD', fontSize: '13px' }}>Visible en el menú para clientes</div>
-                    </div>
-                    <select value={currentProduct.status} onChange={e => setCurrentProduct({...currentProduct, status: e.target.value})} style={{ backgroundColor: '#0D0D0D', border: '1px solid #333333', color: '#FFFFFF', padding: '8px', borderRadius: '6px' }}>
-                      <option value="Activo">Activo</option>
-                      <option value="Inactivo">Inactivo</option>
-                    </select>
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', backgroundColor: '#1A1A1A', padding: '16px', borderRadius: '10px' }}>
-                    <div>
-                      <div style={{ color: '#FFFFFF', fontWeight: '600' }}>Destacado</div>
-                      <div style={{ color: '#BDBDBD', fontSize: '13px' }}>Aparecerá en la sección principal</div>
-                    </div>
-                    <button type="button" onClick={() => setCurrentProduct({...currentProduct, is_featured: !currentProduct.is_featured})} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-                      <Star size={28} fill={currentProduct.is_featured ? '#D4A017' : 'none'} color={currentProduct.is_featured ? '#D4A017' : '#BDBDBD'} />
-                    </button>
-                  </div>
-                </div>
-
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '16px', borderTop: '1px solid #222222', paddingTop: '24px' }}>
-                <button type="button" onClick={() => setIsModalOpen(false)} style={{ padding: '14px 28px', backgroundColor: '#1A1A1A', color: '#FFFFFF', border: '1px solid #333333', borderRadius: '10px', cursor: 'pointer', fontWeight: '600' }}>Cancelar</button>
-                <button type="submit" style={{ padding: '14px 28px', backgroundColor: '#D4A017', color: '#000000', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer' }}>Guardar Producto</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
+      {previewProduct && <div className="ds-modal-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreviewProduct(null); }}><div className="ds-modal product-preview-modal" role="dialog" aria-modal="true" aria-labelledby="product-preview-title"><div className="ds-modal-header"><h2 id="product-preview-title" className="ds-modal-title">Vista en tienda</h2><button className="ds-modal-close" onClick={() => setPreviewProduct(null)} aria-label="Cerrar"><X size={22} /></button></div><div className="ds-modal-body"><div className="product-store-preview"><ProductImage product={previewProduct} size="preview" /><span className="ds-badge ds-badge-neutral">{previewProduct.category}</span>{previewProduct.is_featured && <span className="ds-badge ds-badge-primary"><Star size={12} /> Destacado</span>}<h3>{previewProduct.title}</h3><p>{previewProduct.description || 'Sin descripción'}</p><strong>{formatCurrency(previewProduct.price)}</strong><button className="ds-btn ds-btn-primary" type="button">Agregar al pedido</button></div></div></div></div>}
     </div>
   );
 }

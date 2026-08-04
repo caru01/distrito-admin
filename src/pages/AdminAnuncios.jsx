@@ -1,292 +1,251 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Bell, CalendarClock, CheckCircle, ExternalLink, Image as ImageIcon,
+  Megaphone, RefreshCw, Save, Send, Trash2, Upload, XCircle,
+} from 'lucide-react';
 import { API_URL } from '../config/api';
-import React, { useState, useEffect } from 'react';
-import { Megaphone, Save, Image as ImageIcon, CheckCircle, XCircle, Bell, Send } from 'lucide-react';
+import { formatDateTime } from '../utils/formatters';
 
+const EMPTY_ANNOUNCEMENT = {
+  title: '', body: '', image_url: '', cta_label: 'Continuar', cta_url: '',
+  starts_at: '', ends_at: '', display_frequency: 'session', is_active: false,
+  updated_at: '', is_visible: false,
+};
+
+function toColombiaInput(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(date);
+  return parts.replace(' ', 'T');
+}
+
+function toColombiaIso(value) {
+  return value ? new Date(`${value}:00-05:00`).toISOString() : null;
+}
+
+function normalizeAnnouncement(value = {}) {
+  return {
+    ...EMPTY_ANNOUNCEMENT,
+    ...value,
+    starts_at: toColombiaInput(value.starts_at),
+    ends_at: toColombiaInput(value.ends_at),
+    is_active: Boolean(value.is_active),
+  };
+}
+
+function campaignStatus(announcement) {
+  if (!announcement.is_active) return { label: 'Borrador', tone: 'neutral', description: 'No se muestra en la tienda.' };
+  const now = Date.now();
+  const starts = announcement.starts_at ? new Date(`${announcement.starts_at}:00-05:00`).getTime() : null;
+  const ends = announcement.ends_at ? new Date(`${announcement.ends_at}:00-05:00`).getTime() : null;
+  if (starts && starts > now) return { label: 'Programado', tone: 'info', description: 'Se publicará en la fecha indicada.' };
+  if (ends && ends < now) return { label: 'Finalizado', tone: 'warning', description: 'La fecha de cierre ya pasó.' };
+  return { label: 'Publicado', tone: 'success', description: 'Está visible para los clientes.' };
+}
 
 export default function AdminAnuncios() {
-  const [announcement, setAnnouncement] = useState({
-    title: '',
-    image_url: '',
-    is_active: false
-  });
+  const [announcement, setAnnouncement] = useState(EMPTY_ANNOUNCEMENT);
+  const [pushData, setPushData] = useState({ title: '', message: '', url: '/' });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState('');
-
-  // Push State
-  const [pushData, setPushData] = useState({ title: '', message: '', url: '/' });
   const [sendingPush, setSendingPush] = useState(false);
-  const [pushMessage, setPushMessage] = useState('');
+  const [notice, setNotice] = useState(null);
+  const [pushNotice, setPushNotice] = useState(null);
 
-  useEffect(() => {
-    fetchAnnouncement();
-  }, []);
+  const status = useMemo(() => campaignStatus(announcement), [announcement]);
 
-  const fetchAnnouncement = async () => {
+  const fetchAnnouncement = useCallback(async () => {
+    setLoading(true);
+    setNotice(null);
     try {
-      const res = await fetch(`${API_URL}/announcement`);
-      const data = await res.json();
-      if (data.status === 'ok' && data.announcement) {
-        setAnnouncement({
-          title: data.announcement.title || '',
-          image_url: data.announcement.image_url || '',
-          is_active: data.announcement.is_active || false
-        });
-      }
-    } catch (err) {
-      console.error(err);
+      const token = sessionStorage.getItem('distrito_admin_token');
+      const response = await fetch(`${API_URL}/admin/announcement`, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await response.json();
+      if (!response.ok || data.status !== 'ok') throw new Error(data.error || 'No fue posible cargar el anuncio.');
+      setAnnouncement(normalizeAnnouncement(data.announcement || EMPTY_ANNOUNCEMENT));
+    } catch (error) {
+      setNotice({ type: 'error', text: error.message || 'No fue posible cargar el anuncio.' });
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit
-        setMessage('Error: La imagen es muy pesada (máximo 5MB)');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setAnnouncement({ ...announcement, image_url: reader.result });
-      };
-      reader.readAsDataURL(file);
+  useEffect(() => { fetchAnnouncement(); }, [fetchAnnouncement]);
+
+  const update = (field, value) => setAnnouncement((current) => ({ ...current, [field]: value }));
+
+  const handleImageUpload = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setNotice({ type: 'error', text: 'Selecciona un archivo de imagen válido.' });
+      return;
     }
+    if (file.size > 4 * 1024 * 1024) {
+      setNotice({ type: 'error', text: 'La imagen supera el máximo permitido de 4 MB.' });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => update('image_url', reader.result);
+    reader.readAsDataURL(file);
   };
 
-  const handleSave = async () => {
+  const handleSave = async (event) => {
+    event.preventDefault();
+    setNotice(null);
+    if (!announcement.title.trim()) {
+      setNotice({ type: 'error', text: 'Escribe un título para la campaña.' });
+      return;
+    }
+    if (announcement.starts_at && announcement.ends_at && announcement.ends_at <= announcement.starts_at) {
+      setNotice({ type: 'error', text: 'La fecha de cierre debe ser posterior al inicio.' });
+      return;
+    }
     setSaving(true);
-    setMessage('');
     try {
       const token = sessionStorage.getItem('distrito_admin_token');
-      const res = await fetch(`${API_URL}/admin/announcement`, {
+      const response = await fetch(`${API_URL}/admin/announcement`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(announcement)
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          ...announcement,
+          title: announcement.title.trim(),
+          body: announcement.body.trim(),
+          cta_label: announcement.cta_label.trim() || 'Continuar',
+          cta_url: announcement.cta_url.trim(),
+          starts_at: toColombiaIso(announcement.starts_at),
+          ends_at: toColombiaIso(announcement.ends_at),
+        }),
       });
-      const data = await res.json();
-      if (data.status === 'ok') {
-        setMessage('Anuncio guardado exitosamente');
-        setTimeout(() => setMessage(''), 3000);
-      } else {
-        setMessage('Error al guardar el anuncio');
-      }
-    } catch (err) {
-      setMessage('Error de conexión');
+      const data = await response.json();
+      if (!response.ok || data.status !== 'ok') throw new Error(data.error || 'No fue posible guardar la campaña.');
+      setAnnouncement(normalizeAnnouncement(data.announcement));
+      setNotice({ type: 'success', text: 'Campaña guardada y sincronizada con la tienda.' });
+    } catch (error) {
+      setNotice({ type: 'error', text: error.message || 'No fue posible guardar la campaña.' });
     } finally {
       setSaving(false);
     }
   };
 
-  const handleSendPush = async () => {
-    if (!pushData.title || !pushData.message) return setPushMessage('Error: Título y mensaje requeridos');
+  const handleSendPush = async (event) => {
+    event.preventDefault();
+    setPushNotice(null);
+    if (!pushData.title.trim() || !pushData.message.trim()) {
+      setPushNotice({ type: 'error', text: 'El título y el mensaje son obligatorios.' });
+      return;
+    }
     setSendingPush(true);
-    setPushMessage('');
     try {
       const token = sessionStorage.getItem('distrito_admin_token');
-      const res = await fetch(`${API_URL}/admin/push/send`, {
+      const response = await fetch(`${API_URL}/admin/push/send`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(pushData)
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ title: pushData.title.trim(), message: pushData.message.trim(), url: pushData.url.trim() || '/' }),
       });
-      const data = await res.json();
-      if (res.ok) {
-        setPushMessage(`¡Notificación enviada a ${data.sent} clientes!`);
-        setPushData({ title: '', message: '', url: '/' });
-      } else {
-        setPushMessage(`Error: ${data.error}`);
-      }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'No fue posible enviar la notificación.');
+      setPushNotice({ type: 'success', text: `Notificación enviada a ${data.sent || 0} dispositivos.` });
+      setPushData({ title: '', message: '', url: '/' });
     } catch (error) {
-      setPushMessage('Error de conexión al enviar Push');
+      setPushNotice({ type: 'error', text: error.message || 'No fue posible enviar la notificación.' });
+    } finally {
+      setSendingPush(false);
     }
-    setSendingPush(false);
   };
 
-  if (loading) return <div style={{ padding: '40px', color: '#FFF' }}>Cargando...</div>;
+  if (loading) return <div className="ds-loader-container"><div className="ds-loader" /><p>Cargando campañas…</p></div>;
 
   return (
-    <div style={{ padding: '40px', fontFamily: "'Montserrat', sans-serif", backgroundColor: '#0D0D0D', minHeight: '100%' }}>
-      <div style={{ marginBottom: '40px' }}>
-        <h1 style={{ color: '#FFFFFF', fontSize: '36px', fontWeight: '800', margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Megaphone size={36} color="#D4A017" /> Configuración de Anuncio
-        </h1>
-        <p style={{ color: '#BDBDBD', fontSize: '16px', margin: 0 }}>
-          Administra el anuncio emergente (pop-up) que ven los clientes al entrar a la tienda.
-        </p>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px' }}>
-        {/* Formulario */}
-        <div style={{ backgroundColor: '#111111', borderRadius: '20px', padding: '30px', border: '1px solid #222222' }}>
-          
-          <div style={{ marginBottom: '24px' }}>
-            <label style={{ display: 'block', color: '#BDBDBD', marginBottom: '8px', fontWeight: '500' }}>Título del Anuncio</label>
-            <input 
-              type="text" 
-              value={announcement.title}
-              onChange={(e) => setAnnouncement({...announcement, title: e.target.value})}
-              placeholder="Ej: ¡Gran Promoción de Fin de Semana!"
-              style={{ width: '100%', backgroundColor: '#1A1A1A', border: '1px solid #333333', borderRadius: '12px', padding: '16px', color: '#FFFFFF', fontSize: '15px', boxSizing: 'border-box' }}
-            />
-          </div>
-
-          <div style={{ marginBottom: '24px' }}>
-            <label style={{ display: 'block', color: '#BDBDBD', marginBottom: '8px', fontWeight: '500' }}>URL de la Imagen</label>
-            <div style={{ position: 'relative' }}>
-              <ImageIcon size={20} style={{ position: 'absolute', left: '16px', top: '16px', color: '#6B7280' }} />
-              <input 
-                type="text" 
-                value={announcement.image_url}
-                onChange={(e) => setAnnouncement({...announcement, image_url: e.target.value})}
-                placeholder="https://ejemplo.com/imagen.jpg"
-                style={{ width: '100%', backgroundColor: '#1A1A1A', border: '1px solid #333333', borderRadius: '12px', padding: '16px 16px 16px 48px', color: '#FFFFFF', fontSize: '15px', boxSizing: 'border-box' }}
-              />
-            </div>
-            <p style={{ color: '#6B7280', fontSize: '13px', marginTop: '8px', marginBottom: '16px' }}>Pega el enlace directo a la imagen. Recomendado formato cuadrado o vertical.</p>
-            
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{ flex: 1, height: '1px', backgroundColor: '#333' }}></div>
-              <span style={{ color: '#6B7280', fontSize: '14px', fontWeight: '500' }}>O Sube desde tu PC</span>
-              <div style={{ flex: 1, height: '1px', backgroundColor: '#333' }}></div>
-            </div>
-
-            <div style={{ marginTop: '16px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', padding: '16px', backgroundColor: '#1A1A1A', border: '1px dashed #4A4A4A', borderRadius: '12px', color: '#BDBDBD', cursor: 'pointer', boxSizing: 'border-box', transition: 'all 0.2s' }}>
-                <ImageIcon size={20} />
-                <span>Seleccionar Imagen (Máx 5MB)</span>
-                <input 
-                  type="file" 
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  style={{ display: 'none' }}
-                />
-              </label>
-            </div>
-          </div>
-
-          <div style={{ marginBottom: '32px', display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', backgroundColor: '#1A1A1A', borderRadius: '12px', border: '1px solid #333333' }}>
-            <div 
-              onClick={() => setAnnouncement({...announcement, is_active: !announcement.is_active})}
-              style={{ 
-                width: '50px', height: '28px', backgroundColor: announcement.is_active ? '#D4A017' : '#333333', 
-                borderRadius: '999px', position: 'relative', cursor: 'pointer', transition: '0.3s'
-              }}
-            >
-              <div style={{ 
-                width: '24px', height: '24px', backgroundColor: '#FFF', borderRadius: '50%', 
-                position: 'absolute', top: '2px', left: announcement.is_active ? '24px' : '2px', transition: '0.3s' 
-              }} />
-            </div>
-            <div>
-              <div style={{ color: '#FFF', fontWeight: '600' }}>Activar Anuncio</div>
-              <div style={{ color: '#BDBDBD', fontSize: '13px' }}>{announcement.is_active ? 'El anuncio es visible para todos.' : 'El anuncio está oculto actualmente.'}</div>
-            </div>
-          </div>
-
-          <button 
-            onClick={handleSave}
-            disabled={saving}
-            style={{ 
-              width: '100%', backgroundColor: '#D4A017', color: '#000000', border: 'none', borderRadius: '12px', 
-              padding: '16px', fontSize: '16px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' 
-            }}
-          >
-            <Save size={20} /> {saving ? 'Guardando...' : 'Guardar Cambios'}
-          </button>
-
-          {message && (
-            <div style={{ marginTop: '16px', padding: '12px', backgroundColor: message.includes('Error') ? 'rgba(239,68,68,0.2)' : 'rgba(34,197,94,0.2)', color: message.includes('Error') ? '#EF4444' : '#4ADE80', borderRadius: '8px', textAlign: 'center', fontWeight: '500' }}>
-              {message}
-            </div>
-          )}
-        </div>
-
-        {/* Vista Previa */}
+    <div className="ds-page announcement-page">
+      <header className="ds-page-header">
         <div>
-          <h3 style={{ color: '#FFFFFF', marginTop: '0', marginBottom: '20px', fontSize: '20px' }}>Vista Previa</h3>
-          <div style={{ 
-            backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: '20px', padding: '40px', border: '1px solid #222222', 
-            display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '400px', position: 'relative' 
-          }}>
-            <div style={{ 
-              backgroundColor: '#111111', width: '100%', maxWidth: '350px', borderRadius: '24px', overflow: 'hidden', 
-              boxShadow: '0 20px 40px rgba(0,0,0,0.8)', border: '1px solid #333333'
-            }}>
-              {announcement.image_url ? (
-                <img src={announcement.image_url} alt="Anuncio" style={{ width: '100%', height: 'auto', maxHeight: '350px', objectFit: 'contain', backgroundColor: '#000' }} onError={(e) => e.target.src = 'https://via.placeholder.com/400x400?text=Imagen+Invalida'} />
-              ) : (
-                <div style={{ width: '100%', height: '350px', backgroundColor: '#1A1A1A', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280' }}>
-                  <ImageIcon size={48} />
-                </div>
-              )}
-              <div style={{ padding: '24px', textAlign: 'center' }}>
-                <h3 style={{ margin: '0 0 16px 0', color: '#FFFFFF', fontSize: '22px', fontWeight: '800' }}>
-                  {announcement.title || 'Título del anuncio'}
-                </h3>
-                <button style={{ backgroundColor: '#D4A017', color: '#000', border: 'none', borderRadius: '12px', padding: '12px 24px', fontWeight: '700', fontSize: '15px', width: '100%' }}>
-                  Cerrar
-                </button>
-              </div>
-            </div>
-          </div>
+          <span className="ds-page-kicker">Comunicación con clientes</span>
+          <h1 className="ds-page-title">Anuncios y notificaciones</h1>
+          <p className="ds-page-subtitle">Diseña, programa y publica la campaña que aparece en la tienda virtual.</p>
         </div>
-      </div>
-
-      {/* Notificaciones Push */}
-      <div style={{ marginTop: '40px', display: 'grid', gridTemplateColumns: '1fr', gap: '40px' }}>
-        <div style={{ backgroundColor: '#111111', borderRadius: '20px', padding: '30px', border: '1px solid #222222' }}>
-          <h2 style={{ color: '#FFFFFF', fontSize: '24px', fontWeight: '800', margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <Bell size={28} color="#D4A017" /> Enviar Notificación Push (A Celulares)
-          </h2>
-          <p style={{ color: '#BDBDBD', fontSize: '15px', marginBottom: '24px' }}>
-            Envía un mensaje directo a todos los clientes que hayan aceptado recibir notificaciones e instalado la App.
-          </p>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-            <div>
-              <label style={{ display: 'block', color: '#BDBDBD', marginBottom: '8px', fontWeight: '500' }}>Título</label>
-              <input 
-                type="text" 
-                value={pushData.title}
-                onChange={(e) => setPushData({...pushData, title: e.target.value})}
-                placeholder="Ej: ¡Promo 2x1!"
-                style={{ width: '100%', backgroundColor: '#1A1A1A', border: '1px solid #333333', borderRadius: '12px', padding: '14px', color: '#FFFFFF', fontSize: '15px', boxSizing: 'border-box' }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', color: '#BDBDBD', marginBottom: '8px', fontWeight: '500' }}>Mensaje</label>
-              <input 
-                type="text" 
-                value={pushData.message}
-                onChange={(e) => setPushData({...pushData, message: e.target.value})}
-                placeholder="Ej: Pide hoy y el envío es gratis."
-                style={{ width: '100%', backgroundColor: '#1A1A1A', border: '1px solid #333333', borderRadius: '12px', padding: '14px', color: '#FFFFFF', fontSize: '15px', boxSizing: 'border-box' }}
-              />
-            </div>
-          </div>
-
-          <button 
-            onClick={handleSendPush}
-            disabled={sendingPush}
-            style={{ 
-              width: '100%', backgroundColor: '#22C55E', color: '#FFFFFF', border: 'none', borderRadius: '12px', 
-              padding: '16px', fontSize: '16px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '24px' 
-            }}
-          >
-            <Send size={20} /> {sendingPush ? 'Enviando...' : 'Enviar Notificación a Todos'}
-          </button>
-
-          {pushMessage && (
-            <div style={{ marginTop: '16px', padding: '12px', backgroundColor: pushMessage.includes('Error') ? 'rgba(239,68,68,0.2)' : 'rgba(34,197,94,0.2)', color: pushMessage.includes('Error') ? '#EF4444' : '#4ADE80', borderRadius: '8px', textAlign: 'center', fontWeight: '500' }}>
-              {pushMessage}
-            </div>
-          )}
+        <div className="ds-page-actions">
+          <span className={`ds-badge ds-badge-${status.tone}`}><Megaphone size={14} /> {status.label}</span>
+          <button className="ds-btn ds-btn-secondary" onClick={fetchAnnouncement}><RefreshCw size={18} /> Recargar</button>
         </div>
-      </div>
+      </header>
+
+      {notice && <div className={`ds-inline-alert ds-inline-alert-${notice.type === 'success' ? 'success' : 'danger'}`} role="alert">{notice.type === 'success' ? <CheckCircle size={19} /> : <XCircle size={19} />}<span>{notice.text}</span></div>}
+
+      <form className="announcement-workspace" onSubmit={handleSave}>
+        <section className="ds-card announcement-editor">
+          <div className="ds-card-header"><div><span className="ds-page-kicker">Contenido</span><h2 className="ds-card-title">Campaña de la tienda</h2></div><small>{status.description}</small></div>
+          <div className="ds-card-body ds-form">
+            <div className="ds-form-group">
+              <label className="ds-form-label" htmlFor="announcement-title">Título</label>
+              <input id="announcement-title" className="ds-input" maxLength={255} required value={announcement.title} onChange={(event) => update('title', event.target.value)} placeholder="Ej. Envío gratis este fin de semana" />
+              <span className="ds-form-help announcement-counter">Mensaje principal de la campaña <strong>{announcement.title.length}/255</strong></span>
+            </div>
+            <div className="ds-form-group">
+              <label className="ds-form-label" htmlFor="announcement-body">Descripción</label>
+              <textarea id="announcement-body" className="ds-textarea" maxLength={1000} value={announcement.body} onChange={(event) => update('body', event.target.value)} placeholder="Explica brevemente la promoción o novedad." />
+              <span className="ds-form-help announcement-counter">Texto opcional bajo el título <strong>{announcement.body.length}/1000</strong></span>
+            </div>
+
+            <div className="announcement-section-heading"><ImageIcon size={18} /><div><strong>Imagen</strong><span>Recomendado: 1080 × 1080 px, JPG o PNG.</span></div></div>
+            <div className="ds-form-group">
+              <label className="ds-form-label" htmlFor="announcement-image-url">URL de imagen</label>
+              <input id="announcement-image-url" className="ds-input" value={announcement.image_url?.startsWith('data:') ? '' : announcement.image_url} onChange={(event) => update('image_url', event.target.value)} placeholder="https://…" />
+            </div>
+            <div className="announcement-upload-actions">
+              <label className="announcement-upload"><Upload size={18} /><span>Subir desde el equipo</span><input type="file" accept="image/*" onChange={handleImageUpload} /></label>
+              {announcement.image_url && <button type="button" className="ds-btn ds-btn-ghost" onClick={() => update('image_url', '')}><Trash2 size={17} /> Quitar imagen</button>}
+            </div>
+
+            <div className="announcement-section-heading"><ExternalLink size={18} /><div><strong>Llamado a la acción</strong><span>Define qué hará el cliente al pulsar el botón.</span></div></div>
+            <div className="ds-form-grid">
+              <div className="ds-form-group"><label className="ds-form-label" htmlFor="announcement-cta">Texto del botón</label><input id="announcement-cta" className="ds-input" maxLength={80} value={announcement.cta_label} onChange={(event) => update('cta_label', event.target.value)} /></div>
+              <div className="ds-form-group"><label className="ds-form-label" htmlFor="announcement-link">Destino</label><input id="announcement-link" className="ds-input" value={announcement.cta_url} onChange={(event) => update('cta_url', event.target.value)} placeholder="/ o https://…" /></div>
+            </div>
+
+            <div className="announcement-section-heading"><CalendarClock size={18} /><div><strong>Publicación</strong><span>Las horas se interpretan en Colombia.</span></div></div>
+            <label className="announcement-publish-toggle">
+              <input type="checkbox" checked={announcement.is_active} onChange={(event) => update('is_active', event.target.checked)} />
+              <span className="ds-switch" aria-hidden="true"><i /></span>
+              <span><strong>Campaña activa</strong><small>{announcement.is_active ? 'Se publicará según la programación.' : 'Permanece como borrador.'}</small></span>
+            </label>
+            <div className="ds-form-grid">
+              <div className="ds-form-group"><label className="ds-form-label" htmlFor="announcement-start">Inicia</label><input id="announcement-start" type="datetime-local" className="ds-input" value={announcement.starts_at} onChange={(event) => update('starts_at', event.target.value)} /></div>
+              <div className="ds-form-group"><label className="ds-form-label" htmlFor="announcement-end">Finaliza</label><input id="announcement-end" type="datetime-local" className="ds-input" min={announcement.starts_at} value={announcement.ends_at} onChange={(event) => update('ends_at', event.target.value)} /></div>
+            </div>
+            <div className="ds-form-group"><label className="ds-form-label" htmlFor="announcement-frequency">Frecuencia por cliente</label><select id="announcement-frequency" className="ds-select" value={announcement.display_frequency} onChange={(event) => update('display_frequency', event.target.value)}><option value="session">Una vez por sesión</option><option value="daily">Una vez al día</option><option value="always">En cada visita</option></select></div>
+          </div>
+          <div className="ds-card-footer"><span className="announcement-last-update">{announcement.updated_at ? `Último cambio: ${formatDateTime(announcement.updated_at)}` : 'Aún no se ha guardado'}</span><button className="ds-btn ds-btn-primary" type="submit" disabled={saving}><Save size={18} /> {saving ? 'Guardando…' : 'Guardar campaña'}</button></div>
+        </section>
+
+        <aside className="announcement-preview-column">
+          <div className="announcement-preview-heading"><div><span className="ds-page-kicker">Vista previa</span><h2>Así lo verá el cliente</h2></div><span className={`ds-badge ds-badge-${status.tone}`}>{status.label}</span></div>
+          <div className="announcement-preview-stage">
+            <article className="announcement-preview-card">
+              {announcement.image_url ? <img key={announcement.image_url} src={announcement.image_url} alt="Vista previa de la campaña" /> : <div className="announcement-preview-empty"><ImageIcon size={42} /><span>Agrega una imagen para completar la campaña</span></div>}
+              <div><h3>{announcement.title || 'Título de la campaña'}</h3>{announcement.body && <p>{announcement.body}</p>}<button type="button">{announcement.cta_label || 'Continuar'}</button></div>
+            </article>
+          </div>
+        </aside>
+      </form>
+
+      <section className="ds-card announcement-push-card">
+        <div className="ds-card-header"><div><span className="ds-page-kicker">Canal inmediato</span><h2 className="ds-card-title"><Bell size={19} /> Notificación push</h2></div><span className="ds-badge ds-badge-info">Todos los suscriptores</span></div>
+        <form className="ds-card-body ds-form" onSubmit={handleSendPush}>
+          <p className="ds-form-help">Envía un mensaje único a los clientes que aceptaron notificaciones. Este envío no modifica la campaña de la tienda.</p>
+          <div className="announcement-push-grid">
+            <div className="ds-form-group"><label className="ds-form-label" htmlFor="push-title">Título</label><input id="push-title" className="ds-input" maxLength={80} required value={pushData.title} onChange={(event) => setPushData({ ...pushData, title: event.target.value })} placeholder="Ej. Tu pedido favorito tiene descuento" /></div>
+            <div className="ds-form-group"><label className="ds-form-label" htmlFor="push-url">Destino</label><input id="push-url" className="ds-input" value={pushData.url} onChange={(event) => setPushData({ ...pushData, url: event.target.value })} placeholder="/" /></div>
+            <div className="ds-form-group announcement-push-message"><label className="ds-form-label" htmlFor="push-message">Mensaje</label><textarea id="push-message" className="ds-textarea" maxLength={180} required value={pushData.message} onChange={(event) => setPushData({ ...pushData, message: event.target.value })} placeholder="Escribe un mensaje breve y accionable." /><span className="ds-form-help announcement-counter"><span>Máximo 180 caracteres</span><strong>{pushData.message.length}/180</strong></span></div>
+          </div>
+          {pushNotice && <div className={`ds-inline-alert ds-inline-alert-${pushNotice.type === 'success' ? 'success' : 'danger'}`}>{pushNotice.type === 'success' ? <CheckCircle size={18} /> : <XCircle size={18} />}<span>{pushNotice.text}</span></div>}
+          <div className="announcement-push-submit"><button className="ds-btn ds-btn-success" disabled={sendingPush}><Send size={18} /> {sendingPush ? 'Enviando…' : 'Enviar notificación'}</button></div>
+        </form>
+      </section>
     </div>
   );
 }

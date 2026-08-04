@@ -118,20 +118,22 @@ export default function AdminRecetas() {
   const margin = salePrice > 0 ? ((profit / salePrice) * 100).toFixed(1) : 0;
 
   return (
-    <div style={{ padding: '24px', backgroundColor: '#0D0D0D', minHeight: '100vh', color: '#FFF' }}>
-      <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ margin: '0 0 8px 0', fontSize: '28px', fontWeight: '800', color: '#D4A017' }}>Creador de Recetas</h1>
-        <p style={{ margin: 0, color: '#BDBDBD' }}>Configura los ingredientes de cada producto para calcular tu rentabilidad automáticamente.</p>
+    <div className="ds-page">
+      <div className="ds-page-header">
+        <div>
+          <h1 className="ds-page-title" style={{ color: '#D4A017' }}>Creador de Recetas</h1>
+          <p className="ds-page-subtitle">Configura los ingredientes de cada producto para calcular tu rentabilidad automáticamente.</p>
+        </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '24px', alignItems: 'start' }}>
+      <div className="admin-recetas-grid">
         
         {/* COLUMNA IZQUIERDA: LISTA DE PRODUCTOS */}
-        <div style={{ backgroundColor: '#111', borderRadius: '16px', border: '1px solid #333', overflow: 'hidden' }}>
-          <div style={{ padding: '20px', borderBottom: '1px solid #333', backgroundColor: '#1A1A1A' }}>
-            <h3 style={{ margin: 0, color: '#FFF', fontWeight: '700' }}>Selecciona un Producto</h3>
+        <div className="ds-card admin-recetas-sidebar">
+          <div className="ds-card-header">
+            <h3 style={{ margin: 0 }}>Selecciona un Producto</h3>
           </div>
-          <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
+          <div className="ds-card-body" style={{ padding: 0, maxHeight: '600px', overflowY: 'auto' }}>
             {products.map(p => {
               const costData = recipesCosts.find(rc => rc.product_id === p.id);
               const cost = costData ? Number(costData.total_cost) : 0;
@@ -141,29 +143,19 @@ export default function AdminRecetas() {
                 <div 
                   key={p.id}
                   onClick={() => handleSelectProduct(p)}
-                  style={{ 
-                    padding: '16px 20px', 
-                    borderBottom: '1px solid #333', 
-                    cursor: 'pointer',
-                    backgroundColor: isSelected ? '#1A1A1A' : 'transparent',
-                    borderLeft: isSelected ? '4px solid #D4A017' : '4px solid transparent',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    transition: 'all 0.2s'
-                  }}
+                  className={`admin-recetas-product-item ${isSelected ? 'active' : ''}`}
                 >
                   <div>
-                    <strong style={{ display: 'block', color: isSelected ? '#D4A017' : '#FFF', marginBottom: '4px' }}>{p.title}</strong>
-                    <span style={{ fontSize: '12px', color: '#888' }}>Precio: {formatter.format(p.price)}</span>
+                    <strong className="product-title">{p.title}</strong>
+                    <span className="product-price">Precio: {formatter.format(p.price)}</span>
                   </div>
                   {cost > 0 ? (
-                    <div style={{ textAlign: 'right', fontSize: '12px' }}>
-                      <span style={{ color: '#EF4444', display: 'block' }}>Costo: {formatter.format(cost)}</span>
-                      <span style={{ color: '#10B981', fontWeight: '700' }}>Ganancia: {formatter.format(p.price - cost)}</span>
+                    <div className="product-costs">
+                      <span className="cost-label">Costo: {formatter.format(cost)}</span>
+                      <span className="profit-label">Ganancia: {formatter.format(p.price - cost)}</span>
                     </div>
                   ) : (
-                    <span style={{ color: '#888', fontSize: '12px', fontStyle: 'italic' }}>Sin receta</span>
+                    <span className="no-recipe-label">Sin receta</span>
                   )}
                 </div>
               );
@@ -173,122 +165,193 @@ export default function AdminRecetas() {
 
         {/* COLUMNA DERECHA: CONSTRUCTOR DE RECETA */}
         {selectedProduct ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          <div className="admin-recetas-main">
             
             {/* TARJETA FINANCIERA DORADA */}
-            <div style={{ background: 'linear-gradient(135deg, #1A1A1A 0%, #0D0D0D 100%)', borderRadius: '16px', border: '1px solid #D4A017', padding: '24px', position: 'relative', overflow: 'hidden', boxShadow: '0 10px 30px rgba(212, 160, 23, 0.1)' }}>
-              <div style={{ position: 'absolute', top: '-20px', right: '-20px', opacity: 0.05, transform: 'rotate(15deg)' }}>
+            <div className="ds-card admin-recetas-finance-card">
+              <div className="finance-bg-icon">
                 <TrendingUp size={150} color="#D4A017" />
               </div>
               
-              <h2 style={{ margin: '0 0 20px 0', color: '#FFF', fontSize: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <h2 className="finance-title">
                 {selectedProduct.title}
-                <span style={{ fontSize: '12px', backgroundColor: '#333', padding: '4px 12px', borderRadius: '20px', fontWeight: '600' }}>Rentabilidad Activa</span>
+                <span className="finance-badge">Rentabilidad Activa</span>
               </h2>
               
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
-                <div style={{ backgroundColor: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '12px' }}>
-                  <p style={{ margin: '0 0 8px 0', color: '#BDBDBD', fontSize: '13px' }}>Precio de Venta</p>
-                  <div style={{ color: '#FFF', fontSize: '20px', fontWeight: '800' }}>{formatter.format(salePrice)}</div>
+              <div className="ds-cards-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
+                <div className="ds-stat-card" style={{ backgroundColor: 'rgba(255,255,255,0.05)', border: 'none' }}>
+                  <div className="ds-stat-label">Precio de Venta</div>
+                  <div className="ds-stat-value">{formatter.format(salePrice)}</div>
                 </div>
-                <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
-                  <p style={{ margin: '0 0 8px 0', color: '#EF4444', fontSize: '13px' }}>Costo Producción</p>
-                  <div style={{ color: '#EF4444', fontSize: '20px', fontWeight: '800' }}>{formatter.format(totalCost)}</div>
+                <div className="ds-stat-card" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                  <div className="ds-stat-label" style={{ color: '#EF4444' }}>Costo Producción</div>
+                  <div className="ds-stat-value" style={{ color: '#EF4444' }}>{formatter.format(totalCost)}</div>
                 </div>
-                <div style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
-                  <p style={{ margin: '0 0 8px 0', color: '#10B981', fontSize: '13px' }}>Ganancia Neta</p>
-                  <div style={{ color: '#10B981', fontSize: '20px', fontWeight: '800' }}>{formatter.format(profit)}</div>
+                <div className="ds-stat-card" style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                  <div className="ds-stat-label" style={{ color: '#10B981' }}>Ganancia Neta</div>
+                  <div className="ds-stat-value" style={{ color: '#10B981' }}>{formatter.format(profit)}</div>
                 </div>
-                <div style={{ backgroundColor: 'rgba(212, 160, 23, 0.1)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(212, 160, 23, 0.3)' }}>
-                  <p style={{ margin: '0 0 8px 0', color: '#D4A017', fontSize: '13px' }}>Margen (ROI)</p>
-                  <div style={{ color: '#D4A017', fontSize: '20px', fontWeight: '800' }}>{margin}%</div>
+                <div className="ds-stat-card" style={{ backgroundColor: 'rgba(212, 160, 23, 0.1)', border: '1px solid rgba(212, 160, 23, 0.3)' }}>
+                  <div className="ds-stat-label" style={{ color: '#D4A017' }}>Margen (ROI)</div>
+                  <div className="ds-stat-value" style={{ color: '#D4A017' }}>{margin}%</div>
                 </div>
               </div>
             </div>
 
             {/* CREADOR DE INGREDIENTES */}
-            <div style={{ backgroundColor: '#111', borderRadius: '16px', border: '1px solid #333', padding: '24px' }}>
-              <h3 style={{ margin: '0 0 20px 0', color: '#FFF' }}>Agregar Ingrediente</h3>
-              <form onSubmit={handleAddIngredient} style={{ display: 'flex', gap: '16px', alignItems: 'flex-end' }}>
-                <div style={{ flex: 2 }}>
-                  <label style={{ display: 'block', color: '#888', fontSize: '13px', marginBottom: '8px' }}>Ingrediente (Del panel de Rendimientos)</label>
-                  <select 
-                    value={newIngredientId} 
-                    onChange={e => setNewIngredientId(e.target.value)} 
-                    required
-                    style={{ width: '100%', backgroundColor: '#1A1A1A', border: '1px solid #333', color: '#FFF', padding: '12px', borderRadius: '8px' }}
-                  >
-                    <option value="">-- Seleccionar --</option>
-                    {rendimientos.map(r => (
-                      <option key={r.id} value={r.id}>
-                        {r.ingrediente_name} (1 {r.unidad_consumo} = {formatter.format(r.costo_por_unidad)})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', color: '#888', fontSize: '13px', marginBottom: '8px' }}>Cantidad Usada</label>
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    required
-                    value={cantidadUsada}
-                    onChange={e => setCantidadUsada(e.target.value)}
-                    placeholder="Ej: 100"
-                    style={{ width: '100%', backgroundColor: '#1A1A1A', border: '1px solid #333', color: '#FFF', padding: '12px', borderRadius: '8px', boxSizing: 'border-box' }}
-                  />
-                </div>
-                <button type="submit" style={{ backgroundColor: '#D4A017', color: '#000', border: 'none', padding: '12px 24px', borderRadius: '8px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Plus size={20} /> Agregar
-                </button>
-              </form>
+            <div className="ds-card">
+              <div className="ds-card-header">
+                <h3>Agregar Ingrediente</h3>
+              </div>
+              <div className="ds-card-body">
+                <form onSubmit={handleAddIngredient} className="ds-form-grid" style={{ alignItems: 'flex-end' }}>
+                  <div className="ds-form-group">
+                    <label className="ds-form-label">Ingrediente (Del panel de Rendimientos)</label>
+                    <select 
+                      value={newIngredientId} 
+                      onChange={e => setNewIngredientId(e.target.value)} 
+                      required
+                      className="ds-select"
+                    >
+                      <option value="">-- Seleccionar --</option>
+                      {rendimientos.map(r => (
+                        <option key={r.id} value={r.id}>
+                          {r.ingrediente_name} (1 {r.unidad_consumo} = {formatter.format(r.costo_por_unidad)})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="ds-form-group">
+                    <label className="ds-form-label">Cantidad Usada</label>
+                    <input 
+                      type="number" 
+                      step="0.01"
+                      required
+                      value={cantidadUsada}
+                      onChange={e => setCantidadUsada(e.target.value)}
+                      placeholder="Ej: 100"
+                      className="ds-input"
+                    />
+                  </div>
+                  <div className="ds-form-group">
+                    <button type="submit" className="ds-btn ds-btn-primary ds-btn-full">
+                      <Plus size={20} /> Agregar
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
 
             {/* TABLA DE LA RECETA */}
-            <div style={{ backgroundColor: '#111', borderRadius: '16px', border: '1px solid #333', overflow: 'hidden' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead style={{ backgroundColor: '#1A1A1A', borderBottom: '1px solid #333' }}>
-                  <tr>
-                    <th style={{ padding: '16px', textAlign: 'left', color: '#888', fontWeight: '600', fontSize: '13px' }}>INGREDIENTE</th>
-                    <th style={{ padding: '16px', textAlign: 'left', color: '#888', fontWeight: '600', fontSize: '13px' }}>CANTIDAD</th>
-                    <th style={{ padding: '16px', textAlign: 'right', color: '#888', fontWeight: '600', fontSize: '13px' }}>COSTO</th>
-                    <th style={{ padding: '16px', textAlign: 'right', color: '#888', fontWeight: '600', fontSize: '13px' }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {currentRecipe.map((item) => (
-                    <tr key={item.id} style={{ borderBottom: '1px solid #222' }}>
-                      <td style={{ padding: '16px', color: '#FFF', fontWeight: '600' }}>{item.ingrediente_name}</td>
-                      <td style={{ padding: '16px', color: '#BDBDBD' }}>{item.cantidad_usada} {item.unidad_consumo}</td>
-                      <td style={{ padding: '16px', textAlign: 'right', color: '#EF4444', fontWeight: '700' }}>{formatter.format(item.costo_calculado)}</td>
-                      <td style={{ padding: '16px', textAlign: 'right' }}>
-                        <button onClick={() => handleDeleteIngredient(item.id)} style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '4px' }}>
-                          <Trash2 size={18} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {currentRecipe.length === 0 && (
+            <div className="ds-card">
+              <div className="ds-table-container hide-on-mobile">
+                <table className="ds-table">
+                  <thead>
                     <tr>
-                      <td colSpan="4" style={{ padding: '40px', textAlign: 'center', color: '#666' }}>
-                        <AlertCircle size={32} style={{ margin: '0 auto 12px auto', opacity: 0.5 }} />
-                        No hay ingredientes en esta receta.
-                      </td>
+                      <th>INGREDIENTE</th>
+                      <th>CANTIDAD</th>
+                      <th style={{ textAlign: 'right' }}>COSTO</th>
+                      <th></th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {currentRecipe.map((item) => (
+                      <tr key={item.id}>
+                        <td>{item.ingrediente_name}</td>
+                        <td>{item.cantidad_usada} {item.unidad_consumo}</td>
+                        <td style={{ textAlign: 'right', color: '#EF4444', fontWeight: '700' }}>{formatter.format(item.costo_calculado)}</td>
+                        <td style={{ textAlign: 'right' }}>
+                          <button onClick={() => handleDeleteIngredient(item.id)} className="ds-btn-icon ds-btn-ghost" style={{ color: '#EF4444' }}>
+                            <Trash2 size={18} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {currentRecipe.length === 0 && (
+                      <tr>
+                        <td colSpan="4" className="ds-empty-state">
+                          <AlertCircle size={32} style={{ margin: '0 auto 12px auto', opacity: 0.5 }} />
+                          No hay ingredientes en esta receta.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile cards view */}
+              <div className="ds-table-cards show-on-mobile">
+                {currentRecipe.map((item) => (
+                  <div key={item.id} className="ds-table-card">
+                    <div className="ds-table-card-row">
+                      <span className="ds-table-card-label">INGREDIENTE</span>
+                      <span className="ds-table-card-value">{item.ingrediente_name}</span>
+                    </div>
+                    <div className="ds-table-card-row">
+                      <span className="ds-table-card-label">CANTIDAD</span>
+                      <span className="ds-table-card-value">{item.cantidad_usada} {item.unidad_consumo}</span>
+                    </div>
+                    <div className="ds-table-card-row">
+                      <span className="ds-table-card-label">COSTO</span>
+                      <span className="ds-table-card-value" style={{ color: '#EF4444', fontWeight: '700' }}>{formatter.format(item.costo_calculado)}</span>
+                    </div>
+                    <div className="ds-table-card-actions">
+                      <button onClick={() => handleDeleteIngredient(item.id)} className="ds-btn ds-btn-danger ds-btn-sm ds-btn-full">
+                        <Trash2 size={16} /> Eliminar
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {currentRecipe.length === 0 && (
+                  <div className="ds-empty-state">
+                    <AlertCircle size={32} style={{ margin: '0 auto 12px auto', opacity: 0.5 }} />
+                    No hay ingredientes en esta receta.
+                  </div>
+                )}
+              </div>
             </div>
 
           </div>
         ) : (
-          <div style={{ backgroundColor: '#111', borderRadius: '16px', border: '1px solid #333', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '600px', color: '#666', textAlign: 'center', padding: '40px' }}>
+          <div className="ds-card ds-empty-state admin-recetas-empty">
             <ArrowRight size={48} style={{ marginBottom: '16px', opacity: 0.5 }} />
-            <h3 style={{ margin: '0 0 8px 0', color: '#888' }}>Selecciona un Producto</h3>
-            <p style={{ margin: 0 }}>Haz clic en cualquier producto de la lista izquierda<br/>para empezar a armar su receta.</p>
+            <h3>Selecciona un Producto</h3>
+            <p>Haz clic en cualquier producto de la lista izquierda<br/>para empezar a armar su receta.</p>
           </div>
         )}
       </div>
+
+      <style>{`
+        .admin-recetas-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 24px; align-items: start; }
+        @media (max-width: 768px) {
+          .admin-recetas-grid { grid-template-columns: 1fr; }
+          .hide-on-mobile { display: none !important; }
+          .show-on-mobile { display: flex !important; flex-direction: column; gap: 16px; padding: 16px; }
+        }
+        @media (min-width: 769px) {
+          .show-on-mobile { display: none !important; }
+        }
+
+        .admin-recetas-product-item { padding: 16px 20px; border-bottom: 1px solid #333; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: all 0.2s; border-left: 4px solid transparent; }
+        .admin-recetas-product-item:hover { background-color: rgba(255,255,255,0.05); }
+        .admin-recetas-product-item.active { background-color: #1A1A1A; border-left: 4px solid #D4A017; }
+        .admin-recetas-product-item .product-title { display: block; margin-bottom: 4px; color: #FFF; }
+        .admin-recetas-product-item.active .product-title { color: #D4A017; }
+        .admin-recetas-product-item .product-price { font-size: 12px; color: #888; }
+        .admin-recetas-product-item .product-costs { text-align: right; font-size: 12px; }
+        .admin-recetas-product-item .cost-label { color: #EF4444; display: block; }
+        .admin-recetas-product-item .profit-label { color: #10B981; font-weight: 700; }
+        .admin-recetas-product-item .no-recipe-label { color: #888; font-size: 12px; font-style: italic; }
+
+        .admin-recetas-main { display: flex; flex-direction: column; gap: 24px; }
+        
+        .admin-recetas-finance-card { background: linear-gradient(135deg, #1A1A1A 0%, #0D0D0D 100%); border: 1px solid #D4A017; position: relative; overflow: hidden; box-shadow: 0 10px 30px rgba(212, 160, 23, 0.1); }
+        .finance-bg-icon { position: absolute; top: -20px; right: -20px; opacity: 0.05; transform: rotate(15deg); }
+        .finance-title { margin: 0 0 20px 0; color: #FFF; font-size: 24px; display: flex; align-items: center; gap: 12px; z-index: 1; position: relative; }
+        .finance-badge { font-size: 12px; background-color: #333; padding: 4px 12px; border-radius: 20px; font-weight: 600; }
+        
+        .admin-recetas-empty { min-height: 400px; display: flex; flex-direction: column; justify-content: center; }
+      `}</style>
     </div>
   );
 }

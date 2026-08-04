@@ -1,94 +1,160 @@
-import { API_URL } from '../config/api';
-import React, { useState, useEffect } from 'react';
-import { 
-  ShoppingCart, Plus, Search, Filter, Globe, MessageCircle, Store, Phone, 
-  Clock, Eye, Pencil, Printer, MoreVertical, CheckCircle, ChefHat, Truck, 
-  Banknote, CreditCard, Smartphone, X, ChevronLeft, ChevronRight, Trash2, MapPin
+import { API_URL, STOREFRONT_URL } from '../config/api';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { printTicket } from '../services/printService';
+import {
+  ShoppingCart, Plus, Search, Filter, Globe, MessageCircle, Store, Phone,
+  Clock, Eye, Pencil, Printer, MoreVertical, CheckCircle, ChefHat, Trash2, MapPin,
+  Banknote, CreditCard, Smartphone, X, ChevronLeft, ChevronRight, Zap, Minus, Wallet, User, AlertCircle, Package
 } from 'lucide-react';
 
+const formatter = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
 
 export default function AdminPedidos() {
-  const [orders, setOrders] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  // 🚀 OPTIMIZACIÓN 1: Inicialización inmediata desde Caché en 0ms
+  const getInitialOrders = () => {
+    try {
+      const cached = sessionStorage.getItem('distrito_admin_orders_cache');
+      return cached ? JSON.parse(cached) : [];
+    } catch (e) { return []; }
+  };
+
+  const [orders, setOrders] = useState(getInitialOrders);
+  const [loading, setLoading] = useState(orders.length === 0);
   const [activeTab, setActiveTab] = useState('Todos');
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]); // Default to today
-  
-  // Modal State
+  const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
+
+  // Modal & Print State
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [openMenuId, setOpenMenuId] = useState(null);
-  
-  // POS State
-  const [isNewOrderOpen, setIsNewOrderOpen] = useState(false);
-  const [editingOrderId, setEditingOrderId] = useState(null);
-  const [posSearch, setPosSearch] = useState('');
-  const [posCategory, setPosCategory] = useState('Todas');
-  const [newOrderCart, setNewOrderCart] = useState([]);
+  const [openPrintMenuId, setOpenPrintMenuId] = useState(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-  const [showMobileCart, setShowMobileCart] = useState(false);
-  const [newOrderCustomer, setNewOrderCustomer] = useState({
-    name: 'Cliente Local', phone: '0000000000', barrio: '', address: '', deliveryType: 'presencial', paymentMethod: 'efectivo', source: 'Presencial', created_at: new Date().toISOString().split('T')[0], notes: ''
-  });
-  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [updatingOrderId, setUpdatingOrderId] = useState(null);
 
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     try {
       const token = sessionStorage.getItem('distrito_admin_token');
+      if (!token) return;
       const res = await fetch(`${API_URL}/admin/orders`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
-      if (data.status === 'ok') {
+      if (data.status === 'ok' && data.orders) {
         setOrders(data.orders);
+        setSelectedOrder(current => current
+          ? data.orders.find(order => Number(order.id) === Number(current.id)) || current
+          : null);
+        try {
+          sessionStorage.setItem('distrito_admin_orders_cache', JSON.stringify(data.orders));
+        } catch (e) { }
       }
     } catch (err) {
       console.error('Error fetching orders:', err);
     } finally {
       setLoading(false);
     }
-  };
-
-  const fetchProducts = async () => {
-    try {
-      const token = sessionStorage.getItem('distrito_admin_token');
-      const res = await fetch(`${API_URL}/admin/products`, { headers: { 'Authorization': `Bearer ${token}` } });
-      const data = await res.json();
-      if (data.status === 'ok') setProducts(data.products.filter(p => p.status === 'Activo'));
-    } catch (err) { console.error(err); }
-  };
+  }, []);
 
   useEffect(() => {
     fetchOrders();
-    fetchProducts();
     const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [fetchOrders]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let reconnectTimer;
+    const connect = async () => {
+      try {
+        const token = sessionStorage.getItem('distrito_admin_token');
+        if (!token) return;
+        const response = await fetch(`${API_URL}/realtime/stream`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        });
+        if (!response.ok || !response.body) return;
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const events = buffer.split('\n\n');
+          buffer = events.pop() || '';
+          if (events.some(event => event && !event.startsWith(':'))) fetchOrders();
+        }
+        reconnectTimer = window.setTimeout(connect, 3000);
+      } catch (streamError) {
+        if (streamError.name !== 'AbortError') reconnectTimer = window.setTimeout(connect, 4000);
+      }
+    };
+    connect();
+    return () => { controller.abort(); window.clearTimeout(reconnectTimer); };
+  }, [fetchOrders]);
 
   const handleUpdateStatus = async (id, newStatus) => {
     const token = sessionStorage.getItem('distrito_admin_token');
+    const nowIso = new Date().toISOString();
+    setUpdatingOrderId(id);
+
+    // Actualizar estado local inmediatamente para congelar el reloj al instante en pantalla
+    setOrders(prev => prev.map(o => {
+      if (o.id === id) {
+        const isDelivered = newStatus === 'Entregado' || newStatus === 'Completado';
+        return {
+          ...o,
+          status: newStatus,
+          updated_at: nowIso,
+          delivered_at: isDelivered ? (o.delivered_at || nowIso) : o.delivered_at
+        };
+      }
+      return o;
+    }));
+    setSelectedOrder(current => current && current.id === id
+      ? {
+          ...current,
+          status: newStatus,
+          updated_at: nowIso,
+          delivered_at: newStatus === 'Entregado' || newStatus === 'Completado'
+            ? (current.delivered_at || nowIso)
+            : current.delivered_at,
+        }
+      : current);
+
     try {
       const res = await fetch(`${API_URL}/admin/orders/${id}`, {
         method: 'PUT',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ status: newStatus })
       });
       if (res.ok) {
-        fetchOrders();
-        if (selectedOrder && selectedOrder.id === id) {
-          setSelectedOrder(null);
+        const data = await res.json();
+        if (data.status === 'ok' && data.order) {
+          setOrders(prev => prev.map(o => o.id === id ? data.order : o));
         }
+        setSelectedOrder(null);
+        return true;
       } else {
         const data = await res.json();
         alert(data.error || 'Error al actualizar el estado del pedido');
+        fetchOrders();
+        return false;
       }
     } catch (err) {
       console.error(err);
       alert('Error de red al intentar actualizar');
+      fetchOrders();
+      return false;
+    } finally {
+      setUpdatingOrderId(null);
     }
   };
 
@@ -107,186 +173,88 @@ export default function AdminPedidos() {
   };
 
   const handlePrintOrder = (order) => {
-    const printWindow = window.open('', '_blank', 'width=400,height=600');
-    let itemsHtml = '';
-    if (order.cart_json && Array.isArray(order.cart_json)) {
-      order.cart_json.forEach(item => {
-        const qty = item.quantity || item.qty || 1;
-        const price = item.price || 0;
-        itemsHtml += `<div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-          <span>${qty}x ${item.title}</span>
-          <span>$${(price * qty).toLocaleString()}</span>
-        </div>`;
-      });
-    }
-    
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Imprimir Pedido #${order.id}</title>
-          <style>
-            body { font-family: 'Courier New', Courier, monospace; font-size: 14px; padding: 20px; color: #000; }
-            h2 { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 10px; margin-bottom: 10px; }
-            .row { display: flex; justify-content: space-between; margin-bottom: 5px; }
-            .total { font-weight: bold; font-size: 16px; border-top: 1px dashed #000; padding-top: 10px; margin-top: 10px; }
-          </style>
-        </head>
-        <body>
-          <h2>DISTRITO BG</h2>
-          <div class="row"><span>Pedido:</span><span>#${order.id.toString().padStart(4, '0')}</span></div>
-          <div class="row"><span>Fecha:</span><span>${new Date(order.created_at).toLocaleString()}</span></div>
-          <div class="row"><span>Cliente:</span><span>${order.customer_name}</span></div>
-          <div class="row"><span>Teléfono:</span><span>${order.customer_phone}</span></div>
-          <div class="row"><span>Entrega:</span><span>${order.delivery_type}</span></div>
-          <div class="row"><span>Método Pago:</span><span>${order.payment_method}</span></div>
-          <br>
-          <div style="border-bottom: 1px dashed #000; margin-bottom:10px;"><b>Productos</b></div>
-          ${itemsHtml}
-          <div class="row total"><span>TOTAL</span><span>$${(order.total || 0).toLocaleString()}</span></div>
-          <br><br>
-          <div style="text-align: center;">Â¡¡Gracias por tu compra!</div>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
-    printWindow.close();
+    printTicket(order, 80);
   };
 
-  const handleSendWhatsApp = (phone, id) => {
+  const handlePrepareOrder = async (order) => {
+    handlePrintOrder(order);
+    await handleUpdateStatus(order.id, 'En preparación');
+  };
+
+  const handleSendWhatsApp = async (phone, id) => {
     if (!phone) return alert('No hay número de teléfono registrado');
-    const msg = encodeURIComponent(`Hola, te escribimos de Distrito BG sobre tu pedido #${id.toString().padStart(4, '0')}.`);
-    window.open(`https://wa.me/57${phone.replace(/\D/g, '')}?text=${msg}`, '_blank');
+    try {
+      const token = sessionStorage.getItem('distrito_admin_token');
+      const response = await fetch(`${API_URL}/admin/orders/${id}/tracking-token`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'No fue posible generar el seguimiento');
+      const trackingUrl = new URL(STOREFRONT_URL);
+      trackingUrl.searchParams.set('pedido', id);
+      trackingUrl.searchParams.set('seguimiento', data.tracking_token);
+      const msg = encodeURIComponent(`Hola, te escribimos de Distrito BG sobre tu pedido #${id.toString().padStart(4, '0')}.\n\nSeguimiento temporal:\n${trackingUrl}`);
+      const digits = String(phone).replace(/\D/g, '');
+      const whatsappPhone = digits.length === 10 ? `57${digits}` : digits;
+      window.open(`https://wa.me/${whatsappPhone}?text=${msg}`, '_blank', 'noopener,noreferrer');
+    } catch (error) {
+      alert(error.message);
+    }
   };
 
   const handleEditOrder = (order) => {
-    setEditingOrderId(order.id);
-    setNewOrderCart((order.cart_json || []).map(i => ({...i, quantity: i.quantity || i.qty || 1})));
-    setNewOrderCustomer({
-      name: order.customer_name || '',
-      phone: order.customer_phone || '',
-      barrio: order.barrio || '',
-      address: order.address || '',
-      deliveryType: order.delivery_type || 'presencial',
-      paymentMethod: order.payment_method || 'efectivo',
-      source: order.source || 'Web',
-      notes: order.notes || '',
-      voucher_reference: order.voucher_reference || ''
-    });
-    setIsNewOrderOpen(true);
-  };
-
-  const handleCreateOrder = async (e) => {
-    e.preventDefault();
-    if (newOrderCart.length === 0) return alert('El carrito está vacío');
-    const total = newOrderCart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    
-    try {
-      const token = sessionStorage.getItem('distrito_admin_token');
-      const url = editingOrderId 
-        ? `${API_URL}/admin/orders/${editingOrderId}/edit`
-        : `${API_URL}/checkout`;
-      
-      const method = editingOrderId ? 'PUT' : 'POST';
-
-      const res = await fetch(url, {
-        method: method,
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
-        },
-        body: JSON.stringify({
-          customer: newOrderCustomer,
-          cart: newOrderCart,
-          total,
-          source: newOrderCustomer.source
-        })
-      });
-      if (res.ok) {
-        setIsNewOrderOpen(false);
-        setEditingOrderId(null);
-        setNewOrderCart([]);
-        setNewOrderCustomer({ name: 'Cliente Local', phone: '0000000000', barrio: '', address: '', deliveryType: 'presencial', paymentMethod: 'efectivo', source: 'Presencial', voucher_reference: '' });
-        fetchOrders();
-      } else {
-        alert('Error guardando pedido');
-      }
-    } catch (err) { console.error(err); }
-  };
-
-  const addToCart = (prod) => {
-    setNewOrderCart(prev => {
-      const ex = prev.find(i => i.id === prod.id);
-      if (ex) return prev.map(i => i.id === prod.id ? { ...i, quantity: i.quantity + 1 } : i);
-      return [...prev, { ...prod, quantity: 1, title: prod.title, price: prod.price }];
-    });
-  };
-
-  const updateCartQty = (id, delta) => {
-    setNewOrderCart(prev => prev.map(i => {
-      if (i.id === id) {
-        const newQ = i.quantity + delta;
-        return newQ > 0 ? { ...i, quantity: newQ } : i;
-      }
-      return i;
-    }).filter(i => i.quantity > 0));
+    navigate(`/admin/tomar-pedido?edit=${order.id}`);
   };
 
   const tabs = ['Todos', 'Nuevos', 'En preparación', 'Listos', 'En camino', 'Entregados', 'Pendientes Pago', 'Cancelados'];
 
-  const filteredOrders = orders.filter(order => {
-    const matchesTab = activeTab === 'Todos' || 
-                      (activeTab === 'Nuevos' && order.status === 'Nuevo') ||
-                      (activeTab === 'En preparación' && order.status === 'En preparación') ||
-                      (activeTab === 'Listos' && order.status === 'Listo') ||
-                      (activeTab === 'En camino' && order.status === 'En camino') ||
-                      (activeTab === 'Entregados' && order.status === 'Entregado') ||
-                      (activeTab === 'Pendientes Pago' && order.status === 'Pendiente Pago') ||
-                      (activeTab === 'Cancelados' && order.status === 'Cancelado');
-    
+  // 🚀 OPTIMIZACIÓN 2: Filtrado memoizado ultra-rápido a 60 FPS
+  const filteredOrders = useMemo(() => {
     const searchLower = searchQuery.toLowerCase();
-    const matchesSearch = !searchQuery || 
-                          order.id.toString().includes(searchLower) ||
-                          (order.customer_name && order.customer_name.toLowerCase().includes(searchLower)) ||
-                          (order.customer_phone && order.customer_phone.includes(searchLower));
-                          
-    let matchesDate = true;
-    if (filterDate && order.created_at) {
-      const orderDate = new Date(order.created_at);
-      if (isNaN(orderDate.getTime())) {
-        matchesDate = false;
-      } else {
-        // Ajustar al offset local para que coincida con lo que ve el usuario
-        const localDateString = new Date(orderDate.getTime() - (orderDate.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
-        matchesDate = localDateString === filterDate;
+    return orders.filter(order => {
+      const matchesTab = activeTab === 'Todos' ||
+        (activeTab === 'Nuevos' && order.status === 'Nuevo') ||
+        (activeTab === 'En preparación' && order.status === 'En preparación') ||
+        (activeTab === 'Listos' && order.status === 'Listo') ||
+        (activeTab === 'En camino' && order.status === 'En camino') ||
+        (activeTab === 'Entregados' && order.status === 'Entregado') ||
+        (activeTab === 'Pendientes Pago' && order.status === 'Pendiente Pago') ||
+        (activeTab === 'Cancelados' && order.status === 'Cancelado');
+
+      const matchesSearch = !searchQuery ||
+        order.id.toString().includes(searchLower) ||
+        (order.customer_name && order.customer_name.toLowerCase().includes(searchLower)) ||
+        (order.customer_phone && order.customer_phone.includes(searchLower));
+
+      let matchesDate = true;
+      if (filterDate && order.created_at) {
+        const orderDate = new Date(order.created_at);
+        if (isNaN(orderDate.getTime())) { matchesDate = false; }
+        else {
+          const localDateString = new Date(orderDate.getTime() - (orderDate.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+          matchesDate = localDateString === filterDate;
+        }
       }
-    }
-                          
-    return matchesTab && matchesSearch && matchesDate;
-  });
+      return matchesTab && matchesSearch && matchesDate;
+    });
+  }, [orders, activeTab, searchQuery, filterDate]);
 
   const getStatusBadge = (status) => {
-    const styles = {
-      'Nuevo': { bg: 'rgba(212, 160, 23, 0.15)', color: '#D4A017' },
-      'En preparación': { bg: 'rgba(59, 130, 246, 0.15)', color: '#60A5FA' },
-      'Listo': { bg: 'rgba(34, 197, 94, 0.15)', color: '#4ADE80' },
-      'En camino': { bg: 'rgba(245, 158, 11, 0.15)', color: '#FBBF24' },
-      'Entregado': { bg: 'rgba(34, 197, 94, 0.25)', color: '#FFFFFF' },
-      'Pendiente Pago': { bg: 'rgba(139, 92, 246, 0.15)', color: '#A78BFA' },
-      'Cancelado': { bg: 'rgba(239, 68, 68, 0.15)', color: '#F87171' }
-    };
-    const s = styles[status] || styles['Nuevo'];
-    return (
-      <span style={{ backgroundColor: s.bg, color: s.color, padding: '6px 12px', borderRadius: '999px', fontSize: '13px', fontWeight: '600' }}>
-        {status}
-      </span>
-    );
+    let badgeClass = 'ds-badge-neutral';
+    if (status === 'Nuevo') badgeClass = 'ds-badge-info';
+    else if (status === 'En preparación') badgeClass = 'ds-badge-warning';
+    else if (status === 'Listo' || status === 'Entregado') badgeClass = 'ds-badge-success';
+    else if (status === 'En camino') badgeClass = 'ds-badge-warning';
+    else if (status === 'Cancelado') badgeClass = 'ds-badge-danger';
+    else if (status === 'Pendiente Pago') badgeClass = 'ds-badge-info';
+
+    return <span className={`ds-badge ${badgeClass}`}>{status}</span>;
   };
 
   const getSourceIcon = (source) => {
     if (source === 'WhatsApp') return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><MessageCircle size={16} color="#22C55E" /> WhatsApp</div>;
-    if (source === 'Presencial') return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Store size={16} color="#D4A017" /> Presencial</div>;
+    if (source === 'Presencial' || source === 'Mostrador') return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Store size={16} color="#D4A017" /> {source}</div>;
     if (source === 'Teléfono') return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={16} color="#60A5FA" /> Teléfono</div>;
     return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Globe size={16} color="#A78BFA" /> Web</div>;
   };
@@ -295,32 +263,99 @@ export default function AdminPedidos() {
     if (!method) return '-';
     const m = method.toLowerCase();
     if (m.includes('efectivo')) return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Banknote size={16} color="#4ADE80" /> Efectivo</div>;
-    if (m.includes('nequi') || m.includes('daviplata')) return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Smartphone size={16} color="#A78BFA" /> {method}</div>;
-    if (m.includes('tarjeta')) return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><CreditCard size={16} color="#FBBF24" /> Tarjeta</div>;
-    return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Banknote size={16} color="#BDBDBD" /> {method}</div>;
+    return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Wallet size={16} color="#8B5CF6" /> Transferencia</div>;
   };
 
-  const getTimeElapsed = (dateString) => {
-    if (!dateString) return '-';
-    const start = new Date(dateString);
-    const now = new Date();
-    const diffMins = Math.floor((now - start) / 60000);
-    const isLate = diffMins > 45; // Ejemplo: 45 min máximo
+  const formatDuration = (totalMins) => {
+    if (totalMins < 60) return `${totalMins} min`;
+    const hours = Math.floor(totalMins / 60);
+    const mins = totalMins % 60;
+    if (mins === 0) return `${hours} ${hours === 1 ? 'hora' : 'horas'}`;
+    return `${hours} ${hours === 1 ? 'hora' : 'horas'} con ${mins} min`;
+  };
+
+  const getDeliveryDurationText = (order) => {
+    const deliverySeconds = Number(order?.delivery_duration_seconds);
+    if (Number.isFinite(deliverySeconds) && deliverySeconds >= 0) {
+      return formatDuration(Math.max(1, Math.ceil(deliverySeconds / 60)));
+    }
+    if (!order?.created_at || !order?.delivered_at) return null;
+    const elapsed = new Date(order.delivered_at) - new Date(order.created_at);
+    return Number.isFinite(elapsed) && elapsed >= 0 ? formatDuration(Math.max(1, Math.ceil(elapsed / 60000))) : null;
+  };
+
+  const getTimeElapsed = (order) => {
+    if (!order || !order.created_at) return '-';
+    const start = new Date(order.created_at);
+    if (isNaN(start.getTime())) return '-';
+
+    const isCompleted = order.status === 'Entregado' || order.status === 'Completado' || order.status === 'Cancelado';
+    
+    let end;
+    let hasDeliveryTimestamp = false;
+
+    if (isCompleted) {
+      if (order.delivered_at) {
+        end = new Date(order.delivered_at);
+        hasDeliveryTimestamp = true;
+      } else if (order.updated_at) {
+        end = new Date(order.updated_at);
+        hasDeliveryTimestamp = true;
+      } else {
+        end = start;
+      }
+      if (isNaN(end.getTime())) {
+        end = start;
+        hasDeliveryTimestamp = false;
+      }
+    } else {
+      end = new Date();
+    }
+
+    const diffMins = Math.max(0, Math.floor((end - start) / 60000));
+    const isLate = !isCompleted && diffMins > 45;
+    const formattedText = formatDuration(diffMins);
+
+    if (isCompleted) {
+      const deliveryDuration = order.status === 'Entregado' ? getDeliveryDurationText(order) : null;
+      if (deliveryDuration) {
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#10B981', fontWeight: '700' }} title="Tiempo desde que el domiciliario aceptó hasta la entrega">
+            <CheckCircle size={16} color="#10B981" /> {deliveryDuration} (Entregado)
+          </div>
+        );
+      }
+      // Si es un pedido histórico antiguo entregado sin marca de fecha entregado previa:
+      if (!hasDeliveryTimestamp || diffMins === 0) {
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: order.status === 'Cancelado' ? '#F59E0B' : '#10B981', fontWeight: '700' }} title="Pedido finalizado">
+            <CheckCircle size={16} /> {order.status === 'Cancelado' ? 'Cancelado' : 'Entregado'}
+          </div>
+        );
+      }
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: order.status === 'Cancelado' ? '#F59E0B' : '#10B981', fontWeight: '700' }} title="Duración final fija">
+          <CheckCircle size={16} /> {formattedText} ({order.status === 'Cancelado' ? 'Cancelado' : 'Entregado'})
+        </div>
+      );
+    }
+
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: isLate ? '#EF4444' : '#BDBDBD', fontWeight: isLate ? '600' : '400' }}>
-        <Clock size={16} /> {diffMins} min
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: isLate ? '#EF4444' : '#BDBDBD', fontWeight: isLate ? '600' : '400' }} title="Tiempo transcurrido en preparación">
+        <Clock size={16} color={isLate ? '#EF4444' : '#BDBDBD'} /> {formattedText}
       </div>
     );
   };
 
-  // Filtrar estadísticas por la fecha seleccionada
-  const ordersInDate = orders.filter(o => {
-    if (!filterDate || !o.created_at) return true;
-    const orderDate = new Date(o.created_at);
-    if (isNaN(orderDate.getTime())) return false;
-    const localDateString = new Date(orderDate.getTime() - (orderDate.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
-    return localDateString === filterDate;
-  });
+  const ordersInDate = useMemo(() => {
+    return orders.filter(o => {
+      if (!filterDate || !o.created_at) return true;
+      const orderDate = new Date(o.created_at);
+      if (isNaN(orderDate.getTime())) return false;
+      const localDateString = new Date(orderDate.getTime() - (orderDate.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+      return localDateString === filterDate;
+    });
+  }, [orders, filterDate]);
 
   const statNuevos = ordersInDate.filter(o => o.status === 'Nuevo').length;
   const statPreparacion = ordersInDate.filter(o => o.status === 'En preparación').length;
@@ -330,39 +365,25 @@ export default function AdminPedidos() {
   const totalEfectivo = completedOrders.filter(o => (o.payment_method || '').toLowerCase() === 'efectivo').reduce((s, o) => s + (o.total || 0), 0);
   const totalTransferencia = completedOrders.filter(o => ['transferencia', 'nequi', 'tarjeta'].includes((o.payment_method || '').toLowerCase())).reduce((s, o) => s + (o.total || 0), 0);
 
-  const uniqueCustomers = Array.from(new Map(orders.filter(o => o.customer_name && o.customer_name.trim() !== '' && o.customer_name !== 'Cliente Local').map(o => [o.customer_name.toLowerCase(), o])).values());
-  const filteredCustomers = newOrderCustomer.name ? uniqueCustomers.filter(c => c.customer_name.toLowerCase().includes(newOrderCustomer.name.toLowerCase())) : [];
-
   return (
-    <div style={{ padding: '40px', fontFamily: "'Montserrat', 'Poppins', sans-serif", backgroundColor: '#0D0D0D', minHeight: '100%' }}>
-      
-      {/* Navegación y Encabezado */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '40px' }}>
+    <div className="ds-page">
+      <div className="ds-page-header">
         <div>
-          <div style={{ color: '#BDBDBD', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
-            Dashboard <span style={{ margin: '0 8px' }}>/</span> <span style={{ color: '#FFFFFF' }}>Pedidos</span>
-          </div>
-          <h1 style={{ color: '#FFFFFF', fontSize: '36px', fontWeight: '800', margin: '0 0 8px 0' }}>Pedidos</h1>
-          <p style={{ color: '#BDBDBD', fontSize: '16px', margin: 0 }}>Administra todos los pedidos recibidos por web, WhatsApp, teléfono y presencial.</p>
+          <div style={{ color: 'var(--ds-text-secondary)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>Dashboard <span style={{ margin: '0 8px' }}>/</span> <span style={{ color: 'var(--ds-text-primary)' }}>Pedidos</span></div>
+          <h1 className="ds-page-title">Pedidos</h1>
+          <p style={{ color: 'var(--ds-text-secondary)', fontSize: '16px', margin: 0 }}>Administra todos los pedidos recibidos por web, WhatsApp, teléfono y presencial.</p>
         </div>
-        
-        <button 
-          onClick={() => {
-            setEditingOrderId(null);
-            setNewOrderCart([]);
-            setNewOrderCustomer({ name: 'Cliente Local', phone: '0000000000', barrio: '', address: '', deliveryType: 'presencial', paymentMethod: 'efectivo', source: 'Presencial', voucher_reference: '' });
-            setIsNewOrderOpen(true);
-          }}
-          style={{ 
-            backgroundColor: '#D4A017', color: '#000000', border: 'none', borderRadius: '12px', height: '48px', 
-            padding: '0 24px', fontSize: '16px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer'
-        }}>
-          <Plus size={20} /> Nuevo Pedido
-        </button>
+        <div className="ds-page-actions">
+          <button
+            className="ds-btn ds-btn-primary ds-btn-lg"
+            onClick={() => navigate('/admin/tomar-pedido')}
+          >
+            <Plus size={20} /> Nuevo Pedido
+          </button>
+        </div>
       </div>
 
-      {/* Tarjetas de Estadísticas */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '24px', marginBottom: '40px' }}>
+      <div className="ds-cards-grid" style={{ marginBottom: '40px' }}>
         {[
           { label: filterDate ? 'Pedidos' : 'Total Histórico', value: ordersInDate.length, icon: <ShoppingCart size={24} /> },
           { label: 'Pedidos pendientes', value: statNuevos, icon: <Clock size={24} /> },
@@ -372,52 +393,36 @@ export default function AdminPedidos() {
           { label: 'Efectivo', value: `$${totalEfectivo.toLocaleString()}`, icon: <Banknote size={24} color="#10B981" /> },
           { label: 'Transferencia', value: `$${totalTransferencia.toLocaleString()}`, icon: <Banknote size={24} color="#8B5CF6" /> },
         ].map((stat, i) => (
-          <div key={i} style={{ backgroundColor: '#111111', borderRadius: '20px', padding: '24px', border: '1px solid #222222', display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{ color: '#D4A017' }}>{stat.icon}</div>
-            <div>
-              <div style={{ fontSize: '30px', fontWeight: '700', color: '#FFFFFF', lineHeight: '1' }}>{stat.value}</div>
-              <div style={{ color: '#BDBDBD', fontSize: '13px', fontWeight: '500', marginTop: '6px' }}>{stat.label}</div>
+          <div key={i} className="ds-card">
+            <div className="ds-card-body" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{ color: 'var(--ds-primary)' }}>{stat.icon}</div>
+              <div>
+                <div style={{ fontSize: '30px', fontWeight: '700', color: 'var(--ds-text-primary)', lineHeight: '1' }}>{stat.value}</div>
+                <div style={{ color: 'var(--ds-text-secondary)', fontSize: '13px', fontWeight: '500', marginTop: '6px' }}>{stat.label}</div>
+              </div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Barra de Búsqueda y Filtros */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', marginBottom: '24px', alignItems: 'center' }}>
-        <div style={{ position: 'relative', flex: 1, minWidth: '300px' }}>
-          <Search size={20} style={{ position: 'absolute', left: '16px', top: '16px', color: '#6B7280' }} />
-          <input 
-            type="text" 
-            placeholder="Buscar pedido, cliente o teléfono..." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ width: '100%', backgroundColor: '#111111', border: '1px solid #2A2A2A', borderRadius: '12px', padding: '16px 16px 16px 48px', color: '#FFFFFF', fontSize: '15px', outline: 'none', boxSizing: 'border-box' }} 
-          />
+      <div className="admin-orders-filters" style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', marginBottom: '24px', alignItems: 'center' }}>
+        <div className="ds-search" style={{ flex: 1, minWidth: '300px' }}>
+          <Search size={20} className="ds-search-icon" />
+          <input type="text" placeholder="Buscar pedido, cliente o teléfono..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+            className="ds-search-input ds-input" />
         </div>
-        
-        <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#111111', border: '1px solid #2A2A2A', borderRadius: '12px', padding: '0 16px', height: '52px' }}>
-          <label style={{ color: '#BDBDBD', fontSize: '14px', fontWeight: '500', marginRight: '12px' }}>Fecha:</label>
-          <input 
-            type="date" 
-            onClick={(e) => e.target.showPicker && e.target.showPicker()}
-            value={filterDate} 
-            onChange={e => setFilterDate(e.target.value)} 
-            style={{ backgroundColor: 'transparent', color: '#FFFFFF', border: 'none', outline: 'none', fontSize: '15px', cursor: 'pointer', colorScheme: 'dark' }} 
-          />
-          {filterDate && (
-            <button onClick={() => setFilterDate('')} style={{ background: 'none', border: 'none', color: '#6B7280', cursor: 'pointer', marginLeft: '8px', padding: '4px' }}>
-              <X size={16} />
-            </button>
-          )}
+        <div style={{ display: 'flex', alignItems: 'center', backgroundColor: 'var(--ds-bg-elevated)', border: '1px solid var(--ds-border)', borderRadius: '12px', padding: '0 16px', height: '52px' }}>
+          <label style={{ color: 'var(--ds-text-secondary)', fontSize: '14px', fontWeight: '500', marginRight: '12px' }}>Fecha:</label>
+          <input type="date" onClick={(e) => e.target.showPicker && e.target.showPicker()} value={filterDate} onChange={e => setFilterDate(e.target.value)}
+            style={{ backgroundColor: 'transparent', color: 'var(--ds-text-primary)', border: 'none', outline: 'none', fontSize: '15px', cursor: 'pointer', colorScheme: 'dark' }} />
+          {filterDate && <button onClick={() => setFilterDate('')} style={{ background: 'none', border: 'none', color: 'var(--ds-text-muted)', cursor: 'pointer', marginLeft: '8px', padding: '4px' }}><X size={16} /></button>}
         </div>
-        
-        <button style={{ backgroundColor: '#111111', border: '1px solid #2A2A2A', borderRadius: '12px', padding: '0 20px', height: '52px', color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: '500' }}>
-          <Filter size={18} color="#D4A017" /> Más Filtros
+        <button className="ds-btn ds-btn-secondary" style={{ height: '52px' }}>
+          <Filter size={18} color="var(--ds-primary)" /> Más Filtros
         </button>
       </div>
 
-      {/* Pestañas de Estado */}
-      <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '16px', marginBottom: '24px' }}>
+      <div className="ds-tabs" style={{ marginBottom: '24px' }}>
         {tabs.map(tab => {
           const isActive = activeTab === tab;
           let count = 0;
@@ -429,468 +434,196 @@ export default function AdminPedidos() {
           else if (tab === 'Entregados') count = statEntregados;
           else if (tab === 'Pendientes Pago') count = orders.filter(o => o.status === 'Pendiente Pago').length;
           else if (tab === 'Cancelados') count = orders.filter(o => o.status === 'Cancelado').length;
-
           return (
-            <button 
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              style={{ 
-                backgroundColor: isActive ? '#D4A017' : '#111111', 
-                color: isActive ? '#000000' : '#FFFFFF', 
-                border: isActive ? 'none' : '1px solid #2A2A2A', 
-                borderRadius: '999px', padding: '10px 20px', fontSize: '14px', fontWeight: '600', 
-                display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', whiteSpace: 'nowrap'
-              }}
-            >
+            <button key={tab} onClick={() => setActiveTab(tab)} className={`ds-tab ${isActive ? 'active' : ''}`}>
               {tab}
-              <span style={{ 
-                backgroundColor: isActive ? 'rgba(0,0,0,0.2)' : '#2A2A2A', 
-                color: isActive ? '#000000' : '#BDBDBD', 
-                padding: '2px 8px', borderRadius: '999px', fontSize: '12px' 
-              }}>
-                {count}
-              </span>
+              <span className="ds-badge ds-badge-neutral" style={{ marginLeft: '8px', backgroundColor: isActive ? 'rgba(0,0,0,0.2)' : 'var(--ds-bg-base)', color: isActive ? '#000' : 'var(--ds-text-secondary)' }}>{count}</span>
             </button>
-          )
+          );
         })}
       </div>
 
-      {/* Tabla de Pedidos */}
-      <div className="responsive-table" style={{ backgroundColor: '#111111', borderRadius: '20px', border: '1px solid #222222', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '1000px' }}>
-            <thead>
-              <tr style={{ backgroundColor: '#181818', borderBottom: '1px solid #222222' }}>
-                <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '14px' }}>Pedido</th>
-                <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '14px' }}>Cliente</th>
-                <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '14px' }}>Origen</th>
-                <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '14px' }}>Estado</th>
-                <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '14px' }}>Total</th>
-                <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '14px' }}>Método de pago</th>
-                <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '14px' }}>Tiempo</th>
-                <th style={{ padding: '20px 24px', color: '#BDBDBD', fontWeight: '600', fontSize: '14px', textAlign: 'right' }}>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredOrders.map((order, index) => (
-                <tr key={order.id} style={{ borderBottom: index === filteredOrders.length - 1 ? 'none' : '1px solid #222222' }}>
-                  <td style={{ padding: '16px 24px' }}>
-                    <div style={{ color: '#FFFFFF', fontWeight: '700', fontSize: '16px' }}>#{order.id.toString().padStart(4, '0')}</div>
-                    <div style={{ color: '#6B7280', fontSize: '13px', marginTop: '4px' }}>{new Date(order.created_at).toLocaleDateString()} {new Date(order.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-                  </td>
-                  <td style={{ padding: '16px 24px' }}>
-                    <div style={{ color: '#FFFFFF', fontWeight: '600', fontSize: '15px' }}>{order.customer_name || 'Sin nombre'}</div>
-                    <div style={{ color: '#BDBDBD', fontSize: '13px', marginTop: '4px' }}>{order.customer_phone || 'Sin teléfono'}</div>
-                    {(order.barrio || order.address) && (
-                      <div style={{ color: '#9CA3AF', fontSize: '12px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <MapPin size={12} />
-                        {[order.barrio, order.address].filter(Boolean).join(', ')}
-                      </div>
-                    )}
-                    {order.notes && (
-                      <div style={{ color: '#FCD34D', fontSize: '12px', marginTop: '6px', fontStyle: 'italic', padding: '4px 8px', backgroundColor: 'rgba(252, 211, 77, 0.1)', borderRadius: '4px', display: 'inline-block' }}>
-                        Nota: {order.notes}
-                      </div>
-                    )}
-                  </td>
-                  <td style={{ padding: '16px 24px', color: '#FFFFFF', fontSize: '14px', fontWeight: '500' }}>
-                    {getSourceIcon(order.source || 'Web')}
-                  </td>
-                  <td style={{ padding: '16px 24px' }}>
-                    {getStatusBadge(order.status || 'Nuevo')}
-                  </td>
-                  <td style={{ padding: '16px 24px', color: '#FFFFFF', fontWeight: '700', fontSize: '15px' }}>
-                    ${(order.total || 0).toLocaleString()}
-                  </td>
-                  <td style={{ padding: '16px 24px', color: '#FFFFFF', fontSize: '14px', fontWeight: '500' }}>
-                    {getPaymentIcon(order.payment_method)}
-                    {order.payment_method?.toLowerCase().includes('transferencia') && order.voucher_reference && (
-                      <div style={{ fontSize: '12px', color: '#9CA3AF', marginTop: '4px' }}>Ref: {order.voucher_reference}</div>
-                    )}
-                  </td>
-                  <td style={{ padding: '16px 24px' }}>
-                    {getTimeElapsed(order.created_at)}
-                  </td>
-                  <td style={{ padding: '16px 24px', textAlign: 'right' }}>
-                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', position: 'relative' }}>
-                      <button onClick={() => setSelectedOrder(order)} style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#1A1A1A', border: '1px solid #333333', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFFFFF', cursor: 'pointer' }}>
-                        <Eye size={16} />
-                      </button>
-                      <button onClick={() => handleEditOrder(order)} style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#1A1A1A', border: '1px solid #333333', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFFFFF', cursor: 'pointer' }}>
-                        <Pencil size={16} />
-                      </button>
-                      <button onClick={() => handlePrintOrder(order)} style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#1A1A1A', border: '1px solid #333333', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFFFFF', cursor: 'pointer' }}>
-                        <Printer size={16} />
-                      </button>
-                      <button onClick={() => setOpenMenuId(openMenuId === order.id ? null : order.id)} style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#1A1A1A', border: '1px solid #333333', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFFFFF', cursor: 'pointer' }}>
-                        <MoreVertical size={16} />
-                      </button>
-
-                      {openMenuId === order.id && (
-                        <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: '8px', backgroundColor: '#1A1A1A', border: '1px solid #333333', borderRadius: '8px', zIndex: 10, overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', width: '170px' }}>
-                          <button onClick={() => { handleSendWhatsApp(order.customer_phone, order.id); setOpenMenuId(null); }} style={{ width: '100%', padding: '12px 16px', background: 'none', border: 'none', borderBottom: '1px solid #333333', color: '#FFF', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                            <MessageCircle size={16} color="#22C55E" /> WhatsApp
-                          </button>
-                          <button onClick={() => { handleUpdateStatus(order.id, 'Cancelado'); setOpenMenuId(null); }} style={{ width: '100%', padding: '12px 16px', background: 'none', border: 'none', borderBottom: '1px solid #333333', color: '#F59E0B', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                            <X size={16} /> Anular Orden
-                          </button>
-                          <button onClick={() => { handleDeleteOrder(order.id); setOpenMenuId(null); }} style={{ width: '100%', padding: '12px 16px', background: 'none', border: 'none', color: '#EF4444', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                            <Trash2 size={16} /> Eliminar
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {filteredOrders.length === 0 && (
+      <div className="ds-card" style={{ overflow: 'hidden' }}>
+        {!isMobile ? (
+          <div className="ds-table-container">
+            <table className="ds-table">
+              <thead>
                 <tr>
-                  <td colSpan="8" style={{ padding: '60px', textAlign: 'center', color: '#BDBDBD' }}>
-                    No hay pedidos que coincidan con esta vista.
-                  </td>
+                  {['Pedido', 'Cliente', 'Origen', 'Estado', 'Total', 'Método de pago', 'Tiempo', 'Acciones'].map((h, i) => (
+                    <th key={i} style={{ textAlign: i === 7 ? 'right' : 'left' }}>{h}</th>
+                  ))}
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div style={{ padding: '20px 24px', borderTop: '1px solid #222222', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#111111' }}>
-          <div style={{ color: '#BDBDBD', fontSize: '14px', fontWeight: '500' }}>
-            Mostrando {filteredOrders.length > 0 ? 1 : 0} a {filteredOrders.length} de {filteredOrders.length} pedidos
+              </thead>
+              <tbody>
+                {filteredOrders.map((order) => (
+                  <tr key={order.id}>
+                    <td>
+                      <div style={{ color: 'var(--ds-text-primary)', fontWeight: '700', fontSize: '16px' }}>#{order.id.toString().padStart(4, '0')}</div>
+                      <div style={{ color: 'var(--ds-text-muted)', fontSize: '13px', marginTop: '4px' }}>{new Date(order.created_at).toLocaleDateString()} {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                    </td>
+                    <td>
+                      <div style={{ color: 'var(--ds-text-primary)', fontWeight: '600', fontSize: '15px' }}>{order.customer_name || 'Sin nombre'}</div>
+                      <div style={{ color: 'var(--ds-text-secondary)', fontSize: '13px', marginTop: '4px' }}>{order.customer_phone || 'Sin teléfono'}</div>
+                      {(order.barrio || order.address) && <div style={{ color: 'var(--ds-text-muted)', fontSize: '12px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}><MapPin size={12} />{[order.barrio, order.address].filter(Boolean).join(', ')}</div>}
+                      {order.notes && <div style={{ color: '#FCD34D', fontSize: '12px', marginTop: '6px', fontStyle: 'italic', padding: '4px 8px', backgroundColor: 'rgba(252,211,77,0.1)', borderRadius: '4px', display: 'inline-block' }}>Nota: {order.notes}</div>}
+                    </td>
+                    <td>{getSourceIcon(order.source || 'Web')}</td>
+                    <td><div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '7px' }}>{getStatusBadge(order.status || 'Nuevo')}{order.status === 'Entregado' && getDeliveryDurationText(order) && <small style={{ color: '#10B981', fontWeight: 700 }}>{getDeliveryDurationText(order)}</small>}</div></td>
+                    <td style={{ color: 'var(--ds-text-primary)', fontWeight: '700', fontSize: '15px' }}>${(order.total || 0).toLocaleString()}</td>
+                    <td>
+                      {getPaymentIcon(order.payment_method)}
+                      {order.voucher_reference && <div style={{ fontSize: '12px', marginTop: '4px', fontWeight: '700' }}>Ref: {order.voucher_reference}</div>}
+                    </td>
+                    <td>{getTimeElapsed(order)}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', position: 'relative' }}>
+                        <button onClick={() => setSelectedOrder(order)} className="ds-btn ds-btn-icon ds-btn-secondary ds-btn-sm"><Eye size={16} /></button>
+                        <button onClick={() => handleEditOrder(order)} className="ds-btn ds-btn-icon ds-btn-secondary ds-btn-sm"><Pencil size={16} /></button>
+                        <button onClick={() => handlePrintOrder(order)} className="ds-btn ds-btn-icon ds-btn-secondary ds-btn-sm" title="Imprimir Comanda">
+                          <Printer size={16} />
+                        </button>
+
+                        <button onClick={() => setOpenMenuId(openMenuId === order.id ? null : order.id)} className="ds-btn ds-btn-icon ds-btn-secondary ds-btn-sm"><MoreVertical size={16} /></button>
+                        {openMenuId === order.id && (
+                          <div className="ds-dropdown" style={{ display: 'block', top: '100%', right: 0, zIndex: 40 }}>
+                            <div className="ds-dropdown-menu">
+                              <button onClick={() => { handleSendWhatsApp(order.customer_phone, order.id); setOpenMenuId(null); }} className="ds-dropdown-item"><MessageCircle size={16} color="#22C55E" /> WhatsApp</button>
+                              <button onClick={() => { handleUpdateStatus(order.id, 'Cancelado'); setOpenMenuId(null); }} className="ds-dropdown-item" style={{ color: '#F59E0B' }}><X size={16} /> Anular Orden</button>
+                              <button onClick={() => { handleDeleteOrder(order.id); setOpenMenuId(null); }} className="ds-dropdown-item ds-dropdown-item-danger"><Trash2 size={16} /> Eliminar</button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {filteredOrders.length === 0 && (
+                  <tr><td colSpan="8" style={{ padding: '60px', textAlign: 'center', color: 'var(--ds-text-secondary)' }}>No hay pedidos que coincidan con esta vista.</td></tr>
+                )}
+              </tbody>
+            </table>
           </div>
+        ) : (
+          <div className="ds-table-cards">
+            {filteredOrders.map((order) => (
+              <div key={order.id} className="ds-table-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <div>
+                    <div style={{ color: 'var(--ds-text-primary)', fontWeight: '700', fontSize: '16px' }}>#{order.id.toString().padStart(4, '0')}</div>
+                    <div style={{ color: 'var(--ds-text-muted)', fontSize: '13px', marginTop: '4px' }}>{new Date(order.created_at).toLocaleDateString()} {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                  </div>
+                  <div style={{ display: 'grid', justifyItems: 'end', gap: '5px' }}>{getStatusBadge(order.status || 'Nuevo')}{order.status === 'Entregado' && getDeliveryDurationText(order) && <small style={{ color: '#10B981', fontWeight: 700 }}>{getDeliveryDurationText(order)}</small>}</div>
+                </div>
+
+                <div className="ds-table-card-row">
+                  <span className="ds-table-card-label">Cliente</span>
+                  <span className="ds-table-card-value">
+                    <div style={{ fontWeight: '600' }}>{order.customer_name || 'Sin nombre'}</div>
+                    <div style={{ color: 'var(--ds-text-secondary)' }}>{order.customer_phone || 'Sin teléfono'}</div>
+                  </span>
+                </div>
+                <div className="ds-table-card-row">
+                  <span className="ds-table-card-label">Origen</span>
+                  <span className="ds-table-card-value">{getSourceIcon(order.source || 'Web')}</span>
+                </div>
+                <div className="ds-table-card-row">
+                  <span className="ds-table-card-label">Total</span>
+                  <span className="ds-table-card-value" style={{ fontWeight: '700', color: 'var(--ds-text-primary)' }}>${(order.total || 0).toLocaleString()}</span>
+                </div>
+
+                <div className="ds-table-card-actions" style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+                  <button onClick={() => setSelectedOrder(order)} className="ds-btn ds-btn-secondary" style={{ flex: 1 }}><Eye size={16} /> Ver</button>
+                  <button onClick={() => handleEditOrder(order)} className="ds-btn ds-btn-secondary ds-btn-icon"><Pencil size={16} /></button>
+                  <button onClick={() => handlePrintOrder(order)} className="ds-btn ds-btn-secondary ds-btn-icon"><Printer size={16} /></button>
+                  <button onClick={() => setOpenMenuId(openMenuId === order.id ? null : order.id)} className="ds-btn ds-btn-secondary ds-btn-icon"><MoreVertical size={16} /></button>
+                  {openMenuId === order.id && (
+                    <div className="ds-dropdown" style={{ display: 'block', bottom: '100%', right: 0, marginBottom: '8px' }}>
+                      <div className="ds-dropdown-menu">
+                        <button onClick={() => { handleSendWhatsApp(order.customer_phone, order.id); setOpenMenuId(null); }} className="ds-dropdown-item"><MessageCircle size={16} color="#22C55E" /> WhatsApp</button>
+                        <button onClick={() => { handleUpdateStatus(order.id, 'Cancelado'); setOpenMenuId(null); }} className="ds-dropdown-item" style={{ color: '#F59E0B' }}><X size={16} /> Anular Orden</button>
+                        <button onClick={() => { handleDeleteOrder(order.id); setOpenMenuId(null); }} className="ds-dropdown-item ds-dropdown-item-danger"><Trash2 size={16} /> Eliminar</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+            {filteredOrders.length === 0 && (
+              <div style={{ padding: '60px', textAlign: 'center', color: 'var(--ds-text-secondary)' }}>No hay pedidos que coincidan con esta vista.</div>
+            )}
+          </div>
+        )}
+
+        <div className="ds-card-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ color: 'var(--ds-text-secondary)', fontSize: '14px', fontWeight: '500' }}>Mostrando {filteredOrders.length > 0 ? 1 : 0} a {filteredOrders.length} de {filteredOrders.length} pedidos</div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: '#1A1A1A', border: '1px solid #2A2A2A', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280', cursor: 'not-allowed' }}>
-              <ChevronLeft size={18} />
-            </button>
-            <button style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: '#D4A017', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000000', fontWeight: '700', fontSize: '14px', cursor: 'pointer' }}>
-              1
-            </button>
-            <button style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: '#1A1A1A', border: '1px solid #2A2A2A', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280', cursor: 'not-allowed' }}>
-              <ChevronRight size={18} />
-            </button>
+            <button className="ds-btn ds-btn-icon ds-btn-secondary ds-btn-sm" style={{ cursor: 'not-allowed' }}><ChevronLeft size={18} /></button>
+            <button className="ds-btn ds-btn-icon ds-btn-primary ds-btn-sm" style={{ fontWeight: '700' }}>1</button>
+            <button className="ds-btn ds-btn-icon ds-btn-secondary ds-btn-sm" style={{ cursor: 'not-allowed' }}><ChevronRight size={18} /></button>
           </div>
         </div>
       </div>
 
-      {/* Modal Detalle de Pedido */}
       {selectedOrder && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'flex-end', zIndex: 1000 }}>
-          <div style={{ width: '100%', maxWidth: '500px', backgroundColor: '#111111', height: '100%', borderLeft: '1px solid #222222', display: 'flex', flexDirection: 'column', animation: 'slideIn 0.3s ease' }}>
-            <div style={{ padding: '24px', borderBottom: '1px solid #222222', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="ds-modal-overlay">
+          <div className="ds-modal ds-modal-lg" style={{ height: '100%', maxHeight: '100%', borderRadius: 0, borderLeft: '1px solid var(--ds-border)' }}>
+            <div className="ds-modal-header">
               <div>
-                <h2 style={{ color: '#FFFFFF', margin: 0, fontSize: '24px' }}>Pedido #{selectedOrder.id.toString().padStart(4, '0')}</h2>
-                <div style={{ color: '#BDBDBD', fontSize: '14px', marginTop: '4px' }}>
-                  {new Date(selectedOrder.created_at).toLocaleString()}
-                </div>
+                <h2 className="ds-modal-title">Pedido #{selectedOrder.id.toString().padStart(4, '0')}</h2>
+                <div style={{ color: 'var(--ds-text-secondary)', fontSize: '14px', marginTop: '4px' }}>{new Date(selectedOrder.created_at).toLocaleString()}</div>
               </div>
-              <button onClick={() => setSelectedOrder(null)} style={{ background: 'none', border: 'none', color: '#BDBDBD', cursor: 'pointer' }}><X size={24} /></button>
+              <button className="ds-modal-close" onClick={() => setSelectedOrder(null)}><X size={24} /></button>
             </div>
-            
-            <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+            <div className="ds-modal-body">
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
-                {getStatusBadge(selectedOrder.status || 'Nuevo')}
-                <div style={{ color: '#FFFFFF', fontSize: '14px', fontWeight: '500' }}>
-                  {getSourceIcon(selectedOrder.source || 'Web')}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>{getStatusBadge(selectedOrder.status || 'Nuevo')}{selectedOrder.status === 'Entregado' && getDeliveryDurationText(selectedOrder) && <strong style={{ color: '#10B981', fontSize: '13px' }}>Entregado en {getDeliveryDurationText(selectedOrder)}</strong>}</div>
+                <div style={{ color: 'var(--ds-text-primary)', fontSize: '14px', fontWeight: '500' }}>{getSourceIcon(selectedOrder.source || 'Web')}</div>
+              </div>
+              <div className="ds-card" style={{ padding: '20px', marginBottom: '24px' }}>
+                <h3 style={{ color: 'var(--ds-text-secondary)', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 12px 0' }}>Cliente</h3>
+                <div style={{ color: 'var(--ds-text-primary)', fontWeight: '600', fontSize: '16px', marginBottom: '4px' }}>{selectedOrder.customer_name}</div>
+                <div style={{ color: 'var(--ds-text-secondary)', fontSize: '14px', marginBottom: '12px' }}>{selectedOrder.customer_phone}</div>
+                <div style={{ borderTop: '1px solid var(--ds-border)', paddingTop: '12px' }}>
+                  <div style={{ color: 'var(--ds-text-secondary)', fontSize: '14px' }}><strong>Dirección:</strong> {selectedOrder.address}, {selectedOrder.barrio}</div>
+                  <div style={{ color: 'var(--ds-text-secondary)', fontSize: '14px', marginTop: '4px' }}><strong>Entrega:</strong> {selectedOrder.delivery_type}</div>
                 </div>
               </div>
-
-              <div style={{ backgroundColor: '#1A1A1A', borderRadius: '12px', padding: '20px', marginBottom: '24px' }}>
-                <h3 style={{ color: '#BDBDBD', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 12px 0' }}>Cliente</h3>
-                <div style={{ color: '#FFFFFF', fontWeight: '600', fontSize: '16px', marginBottom: '4px' }}>{selectedOrder.customer_name}</div>
-                <div style={{ color: '#BDBDBD', fontSize: '14px', marginBottom: '12px' }}>{selectedOrder.customer_phone}</div>
-                <div style={{ borderTop: '1px solid #333333', paddingTop: '12px' }}>
-                  <div style={{ color: '#BDBDBD', fontSize: '14px' }}><strong>Dirección:</strong> {selectedOrder.address}, {selectedOrder.barrio}</div>
-                  <div style={{ color: '#BDBDBD', fontSize: '14px', marginTop: '4px' }}><strong>Entrega:</strong> {selectedOrder.delivery_type}</div>
-                </div>
-              </div>
-
-              <div style={{ backgroundColor: '#1A1A1A', borderRadius: '12px', padding: '20px', marginBottom: '24px' }}>
-                <h3 style={{ color: '#BDBDBD', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 12px 0' }}>Productos</h3>
+              <div className="ds-card" style={{ padding: '20px', marginBottom: '24px' }}>
+                <h3 style={{ color: 'var(--ds-text-secondary)', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 12px 0' }}>Productos</h3>
                 {selectedOrder.cart_json && selectedOrder.cart_json.map((item, idx) => (
-                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: idx < selectedOrder.cart_json.length - 1 ? '1px solid #333333' : 'none', paddingBottom: '12px', marginBottom: '12px' }}>
+                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: idx < selectedOrder.cart_json.length - 1 ? '1px solid var(--ds-border)' : 'none', paddingBottom: '12px', marginBottom: '12px' }}>
                     <div>
-                      <div style={{ color: '#FFFFFF', fontWeight: '500' }}>{item.quantity || item.qty || 1}x {item.title}</div>
-                      {item.notes && <div style={{ color: '#D4A017', fontSize: '13px', marginTop: '4px' }}>Nota: {item.notes}</div>}
+                      <div style={{ color: 'var(--ds-text-primary)', fontWeight: '500' }}>{item.quantity || item.qty || 1}x {item.title}</div>
+                      {item.notes && <div style={{ color: 'var(--ds-primary)', fontSize: '13px', marginTop: '4px' }}>Nota: {item.notes}</div>}
                     </div>
-                    <div style={{ color: '#FFFFFF', fontWeight: '600' }}>${((item.price || 0) * (item.quantity || item.qty || 1)).toLocaleString()}</div>
+                    <div style={{ color: 'var(--ds-text-primary)', fontWeight: '600' }}>${((item.price || 0) * (item.quantity || item.qty || 1)).toLocaleString()}</div>
                   </div>
                 ))}
-                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #333333', paddingTop: '12px', marginTop: '4px' }}>
-                  <div style={{ color: '#FFFFFF', fontWeight: '700', fontSize: '18px' }}>Total</div>
-                  <div style={{ color: '#D4A017', fontWeight: '800', fontSize: '18px' }}>${(selectedOrder.total || 0).toLocaleString()}</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid var(--ds-border)', paddingTop: '12px', marginTop: '4px' }}>
+                  <div style={{ color: 'var(--ds-text-primary)', fontWeight: '700', fontSize: '18px' }}>Total</div>
+                  <div style={{ color: 'var(--ds-primary)', fontWeight: '800', fontSize: '18px' }}>${(selectedOrder.total || 0).toLocaleString()}</div>
                 </div>
               </div>
-
-              <div style={{ backgroundColor: '#1A1A1A', borderRadius: '12px', padding: '20px' }}>
-                <h3 style={{ color: '#BDBDBD', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 12px 0' }}>Pago</h3>
-                <div style={{ color: '#FFFFFF', fontSize: '15px' }}>{getPaymentIcon(selectedOrder.payment_method)}</div>
-                {selectedOrder.payment_method?.toLowerCase().includes('transferencia') && selectedOrder.voucher_reference && (
-                  <div style={{ fontSize: '13px', color: '#9CA3AF', marginTop: '8px' }}>Ref: {selectedOrder.voucher_reference}</div>
-                )}
+              <div className="ds-card" style={{ padding: '20px' }}>
+                <h3 style={{ color: 'var(--ds-text-secondary)', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 12px 0' }}>Pago</h3>
+                <div style={{ color: 'var(--ds-text-primary)', fontSize: '15px' }}>{getPaymentIcon(selectedOrder.payment_method)}</div>
               </div>
             </div>
-
-            <div style={{ padding: '24px', borderTop: '1px solid #222222', backgroundColor: '#181818' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <button 
-                  onClick={() => handleUpdateStatus(selectedOrder.id, 'En preparación')}
-                  style={{ padding: '12px', backgroundColor: '#3B82F6', color: '#FFFFFF', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
-                >
-                  Preparar
-                </button>
-                <button 
-                  onClick={() => handleUpdateStatus(selectedOrder.id, 'En camino')}
-                  style={{ padding: '12px', backgroundColor: '#F59E0B', color: '#FFFFFF', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
-                >
-                  Despachar
-                </button>
-                <button 
-                  onClick={() => handleUpdateStatus(selectedOrder.id, 'Pendiente Pago')}
-                  style={{ padding: '12px', backgroundColor: '#8B5CF6', color: '#FFFFFF', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
-                >
-                  Pendiente Pago
-                </button>
-                <button 
-                  onClick={() => handleUpdateStatus(selectedOrder.id, 'Entregado')}
-                  style={{ padding: '12px', backgroundColor: '#22C55E', color: '#FFFFFF', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
-                >
-                  Marcar Entregado
-                </button>
+            <div className="ds-modal-footer" style={{ borderTop: '1px solid var(--ds-border)', backgroundColor: 'var(--ds-bg-elevated)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '12px', width: '100%' }}>
+                {selectedOrder.status === 'Nuevo' && <button disabled={updatingOrderId === selectedOrder.id} onClick={() => handlePrepareOrder(selectedOrder)} className="ds-btn ds-btn-full ds-btn-info" style={{ gridColumn: '1 / -1', backgroundColor: '#3B82F6' }}><Printer size={17}/> {updatingOrderId === selectedOrder.id ? 'Preparando…' : 'Preparar e imprimir cocina'}</button>}
+                {selectedOrder.status === 'En preparación' && <button disabled={updatingOrderId === selectedOrder.id} onClick={() => handleUpdateStatus(selectedOrder.id, 'Listo')} className="ds-btn ds-btn-full ds-btn-success" style={{ gridColumn: '1 / -1', backgroundColor: '#22C55E' }}><Package size={17}/> {updatingOrderId === selectedOrder.id ? 'Actualizando…' : 'Pedido listo'}</button>}
+                {selectedOrder.status === 'Listo' && String(selectedOrder.delivery_type || '').toLowerCase() === 'domicilio' && <button type="button" disabled className="ds-btn ds-btn-full" style={{ gridColumn: '1 / -1', backgroundColor: '#374151', color: '#fff', opacity: 1 }}><Clock size={17}/> Esperando que un domiciliario acepte</button>}
+                {selectedOrder.status === 'Listo' && String(selectedOrder.delivery_type || '').toLowerCase() !== 'domicilio' && <button disabled={updatingOrderId === selectedOrder.id} onClick={() => handleUpdateStatus(selectedOrder.id, 'Entregado')} className="ds-btn ds-btn-full ds-btn-success" style={{ gridColumn: '1 / -1', backgroundColor: '#22C55E' }}><CheckCircle size={17}/> Entregar pedido para recoger</button>}
+                {selectedOrder.status === 'En camino' && <button type="button" disabled className="ds-btn ds-btn-full" style={{ gridColumn: '1 / -1', backgroundColor: '#D4A017', color: '#111', opacity: 1 }}><MapPin size={17}/> Pedido en seguimiento con el domiciliario</button>}
+                {selectedOrder.status === 'Entregado' && <div style={{ gridColumn: '1 / -1', padding: '12px', borderRadius: '10px', backgroundColor: 'rgba(34,197,94,.12)', color: '#22C55E', textAlign: 'center', fontWeight: 800 }}><CheckCircle size={17} style={{ verticalAlign: 'middle', marginRight: '7px' }}/> Entregado{getDeliveryDurationText(selectedOrder) ? ` en ${getDeliveryDurationText(selectedOrder)}` : ''}</div>}
+                {!['Entregado', 'Completado', 'Cancelado'].includes(selectedOrder.status) && <button disabled={updatingOrderId === selectedOrder.id} onClick={() => handleUpdateStatus(selectedOrder.id, 'Pendiente Pago')} className="ds-btn ds-btn-full" style={{ backgroundColor: '#8B5CF6', color: '#FFFFFF' }}>Pendiente Pago</button>}
+                {!['Entregado', 'Completado', 'Cancelado'].includes(selectedOrder.status) && <button disabled={updatingOrderId === selectedOrder.id} onClick={() => handleUpdateStatus(selectedOrder.id, 'Cancelado')} className="ds-btn ds-btn-full ds-btn-danger">Cancelar pedido</button>}
               </div>
             </div>
           </div>
         </div>
       )}
-
-      {/* Modal Nuevo Pedido (POS) */}
-      {isNewOrderOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', zIndex: 1000 }}>
-          
-          {/* Panel Izquierdo: Productos */}
-          <div style={{ flex: 1, backgroundColor: '#0D0D0D', display: (!isMobile || !showMobileCart) ? 'flex' : 'none', flexDirection: 'column', overflow: 'hidden' }}>
-            <div style={{ padding: '20px', borderBottom: '1px solid #222222' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h2 style={{ color: '#FFFFFF', margin: 0, fontSize: '24px' }}>
-                  {editingOrderId ? `Editar Pedido #${editingOrderId}` : 'Menú de Productos'}
-                </h2>
-                <div style={{ position: 'relative', width: isMobile ? '180px' : '300px' }}>
-                  <Search size={18} style={{ position: 'absolute', left: '12px', top: '10px', color: '#6B7280' }} />
-                  <input 
-                    type="text" placeholder="Buscar producto..." 
-                    value={posSearch} onChange={e => setPosSearch(e.target.value)}
-                    style={{ width: '100%', backgroundColor: '#1A1A1A', border: '1px solid #333333', borderRadius: '8px', padding: '10px 10px 10px 36px', color: '#FFF', outline: 'none', boxSizing: 'border-box' }}
-                  />
-                </div>
-              </div>
-              {/* Category Filters */}
-              <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '8px' }}>
-                {['Todas', ...new Set(products.map(p => p.category || 'General'))].map(cat => (
-                  <button 
-                    key={cat}
-                    onClick={() => setPosCategory(cat)}
-                    style={{
-                      padding: '8px 16px',
-                      borderRadius: '20px',
-                      border: 'none',
-                      backgroundColor: posCategory === cat ? '#D4A017' : '#1A1A1A',
-                      color: posCategory === cat ? '#000' : '#FFF',
-                      fontWeight: posCategory === cat ? '700' : '500',
-                      cursor: 'pointer',
-                      whiteSpace: 'nowrap'
-                    }}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px', alignContent: 'start', paddingBottom: isMobile && newOrderCart.length > 0 ? '100px' : '20px' }}>
-              {products
-                .filter(p => posCategory === 'Todas' || (p.category || 'General') === posCategory)
-                .filter(p => p.title.toLowerCase().includes(posSearch.toLowerCase()))
-                .map(p => {
-                  const cartItem = newOrderCart.find(i => i.id === p.id);
-                  return (
-                    <div key={p.id} className="product-card" onClick={() => addToCart(p)} style={{ cursor: 'pointer', margin: 0, height: '100%', backgroundColor: '#111111', borderColor: '#222', borderWidth: '1px', borderStyle: 'solid' }}>
-                      <div className="product-image-container">
-                        {p.image ? (
-                          <img src={p.image} alt={p.title} className="product-image" />
-                        ) : (
-                          <div className="product-placeholder" style={{ backgroundColor: '#1A1A1A', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                            <ChefHat size={32} color="#333" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="product-info" style={{ padding: '16px', display: 'flex', flexDirection: 'column', flex: 1, backgroundColor: '#111111' }}>
-                        <h3 className="product-title" style={{ fontSize: isMobile ? '14px' : '16px', marginBottom: '8px', color: '#FFF' }}>{p.title}</h3>
-                        <p className="product-desc" style={{ fontSize: isMobile ? '12px' : '14px', flex: 1, color: '#BDBDBD', marginBottom: '12px', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.description}</p>
-                        <div className="product-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
-                          <span className="product-price" style={{ color: '#D4A017', fontWeight: '800', fontSize: isMobile ? '14px' : '18px' }}>${(p.price || 0).toLocaleString()}</span>
-                          <button className="add-btn" onClick={(e) => { e.stopPropagation(); addToCart(p); }}>
-                            {cartItem ? `+ (${cartItem.quantity})` : '+ AGREGAR'}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-            </div>
-            
-            {/* Botón flotante Ver Pedido (Móvil) */}
-            {isMobile && newOrderCart.length > 0 && !showMobileCart && (
-              <div style={{ position: 'absolute', bottom: '20px', left: '20px', right: '20px', zIndex: 100 }}>
-                <button 
-                  onClick={() => setShowMobileCart(true)}
-                  style={{ width: '100%', backgroundColor: '#D4A017', color: '#000', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '16px', fontWeight: '800', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <ShoppingCart size={20} /> Ver Pedido ({newOrderCart.reduce((s, i) => s + i.quantity, 0)})
-                  </div>
-                  <span>${newOrderCart.reduce((s, i) => s + (i.price || 0) * i.quantity, 0).toLocaleString()}</span>
-                </button>
-              </div>
-            )}
-          </div>
-          
-          {/* Panel Derecho: Carrito y Checkout */}
-          <div style={{ width: isMobile ? '100%' : '400px', backgroundColor: '#111111', borderLeft: '1px solid #222222', display: (!isMobile || showMobileCart) ? 'flex' : 'none', flexDirection: 'column' }}>
-            <div style={{ padding: '20px', borderBottom: '1px solid #222222', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              {isMobile ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <button onClick={() => setShowMobileCart(false)} style={{ background: 'none', border: 'none', color: '#FFF', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><ChevronLeft size={24} /></button>
-                  <h2 style={{ color: '#FFFFFF', margin: 0, fontSize: '20px' }}>
-                    {editingOrderId ? `Editar Orden #${editingOrderId}` : `Nueva Orden #${orders.length > 0 ? Math.max(...orders.map(o => o.id)) + 1 : 1}`}
-                  </h2>
-                </div>
-              ) : (
-                <h2 style={{ color: '#FFFFFF', margin: 0, fontSize: '20px' }}>
-                  {editingOrderId ? `Editar Orden #${editingOrderId}` : `Nueva Orden #${orders.length > 0 ? Math.max(...orders.map(o => o.id)) + 1 : 1}`}
-                </h2>
-              )}
-              <button onClick={() => { setIsNewOrderOpen(false); setShowMobileCart(false); }} style={{ background: 'none', border: 'none', color: '#BDBDBD', cursor: 'pointer' }}><X size={24} /></button>
-            </div>
-            
-            <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
-              {newOrderCart.length === 0 ? (
-                <div style={{ color: '#6B7280', textAlign: 'center', marginTop: '40px' }}>Haz clic en los productos para agregarlos</div>
-              ) : (
-                newOrderCart.map(item => (
-                  <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', backgroundColor: '#1A1A1A', padding: '12px', borderRadius: '8px' }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ color: '#FFF', fontWeight: '600', fontSize: '14px' }}>{item.title}</div>
-                      <div style={{ color: '#D4A017', fontSize: '13px' }}>${((item.price || 0) * item.quantity).toLocaleString()}</div>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', backgroundColor: '#222', padding: '4px 8px', borderRadius: '8px' }}>
-                      <button onClick={() => updateCartQty(item.id, -1)} style={{ background: 'none', border: 'none', color: '#FFF', cursor: 'pointer', fontSize: '16px' }}>-</button>
-                      <span style={{ color: '#FFF', fontWeight: '600' }}>{item.quantity}</span>
-                      <button onClick={() => updateCartQty(item.id, 1)} style={{ background: 'none', border: 'none', color: '#FFF', cursor: 'pointer', fontSize: '16px' }}>+</button>
-                      <button onClick={() => setNewOrderCart(prev => prev.filter(i => i.id !== item.id))} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', display: 'flex', alignItems: 'center', marginLeft: '4px' }}><Trash2 size={16} /></button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            <div style={{ padding: '20px', borderTop: '1px solid #222222', backgroundColor: '#181818' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-                  <div style={{ position: 'relative' }}>
-                    <input 
-                      type="text" 
-                      placeholder="Nombre cliente" 
-                      value={newOrderCustomer.name} 
-                      onChange={e => {
-                        setNewOrderCustomer({...newOrderCustomer, name: e.target.value});
-                        setShowCustomerDropdown(true);
-                      }} 
-                      onFocus={() => setShowCustomerDropdown(true)}
-                      onBlur={() => setTimeout(() => setShowCustomerDropdown(false), 200)}
-                      style={{ width: '100%', boxSizing: 'border-box', backgroundColor: '#111', border: '1px solid #333', padding: '10px', borderRadius: '8px', color: '#FFF', outline: 'none' }} 
-                    />
-                    {showCustomerDropdown && filteredCustomers.length > 0 && (
-                      <div style={{ position: 'absolute', bottom: '100%', left: 0, right: 0, backgroundColor: '#1A1A1A', border: '1px solid #333', borderRadius: '8px', marginBottom: '4px', zIndex: 10, maxHeight: '200px', overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
-                        {filteredCustomers.map((c, idx) => (
-                          <div 
-                            key={idx}
-                            onClick={() => {
-                              setNewOrderCustomer({
-                                ...newOrderCustomer,
-                                name: c.customer_name,
-                                phone: c.customer_phone || newOrderCustomer.phone,
-                                address: c.address || newOrderCustomer.address,
-                                deliveryType: c.delivery_type || newOrderCustomer.deliveryType,
-                                source: c.source || newOrderCustomer.source
-                              });
-                              setShowCustomerDropdown(false);
-                            }}
-                            style={{ padding: '10px', color: '#FFF', cursor: 'pointer', borderBottom: '1px solid #222' }}
-                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#333'}
-                            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                          >
-                            <div style={{ fontWeight: '600', fontSize: '14px' }}>{c.customer_name}</div>
-                            <div style={{ fontSize: '12px', color: '#9CA3AF' }}>{c.customer_phone}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                <input type="text" placeholder="Teléfono" value={newOrderCustomer.phone} onChange={e => setNewOrderCustomer({...newOrderCustomer, phone: e.target.value})} style={{ backgroundColor: '#111', border: '1px solid #333', padding: '10px', borderRadius: '8px', color: '#FFF', outline: 'none' }} />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-                <input type="text" placeholder="Barrio" value={newOrderCustomer.barrio} onChange={e => setNewOrderCustomer({...newOrderCustomer, barrio: e.target.value})} style={{ backgroundColor: '#111', border: '1px solid #333', padding: '10px', borderRadius: '8px', color: '#FFF', outline: 'none' }} />
-                <input type="text" placeholder="Dirección" value={newOrderCustomer.address} onChange={e => setNewOrderCustomer({...newOrderCustomer, address: e.target.value})} style={{ backgroundColor: '#111', border: '1px solid #333', padding: '10px', borderRadius: '8px', color: '#FFF', outline: 'none' }} />
-              </div>
-              <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
-                <select value={newOrderCustomer.source} onChange={e => setNewOrderCustomer({...newOrderCustomer, source: e.target.value})} style={{ flex: 1, backgroundColor: '#111', border: '1px solid #333', padding: '10px', borderRadius: '8px', color: '#FFF', outline: 'none' }}>
-                  <option value="Presencial">Presencial</option>
-                  <option value="WhatsApp">WhatsApp</option>
-                  <option value="Teléfono">Teléfono</option>
-                </select>
-                <select value={newOrderCustomer.paymentMethod} onChange={e => setNewOrderCustomer({...newOrderCustomer, paymentMethod: e.target.value})} style={{ flex: 1, backgroundColor: '#111', border: '1px solid #333', padding: '10px', borderRadius: '8px', color: '#FFF', outline: 'none' }}>
-                  <option value="efectivo">Efectivo</option>
-                  <option value="transferencia">Transferencia</option>
-                </select>
-              </div>
-              {newOrderCustomer.paymentMethod === 'transferencia' && (
-                <div style={{ marginBottom: '16px' }}>
-                  <input type="text" placeholder="Referencia de comprobante" value={newOrderCustomer.voucher_reference || ''} onChange={e => setNewOrderCustomer({...newOrderCustomer, voucher_reference: e.target.value})} style={{ width: '100%', boxSizing: 'border-box', backgroundColor: '#111', border: '1px solid #333', padding: '10px', borderRadius: '8px', color: '#FFF', outline: 'none' }} />
-                </div>
-              )}
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', color: '#BDBDBD', fontSize: '12px', marginBottom: '4px' }}>Forma de Entrega</label>
-                <select value={newOrderCustomer.deliveryType} onChange={e => setNewOrderCustomer({...newOrderCustomer, deliveryType: e.target.value})} style={{ width: '100%', backgroundColor: '#111', border: '1px solid #333', padding: '10px', borderRadius: '8px', color: '#FFF', outline: 'none' }}>
-                  <option value="presencial">Para Llevar (Presencial)</option>
-                  <option value="domicilio">Domicilio</option>
-                  <option value="mesa">Consumo en Mesa</option>
-                </select>
-              </div>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', color: '#BDBDBD', fontSize: '12px', marginBottom: '4px' }}>Fecha del Pedido (Para pedidos anteriores)</label>
-                <input type="date" onClick={(e) => e.target.showPicker && e.target.showPicker()} value={newOrderCustomer.created_at || ''} onChange={e => setNewOrderCustomer({...newOrderCustomer, created_at: e.target.value})} style={{ width: '100%', boxSizing: 'border-box', backgroundColor: '#111', border: '1px solid #333', padding: '10px', borderRadius: '8px', color: '#FFF', outline: 'none', colorScheme: 'dark', cursor: 'pointer' }} />
-              </div>
-              
-              <div style={{ marginBottom: '16px' }}>
-                <textarea placeholder="Notas / Observaciones (Opcional)" value={newOrderCustomer.notes} onChange={e => setNewOrderCustomer({...newOrderCustomer, notes: e.target.value})} style={{ width: '100%', boxSizing: 'border-box', backgroundColor: '#111', border: '1px solid #333', padding: '10px', borderRadius: '8px', color: '#FFF', outline: 'none', minHeight: '80px', resize: 'vertical' }} />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', fontSize: '20px' }}>
-                <span style={{ color: '#FFF', fontWeight: '600' }}>Total:</span>
-                <span style={{ color: '#D4A017', fontWeight: '800' }}>${newOrderCart.reduce((s, i) => s + (i.price || 0) * i.quantity, 0).toLocaleString()}</span>
-              </div>
-
-              <button onClick={handleCreateOrder} style={{ width: '100%', padding: '14px', backgroundColor: '#D4A017', color: '#000', border: 'none', borderRadius: '12px', fontWeight: '700', fontSize: '16px', cursor: 'pointer' }}>
-                {editingOrderId ? 'Guardar Cambios' : 'Confirmar Orden'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <style>{`
-        @keyframes slideIn {
-          from { transform: translateX(100%); }
-          to { transform: translateX(0); }
-        }
-      `}</style>
     </div>
   );
 }
-

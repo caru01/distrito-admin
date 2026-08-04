@@ -1,49 +1,66 @@
-﻿import React from 'react'
+import React, { lazy, Suspense } from 'react'
 import ReactDOM from 'react-dom/client'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import StoreFront from './App.jsx'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import AdminLayout from './layouts/AdminLayout.jsx'
 import AdminLogin from './pages/AdminLogin.jsx'
-import AdminDashboard from './pages/AdminDashboard.jsx'
-import AdminCategorias from './pages/AdminCategorias.jsx'
-import AdminPedidos from './pages/AdminPedidos.jsx'
-import AdminProductos from './pages/AdminProductos.jsx'
-import AdminInventario from './pages/AdminInventario.jsx'
-import AdminReportes from './pages/AdminReportes.jsx'
-import AdminRendimientos from './pages/AdminRendimientos.jsx'
-import AdminRecetas from './pages/AdminRecetas.jsx'
-import AdminGastos from './pages/AdminGastos.jsx'
-import AdminCierreContable from './pages/AdminCierreContable.jsx'
-import AdminAnuncios from './pages/AdminAnuncios.jsx'
-import AdminConfiguracion from './pages/AdminConfiguracion.jsx'
-import AdminHorarios from './pages/AdminHorarios.jsx'
-import { Navigate } from "react-router-dom";
-import './index.css'
+import { AuthProvider } from './context/AuthContext.jsx'
+import AppErrorBoundary from './components/AppErrorBoundary.jsx'
+
+import './styles/design-system.css'
+
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard.jsx'))
+const AdminCategorias = lazy(() => import('./pages/AdminCategorias.jsx'))
+const AdminPedidos = lazy(() => import('./pages/AdminPedidos.jsx'))
+const AdminProductos = lazy(() => import('./pages/AdminProductos.jsx'))
+const AdminInventario = lazy(() => import('./pages/AdminInventario.jsx'))
+const AdminReportes = lazy(() => import('./pages/AdminReportes.jsx'))
+const AdminGastos = lazy(() => import('./pages/AdminGastos.jsx'))
+const AdminCierreContable = lazy(() => import('./pages/AdminCierreContable.jsx'))
+const AdminAnuncios = lazy(() => import('./pages/AdminAnuncios.jsx'))
+const AdminConfiguracion = lazy(() => import('./pages/AdminConfiguracion.jsx'))
+const AdminHorarios = lazy(() => import('./pages/AdminHorarios.jsx'))
+const TomarPedido = lazy(() => import('./pages/TomarPedido.jsx'))
+const Perfil = lazy(() => import('./pages/Perfil.jsx'))
+const AdminAuditoria = lazy(() => import('./pages/AdminAuditoria.jsx'))
+const ResetPassword = lazy(() => import('./pages/ResetPassword.jsx'))
+const AdminUsuarios = lazy(() => import('./pages/AdminUsuarios.jsx'))
+const AdminRoles = lazy(() => import('./pages/AdminRoles.jsx'))
+const AdminDeliveryMap = lazy(() => import('./pages/AdminDeliveryMap.jsx'))
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Navigate to="/admin/login" replace />} />
-        <Route path="/admin/login" element={<AdminLogin />} />
-        <Route path="/admin" element={<AdminLayout />}>
-          <Route index element={<AdminDashboard />} />
-          <Route path="pedidos" element={<AdminPedidos />} />
-          <Route path="productos" element={<AdminProductos />} />
-          <Route path="categorias" element={<AdminCategorias />} />
-          <Route path="clientes" element={<div style={{ padding: 20 }}>Vista de Clientes (En construcción)</div>} />
-          <Route path="inventario" element={<AdminInventario />} />
-          <Route path="reportes" element={<AdminReportes />} />
-          <Route path="rendimientos" element={<AdminRendimientos />} />
-          <Route path="recetas" element={<AdminRecetas />} />
-          <Route path="gastos" element={<AdminGastos />} />
-          <Route path="cierre-contable" element={<AdminCierreContable />} />
-          <Route path="anuncios" element={<AdminAnuncios />} />
-          <Route path="configuracion" element={<AdminConfiguracion />} />
-          <Route path="horarios" element={<AdminHorarios />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+    <AppErrorBoundary>
+      <AuthProvider>
+        <BrowserRouter>
+          <Suspense fallback={<div className="admin-route-loading">Cargando módulo…</div>}>
+          <Routes>
+          <Route path="/" element={<Navigate to="/admin/login" replace />} />
+          <Route path="/admin/login" element={<AdminLogin />} />
+          <Route path="/admin/reset-password" element={<ResetPassword />} />
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<AdminDashboard />} />
+            <Route path="pedidos" element={<AdminPedidos />} />
+            <Route path="mapa-domicilios" element={<AdminDeliveryMap />} />
+            <Route path="productos" element={<AdminProductos />} />
+            <Route path="categorias" element={<AdminCategorias />} />
+            <Route path="usuarios" element={<AdminUsuarios />} />
+            <Route path="roles" element={<AdminRoles />} />
+            <Route path="clientes" element={<div style={{ padding: 20 }}>Vista de Clientes (En construcción)</div>} />
+            <Route path="inventario" element={<AdminInventario />} />
+            <Route path="reportes" element={<AdminReportes />} />
+            <Route path="gastos" element={<AdminGastos />} />
+            <Route path="cierre-contable" element={<AdminCierreContable />} />
+            <Route path="anuncios" element={<AdminAnuncios />} />
+            <Route path="configuracion" element={<AdminConfiguracion />} />
+            <Route path="horarios" element={<AdminHorarios />} />
+            <Route path="tomar-pedido" element={<TomarPedido />} />
+            <Route path="perfil" element={<Perfil />} />
+            <Route path="auditoria" element={<AdminAuditoria />} />
+          </Route>
+          </Routes>
+          </Suspense>
+        </BrowserRouter>
+      </AuthProvider>
+    </AppErrorBoundary>
   </React.StrictMode>,
 )
-
