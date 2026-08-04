@@ -1,4 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+const fs = require('fs');
+
+const code = `import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { loadGoogleMaps } from './googleMaps.js';
 import './live-map.css';
 
@@ -22,7 +24,7 @@ function pointFrom(value) {
 
 function markerContent(kind, label, detail = '', selected = false, status = '') {
   const root = document.createElement('div');
-  root.className = `live-map-marker live-map-marker--${kind}${selected ? ' is-selected' : ''}${status ? ` is-${String(status).toLowerCase()}` : ''}`;
+  root.className = \`live-map-marker live-map-marker--\${kind}\${selected ? ' is-selected' : ''}\${status ? \` is-\${String(status).toLowerCase()}\` : ''}\`;
 
   const copy = document.createElement('span');
   copy.className = 'live-map-marker__copy';
@@ -151,7 +153,7 @@ export default function LiveDeliveryMap({
     if (showJourney && destinationPoints.length > 0) {
       const routeStart = currentDriver?.point || trailPoints.at(-1) || storePoint;
       
-      const sig = `${routeStart.lat},${routeStart.lng}|${destinationPoints.map(d => d.point.lat+','+d.point.lng).join('|')}`;
+      const sig = \`\${routeStart.lat},\${routeStart.lng}|\${destinationPoints.map(d => d.point.lat+','+d.point.lng).join('|')}\`;
       if (routeSignatureRef.current === sig) return; // Prevent spamming API
       routeSignatureRef.current = sig;
 
@@ -213,7 +215,7 @@ export default function LiveDeliveryMap({
       const content = markerContent(
         'driver',
         driver.name || driver.username || 'Domiciliario',
-        driver.orderId ? `Pedido #${driver.orderId}` : (driver.detail || 'Ubicación en vivo'),
+        driver.orderId ? \`Pedido #\${driver.orderId}\` : (driver.detail || 'Ubicación en vivo'),
         selected,
         driver.status || driver.liveStatus || '',
       );
@@ -254,7 +256,7 @@ export default function LiveDeliveryMap({
       }
     }
 
-    const signature = `${visibleDrivers.map((driver) => driver.id).sort().join(',')}|${selectedDriverId || ''}|${destinationPoints.length}`;
+    const signature = \`\${visibleDrivers.map((driver) => driver.id).sort().join(',')}|\${selectedDriverId || ''}|\${destinationPoints.length}\`;
     if (fitSignatureRef.current !== signature) {
       const bounds = new coreLibraryRef.current.LatLngBounds();
       bounds.extend(storePoint);
@@ -268,7 +270,7 @@ export default function LiveDeliveryMap({
   }, [destinationPoints, normalizedStore, selectedDriverId, showJourney, status, storePoint, trailPoints, visibleDrivers, currentDriver]);
 
   return (
-    <div className={`live-delivery-map-shell ${className}`.trim()} data-status={status}>
+    <div className={\`live-delivery-map-shell \${className}\`.trim()} data-status={status}>
       <div ref={hostRef} className="live-delivery-map-canvas" aria-label={ariaLabel} />
       {status === 'loading' && <div className="live-delivery-map-state">Cargando mapa en vivo...</div>}
       {(status === 'error' || status === 'unavailable') && (
@@ -279,3 +281,6 @@ export default function LiveDeliveryMap({
     </div>
   );
 }
+`;
+fs.writeFileSync('e:/RESPALDO PC CAMILO/Documentos/DistritoBG/distrito-admin/src/components/LiveDeliveryMap.jsx', code);
+console.log('LiveDeliveryMap.jsx updated');
