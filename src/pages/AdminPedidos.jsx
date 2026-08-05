@@ -191,21 +191,14 @@ export default function AdminPedidos() {
   const handleSendWhatsApp = async (phone, id, order = null) => {
     if (!phone) return alert('No hay número de teléfono registrado');
     try {
-      const token = sessionStorage.getItem('distrito_admin_token');
-      const response = await fetch(`${API_URL}/admin/orders/${id}/tracking-token`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'No fue posible generar el seguimiento');
-      const trackingUrl = new URL(STOREFRONT_URL);
-      trackingUrl.searchParams.set('pedido', id);
-      trackingUrl.searchParams.set('seguimiento', data.tracking_token);
+      const code = String(phone).replace(/\D/g, '').slice(-4);
+      const trackingUrl = `${STOREFRONT_URL.replace(/\/$/, '')}/rastrear/${id}?c=${code}`;
       const msg = encodeURIComponent(`🍔 Distrito BG\n\n¡Buenas noticias!\n\nTu pedido ya está listo.\n\nEn unos minutos será entregado al domiciliario.\n\nPuedes seguir el estado de tu pedido aquí:\n\n${trackingUrl}\n\nGracias por elegir Distrito BG ❤️`);
       const digits = String(phone).replace(/\D/g, '');
       const whatsappPhone = digits.length === 10 ? `57${digits}` : digits;
       window.open(`https://wa.me/${whatsappPhone}?text=${msg}`, '_blank', 'noopener,noreferrer');
       
+      const token = sessionStorage.getItem('distrito_admin_token');
       // Update tracking_sent_at on backend
       await fetch(`${API_URL}/admin/orders/${id}/tracking-sent`, {
         method: 'POST',
