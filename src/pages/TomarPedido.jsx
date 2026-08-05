@@ -385,7 +385,7 @@ export default function TomarPedido() {
         notes:             customer.notes,
         cart:              cart.map(i => ({ id: i.id, title: i.title, price: i.price, quantity: i.qty })),
         total,
-        status:            sendToKitchen ? 'Nuevo' : 'Nuevo',
+        status:            sendToKitchen ? 'En preparación' : 'Nuevo',
         created_at:        customer.created_at ? customer.created_at : undefined,
         customer: {
           name: customer.name,
