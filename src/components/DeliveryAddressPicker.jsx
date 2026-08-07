@@ -51,9 +51,10 @@ export default function DeliveryAddressPicker({
   onAvailabilityChange,
   apiKey = '',
   mapId = 'DEMO_MAP_ID',
-  inputClassName = 'form-input',
+  inputClassName = 'ds-input',
   compact = false,
   labels = {},
+  mapHeight = '250px',
 }) {
   const copy = { ...DEFAULT_LABELS, ...labels };
   const suggestionListId = useId();
@@ -428,7 +429,12 @@ export default function DeliveryAddressPicker({
       )}
 
       <div className={`delivery-map-panel ${selectionReady ? 'is-visible' : ''}`}>
-        <div ref={mapHostRef} className="delivery-map" aria-label={copy.mapAriaLabel} />
+        <div
+          ref={mapHostRef}
+          className="delivery-map"
+          aria-label={copy.mapAriaLabel}
+          style={{ height: mapHeight }}
+        />
         {selectionReady && (
           <div className="delivery-map-confirmation">
             <div className="selected-address-row">
@@ -441,7 +447,7 @@ export default function DeliveryAddressPicker({
             <p className="address-helper"><Move size={16} /> Si el punto quedó corrido, arrastra el marcador.</p>
             <button
               type="button"
-              className={`confirm-location-btn ${value.locationConfirmed ? 'is-confirmed' : ''}`}
+              className={`ds-btn ds-btn-primary ${value.locationConfirmed ? 'is-confirmed' : ''}`}
               onClick={() => onChange({ locationConfirmed: true })}
             >
               <CheckCircle2 size={19} />
