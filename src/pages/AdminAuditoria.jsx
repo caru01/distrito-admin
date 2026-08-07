@@ -126,6 +126,7 @@ export default function AdminAuditoria() {
                             <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'currentColor' }}></div>
                             {s.status}
                           </span>
+                          <span className="ds-badge ds-badge-neutral" style={{marginLeft: '8px'}}>{s.role_name === 'Domiciliario' ? 'App Delivery' : 'Panel Web'}</span>
                         </td>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -181,6 +182,7 @@ export default function AdminAuditoria() {
                           <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'currentColor' }}></div>
                           {s.status}
                         </span>
+                        <span className="ds-badge ds-badge-neutral" style={{marginLeft: '8px'}}>{s.role_name === 'Domiciliario' ? 'App Delivery' : 'Panel Web'}</span>
                       </span>
                     </div>
                     <div className="ds-table-card-row">

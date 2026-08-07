@@ -65,7 +65,16 @@ export default function AdminUsuarios() {
   return <div className="ds-page users-page">
     <header className="ds-page-header"><div><span className="ds-eyebrow">Seguridad</span><h1 className="ds-page-title">Usuarios</h1><p className="ds-page-subtitle">Cuentas reales, roles, estado y sesiones activas.</p></div><button className="ds-btn ds-btn-primary" onClick={openCreate}><Plus size={17} /> Nuevo usuario</button></header>
     {message.text && <div className={`ds-alert ds-alert-${message.type === 'error' ? 'danger' : 'success'}`}>{message.text}</div>}
-    <section className="ds-card"><div className="users-toolbar"><div className="ds-search"><Search size={17} /><input placeholder="Buscar por nombre, usuario, rol o correo" value={query} onChange={(e) => setQuery(e.target.value)} /></div><span className="ds-badge ds-badge-info">{filtered.length} usuarios</span></div>
+    <section className="ds-card"><div className="users-toolbar"><div className="ds-search" style={{ flex: 1, minWidth: '300px' }}>
+  <Search size={20} className="ds-search-icon" />
+  <input 
+    type="text" 
+    placeholder="Buscar por nombre, usuario, rol o correo" 
+    value={query} 
+    onChange={(e) => setQuery(e.target.value)}
+    className="ds-search-input ds-input" 
+  />
+</div><span className="ds-badge ds-badge-info">{filtered.length} usuarios</span></div>
       <div className="ds-table-container"><table className="ds-table"><thead><tr><th>Usuario</th><th>Rol</th><th>Contacto</th><th>Sesiones</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
         {filtered.map((user) => <tr key={user.id}><td><div className="user-cell"><span className="user-avatar"><UserRound size={18} /></span><div><strong>{[user.name, user.last_name].filter(Boolean).join(' ') || user.username}</strong><small>@{user.username}{user.document ? ` · ${user.document}` : ''}</small></div></div></td><td><span className="ds-badge ds-badge-warning"><Shield size={13} /> {user.role_name || 'Sin rol'}</span>{DELIVERY_ROLES.has(user.role_name) && <small className="delivery-capacity-copy">{user.active_delivery_orders || 0}/{user.max_active_orders || 5} pedidos activos</small>}</td><td><div>{user.email || 'Sin correo'}</div><small>{user.phone || 'Sin teléfono'}</small></td><td><span className="user-sessions"><Smartphone size={15} /> {user.active_sessions || 0}/3</span></td><td><span className={`ds-badge ${user.status === 'Activo' ? 'ds-badge-success' : 'ds-badge-neutral'}`}>{user.status}</span></td><td><div className="ds-actions"><button className="ds-icon-btn" onClick={() => openEdit(user)} title="Editar"><Edit3 size={16} /></button><button className="ds-icon-btn danger" onClick={() => deactivate(user)} title="Desactivar"><UserX size={16} /></button></div></td></tr>)}
         {!loading && !filtered.length && <tr><td colSpan="6"><div className="ds-empty-state">No hay usuarios que coincidan.</div></td></tr>}

@@ -253,7 +253,10 @@ export default function AdminPedidos() {
     });
   }, [orders, activeTab, searchQuery, filterDate]);
 
-  const getStatusBadge = (status) => {
+  const getStatusBadge = (status, order = null) => {
+    if (status === 'Listo' && (!order || !order.delivery_user_id)) {
+      return <span className="ds-badge ds-badge-success">Listo, esperando que un domiciliario acepte</span>;
+    }
     let badgeClass = 'ds-badge-neutral';
     if (status === 'Nuevo') badgeClass = 'ds-badge-info';
     else if (status === 'En preparación') badgeClass = 'ds-badge-warning';
@@ -481,7 +484,7 @@ export default function AdminPedidos() {
                       {order.notes && <div style={{ color: '#FCD34D', fontSize: '12px', marginTop: '6px', fontStyle: 'italic', padding: '4px 8px', backgroundColor: 'rgba(252,211,77,0.1)', borderRadius: '4px', display: 'inline-block' }}>Nota: {order.notes}</div>}
                     </td>
                     <td>{getSourceIcon(order.source || 'Web')}</td>
-                    <td><div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '7px' }}>{getStatusBadge(order.status || 'Nuevo')}{order.status === 'Entregado' && getDeliveryDurationText(order) && <small style={{ color: '#10B981', fontWeight: 700 }}>{getDeliveryDurationText(order)}</small>}</div></td>
+                    <td><div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '7px' }}>{getStatusBadge(order.status || 'Nuevo', order)}{order.status === 'Entregado' && getDeliveryDurationText(order) && <small style={{ color: '#10B981', fontWeight: 700 }}>{getDeliveryDurationText(order)}</small>}</div></td>
                     <td style={{ color: 'var(--ds-text-primary)', fontWeight: '700', fontSize: '15px' }}>${(order.total || 0).toLocaleString()}</td>
                     <td>
                       {getPaymentIcon(order.payment_method)}
@@ -491,7 +494,7 @@ export default function AdminPedidos() {
                     <td style={{ textAlign: 'right' }}>
                       <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', position: 'relative' }}>
                         <button onClick={() => setSelectedOrder(order)} className="ds-btn ds-btn-icon ds-btn-secondary ds-btn-sm"><Eye size={16} /></button>
-                        <button onClick={() => handleEditOrder(order)} className="ds-btn ds-btn-icon ds-btn-secondary ds-btn-sm"><Pencil size={16} /></button>
+                        {['Nuevo', 'En preparación', 'Pendiente Pago'].includes(order.status) && (<button onClick={() => handleEditOrder(order)} className="ds-btn ds-btn-icon ds-btn-secondary ds-btn-sm"><Pencil size={16} /></button>)}
                         <button onClick={() => handlePrintOrder(order)} className="ds-btn ds-btn-icon ds-btn-secondary ds-btn-sm" title="Imprimir Comanda">
                           <Printer size={16} />
                         </button>
@@ -525,7 +528,7 @@ export default function AdminPedidos() {
                     <div style={{ color: 'var(--ds-text-primary)', fontWeight: '700', fontSize: '16px' }}>#{order.id.toString().padStart(4, '0')}</div>
                     <div style={{ color: 'var(--ds-text-muted)', fontSize: '13px', marginTop: '4px' }}>{new Date(order.created_at).toLocaleDateString()} {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                   </div>
-                  <div style={{ display: 'grid', justifyItems: 'end', gap: '5px' }}>{getStatusBadge(order.status || 'Nuevo')}{order.status === 'Entregado' && getDeliveryDurationText(order) && <small style={{ color: '#10B981', fontWeight: 700 }}>{getDeliveryDurationText(order)}</small>}</div>
+                  <div style={{ display: 'grid', justifyItems: 'end', gap: '5px' }}>{getStatusBadge(order.status || 'Nuevo', order)}{order.status === 'Entregado' && getDeliveryDurationText(order) && <small style={{ color: '#10B981', fontWeight: 700 }}>{getDeliveryDurationText(order)}</small>}</div>
                 </div>
 
                 <div className="ds-table-card-row">
@@ -546,7 +549,7 @@ export default function AdminPedidos() {
 
                 <div className="ds-table-card-actions" style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
                   <button onClick={() => setSelectedOrder(order)} className="ds-btn ds-btn-secondary" style={{ flex: 1 }}><Eye size={16} /> Ver</button>
-                  <button onClick={() => handleEditOrder(order)} className="ds-btn ds-btn-secondary ds-btn-icon"><Pencil size={16} /></button>
+                  {['Nuevo', 'En preparación', 'Pendiente Pago'].includes(order.status) && (<button onClick={() => handleEditOrder(order)} className="ds-btn ds-btn-secondary ds-btn-icon"><Pencil size={16} /></button>)}
                   <button onClick={() => handlePrintOrder(order)} className="ds-btn ds-btn-secondary ds-btn-icon"><Printer size={16} /></button>
                   <button onClick={() => setOpenMenuId(openMenuId === order.id ? null : order.id)} className="ds-btn ds-btn-secondary ds-btn-icon"><MoreVertical size={16} /></button>
                   {openMenuId === order.id && (
@@ -589,7 +592,7 @@ export default function AdminPedidos() {
             </div>
             <div className="ds-modal-body">
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>{getStatusBadge(selectedOrder.status || 'Nuevo')}{selectedOrder.status === 'Entregado' && getDeliveryDurationText(selectedOrder) && <strong style={{ color: '#10B981', fontSize: '13px' }}>Entregado en {getDeliveryDurationText(selectedOrder)}</strong>}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>{getStatusBadge(selectedOrder.status || 'Nuevo', selectedOrder)}{selectedOrder.status === 'Entregado' && getDeliveryDurationText(selectedOrder) && <strong style={{ color: '#10B981', fontSize: '13px' }}>Entregado en {getDeliveryDurationText(selectedOrder)}</strong>}</div>
                 <div style={{ color: 'var(--ds-text-primary)', fontSize: '14px', fontWeight: '500' }}>{getSourceIcon(selectedOrder.source || 'Web')}</div>
               </div>
               <div className="ds-card" style={{ padding: '20px', marginBottom: '24px' }}>

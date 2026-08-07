@@ -55,6 +55,7 @@ export default function AdminAnuncios() {
   const [sendingPush, setSendingPush] = useState(false);
   const [notice, setNotice] = useState(null);
   const [pushNotice, setPushNotice] = useState(null);
+  const [pushCount, setPushCount] = useState({ total: 0, customers: 0, drivers: 0 });
 
   const status = useMemo(() => campaignStatus(announcement), [announcement]);
 
@@ -75,6 +76,14 @@ export default function AdminAnuncios() {
   }, []);
 
   useEffect(() => { fetchAnnouncement(); }, [fetchAnnouncement]);
+
+  useEffect(() => {
+    const token = sessionStorage.getItem('distrito_admin_token');
+    fetch(`${API_URL}/admin/push/subscriptions/count`, { headers: { 'Authorization': `Bearer ${token}` } })
+      .then(res => res.json())
+      .then(data => { if (data.status === 'ok') setPushCount(data); })
+      .catch(console.error);
+  }, []);
 
   const update = (field, value) => setAnnouncement((current) => ({ ...current, [field]: value }));
 
@@ -243,6 +252,23 @@ export default function AdminAnuncios() {
             <div className="ds-form-group announcement-push-message"><label className="ds-form-label" htmlFor="push-message">Mensaje</label><textarea id="push-message" className="ds-textarea" maxLength={180} required value={pushData.message} onChange={(event) => setPushData({ ...pushData, message: event.target.value })} placeholder="Escribe un mensaje breve y accionable." /><span className="ds-form-help announcement-counter"><span>Máximo 180 caracteres</span><strong>{pushData.message.length}/180</strong></span></div>
           </div>
           {pushNotice && <div className={`ds-inline-alert ds-inline-alert-${pushNotice.type === 'success' ? 'success' : 'danger'}`}>{pushNotice.type === 'success' ? <CheckCircle size={18} /> : <XCircle size={18} />}<span>{pushNotice.text}</span></div>}
+          
+          <div style={{ marginTop: '20px', padding: '15px', backgroundColor: 'var(--ds-bg-secondary)', borderRadius: '12px', marginBottom: '20px' }}>
+            <h3 style={{ fontSize: '14px', marginBottom: '10px' }}>Vista previa en el celular:</h3>
+            <div style={{ backgroundColor: '#fff', color: '#333', padding: '12px 16px', borderRadius: '16px', display: 'flex', gap: '12px', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+              <div style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: '#e21b1b', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                <img src="/pwa-192x192.png" alt="Icon" style={{ width: '24px', height: '24px' }} onError={(e) => e.target.style.display = 'none'} />
+              </div>
+              <div>
+                <strong style={{ display: 'block', fontSize: '14px', marginBottom: '2px' }}>{pushData.title || 'Título de notificación'}</strong>
+                <span style={{ fontSize: '13px', opacity: 0.8 }}>{pushData.message || 'Mensaje de la notificación que llegará al cliente.'}</span>
+              </div>
+            </div>
+            <p style={{ marginTop: '15px', fontSize: '13px', color: 'var(--ds-text-secondary)' }}>
+              Esta notificación llegará a <strong>{pushCount.customers}</strong> clientes y <strong>{pushCount.drivers}</strong> domiciliarios con la App instalada.
+            </p>
+          </div>
+
           <div className="announcement-push-submit"><button className="ds-btn ds-btn-success" disabled={sendingPush}><Send size={18} /> {sendingPush ? 'Enviando…' : 'Enviar notificación'}</button></div>
         </form>
       </section>

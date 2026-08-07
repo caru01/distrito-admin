@@ -154,6 +154,18 @@ export default function AdminDeliveryMap() {
     }
   };
 
+  const updateOrderStatus = async (orderId, newStatus) => {
+    try {
+      const response = await fetch(`${API_URL}/admin/orders/${orderId}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (response.ok) await load(true);
+      else alert('Error actualizando pedido');
+    } catch (err) { alert('Error de red'); }
+  };
+
   return <div className="ds-page delivery-map-page">
     <div className="ds-page-header delivery-map-header">
       <div><div className="ds-breadcrumb">Dashboard <span>/</span> Mapa de Domicilios</div><h1 className="ds-page-title">Mapa de Domicilios</h1><p className="ds-page-subtitle"><Radio size={15}/> Motocicletas y pedidos sincronizados en tiempo real</p></div>
@@ -177,6 +189,7 @@ export default function AdminDeliveryMap() {
           drivers={mappedDrivers}
           selectedDriverId={selectedId}
           onDriverSelect={setSelectedId}
+          showJourney={Boolean(selectedDestinations.length > 0)}
           ariaLabel="Mapa con todos los domiciliarios y la cocina"
         />
         <div className="delivery-map-legend"><span><i className="is-store">🏪</i> Cocina — punto de salida</span><span><i className="is-driver">🛵</i> Domiciliario en vivo</span>{selectedDestinations && selectedDestinations.length > 0 && <span><i>📍</i> {selectedDestinations.length} destino(s)</span>}</div>
@@ -184,7 +197,25 @@ export default function AdminDeliveryMap() {
       </section>
       <section className="ds-card delivery-driver-panel">
         <div className="delivery-panel-heading"><div><h2>Domiciliarios</h2><p>Selecciona uno para resaltarlo</p></div></div>
-        <div className="delivery-driver-list">{loading ? <div className="delivery-loading">Cargando…</div> : drivers.length ? drivers.map((driver) => <button key={driver.id} className={`delivery-driver ${Number(selectedId) === Number(driver.id) ? 'active' : ''}`} onClick={() => setSelectedId(driver.id)}><span className="delivery-avatar">{driver.photo_url ? <img src={driver.photo_url} alt=""/> : <Bike/>}<i className={`presence is-${String(driver.live_status).toLowerCase()}`}/></span><span><b>{driver.name || driver.username}</b><small>{driver.vehicle_type || 'Vehículo sin registrar'} {driver.plate ? `· ${driver.plate}` : ''}</small>{driver.active_order_count > 0 && <em>{driver.active_order_count}/{driver.max_active_orders || 5} pedidos activos{driver.active_order_id ? ` · Próximo #${driver.active_order_id}` : ''}</em>}</span><span className="delivery-driver-state">{driver.live_status === 'Desconectado' ? <SignalZero/> : <Signal/>}</span></button>) : <div className="delivery-map-empty compact"><Bike/><p>Crea usuarios con el rol Domiciliario para verlos aquí.</p></div>}</div>
+        <div className="delivery-driver-list">{loading ? <div className="delivery-loading">Cargando…</div> : drivers.length ? drivers.map((driver) => (
+          <div key={driver.id}>
+            <button className={`delivery-driver ${Number(selectedId) === Number(driver.id) ? 'active' : ''}`} onClick={() => setSelectedId(driver.id)}><span className="delivery-avatar">{driver.photo_url ? <img src={driver.photo_url} alt=""/> : <Bike/>}<i className={`presence is-${String(driver.live_status).toLowerCase()}`}/></span><span><b>{driver.name || driver.username}</b><small>{driver.vehicle_type || 'Vehículo sin registrar'} {driver.plate ? `· ${driver.plate}` : ''}</small>{driver.active_order_count > 0 && <em>{driver.active_order_count}/{driver.max_active_orders || 5} pedidos activos{driver.active_order_id ? ` · Próximo #${driver.active_order_id}` : ''}</em>}</span><span className="delivery-driver-state">{driver.live_status === 'Desconectado' ? <SignalZero/> : <Signal/>}</span></button>
+            {Number(selectedId) === Number(driver.id) && driver.active_orders && driver.active_orders.length > 0 && (
+              <div style={{ padding: '10px', backgroundColor: 'var(--ds-bg-secondary)', borderRadius: '8px', marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <h4 style={{ margin: 0, fontSize: '13px', color: 'var(--ds-text-secondary)' }}>Pedidos en curso:</h4>
+                {driver.active_orders.map(o => (
+                  <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--ds-bg-primary)', padding: '8px', borderRadius: '6px' }}>
+                    <div>
+                      <strong style={{ display: 'block', fontSize: '13px' }}>#{o.id} - {o.customer_name}</strong>
+                      <span style={{ fontSize: '12px', color: 'var(--ds-text-secondary)' }}>{o.address}</span>
+                    </div>
+                    <button onClick={() => updateOrderStatus(o.id, 'Entregado')} className="ds-btn ds-btn-sm ds-btn-success" style={{ padding: '4px 8px', fontSize: '11px' }}>Entregado</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )) : <div className="delivery-map-empty compact"><Bike/><p>Crea usuarios con el rol Domiciliario para verlos aquí.</p></div>}</div>
       </section>
     </div>
     <section className="ds-card delivery-queue">

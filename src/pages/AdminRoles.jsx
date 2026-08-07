@@ -79,7 +79,16 @@ export default function AdminRoles() {
   return <div className="ds-page roles-page">
     <header className="ds-page-header"><div><span className="ds-eyebrow">Control de acceso</span><h1 className="ds-page-title">Roles y permisos</h1><p className="ds-page-subtitle">Una matriz central define exactamente qué puede ver y modificar cada rol.</p></div><button className="ds-btn ds-btn-primary" onClick={openCreate}><Plus size={17} /> Nuevo rol</button></header>
     {message.text && <div className={`ds-alert ds-alert-${message.type === 'error' ? 'danger' : 'success'}`}>{message.text}</div>}
-    <section className="ds-card"><div className="users-toolbar"><div className="ds-search"><Search size={17} /><input placeholder="Buscar rol" value={query} onChange={(e) => setQuery(e.target.value)} /></div><span className="ds-badge ds-badge-info">{filtered.length} roles</span></div>
+    <section className="ds-card"><div className="users-toolbar"><div className="ds-search" style={{ flex: 1, minWidth: '300px' }}>
+  <Search size={20} className="ds-search-icon" />
+  <input 
+    type="text" 
+    placeholder="Buscar rol" 
+    value={query} 
+    onChange={(e) => setQuery(e.target.value)}
+    className="ds-search-input ds-input" 
+  />
+</div><span className="ds-badge ds-badge-info">{filtered.length} roles</span></div>
       <div className="roles-grid">{filtered.map((role) => <article className="role-card" key={role.id}><div className="role-card-icon"><ShieldCheck size={24} /></div><div className="role-card-content"><div className="role-card-heading"><h2>{role.name}</h2>{role.is_system_role && <span className="ds-badge ds-badge-warning"><LockKeyhole size={12} /> Sistema</span>}</div><p>{role.description || 'Sin descripción'}</p><div className="role-card-meta"><span><Users size={15} /> {role.users_count || 0} usuarios</span><span>{(permissionsByRole[role.id] || []).length} permisos</span></div></div><div className="ds-actions"><button className="ds-icon-btn" onClick={() => openEdit(role)} title="Editar"><Edit3 size={16} /></button><button className="ds-icon-btn danger" onClick={() => remove(role)} title="Eliminar" disabled={role.is_system_role}><Trash2 size={16} /></button></div></article>)}</div>
     </section>
     {editing !== undefined && <div className="ds-modal-overlay role-modal-overlay" onMouseDown={(e) => e.target === e.currentTarget && close()}><div className="ds-modal ds-modal-lg role-modal"><div className="ds-modal-header"><div><h2 className="ds-modal-title">{editing ? `Editar ${editing.name}` : 'Crear rol'}</h2><p className="ds-text-muted">Desplázate dentro de la matriz para revisar todos los módulos.</p></div><button className="ds-icon-btn" onClick={close}><X /></button></div><form onSubmit={save}><div className="ds-modal-body ds-form-stack role-modal-scroll">
