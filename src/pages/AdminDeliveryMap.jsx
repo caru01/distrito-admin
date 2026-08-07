@@ -4,8 +4,8 @@ import LiveDeliveryMap from '../components/LiveDeliveryMap.jsx';
 import { API_URL } from '../config/api';
 
 const money = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
-const time = (value) => value
-  ? new Intl.DateTimeFormat('es-CO', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Bogota' }).format(new Date(value))
+const dateTime = (value) => value
+  ? new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Bogota' }).format(new Date(value))
   : '—';
 
 function getToken() {
@@ -180,7 +180,7 @@ export default function AdminDeliveryMap() {
           ariaLabel="Mapa con todos los domiciliarios y la cocina"
         />
         <div className="delivery-map-legend"><span><i className="is-store">🏪</i> Cocina — punto de salida</span><span><i className="is-driver">🛵</i> Domiciliario en vivo</span>{selectedDestinations && selectedDestinations.length > 0 && <span><i>📍</i> {selectedDestinations.length} destino(s)</span>}</div>
-        <div className="delivery-map-footer"><span><Clock3/> Último GPS: {time(selected?.last_location_at)}</span>{selected?.current_latitude && selected?.current_longitude && <a className="ds-btn ds-btn-primary" target="_blank" rel="noreferrer" href={`https://www.google.com/maps/search/?api=1&query=${selected.current_latitude},${selected.current_longitude}`}><Navigation size={17}/> Abrir Google Maps</a>}</div>
+        <div className="delivery-map-footer"><span><Clock3/> Último GPS: {dateTime(selected?.last_location_at)}</span>{selected?.current_latitude && selected?.current_longitude && <a className="ds-btn ds-btn-primary" target="_blank" rel="noreferrer" href={`https://www.google.com/maps/search/?api=1&query=${selected.current_latitude},${selected.current_longitude}`}><Navigation size={17}/> Abrir Google Maps</a>}</div>
       </section>
       <section className="ds-card delivery-driver-panel">
         <div className="delivery-panel-heading"><div><h2>Domiciliarios</h2><p>Selecciona uno para resaltarlo</p></div></div>
@@ -189,7 +189,7 @@ export default function AdminDeliveryMap() {
     </div>
     <section className="ds-card delivery-queue">
       <div className="delivery-panel-heading"><div><h2>Pedidos listos</h2><p>Asignación manual sin salir del mapa operativo</p></div><span className="ds-badge ds-badge-warning">{orders.length} pendientes</span></div>
-      {orders.length ? <div className="delivery-order-grid">{orders.map((order) => <article key={order.id}><div><span className="ds-badge ds-badge-success">Listo</span><b>Pedido #{order.id}</b><small>{time(order.createdAt)}</small></div><h3>{order.customerName}</h3><p><MapPin size={16}/> {order.address}, {order.barrio}</p><div className="delivery-order-meta"><span>{order.paymentMethod}</span><strong>{money.format(order.deliveryFee)}</strong></div><div className="delivery-assign"><select className="ds-input" value={assignments[order.id] ?? order.deliveryUserId ?? ''} onChange={(event) => setAssignments({ ...assignments, [order.id]: event.target.value })}><option value="">Todos los domiciliarios</option>{drivers.filter((driver) => Number(driver.active_order_count || 0) < Number(driver.max_active_orders || 5) || Number(driver.id) === Number(order.deliveryUserId)).map((driver) => <option value={driver.id} key={driver.id}>{driver.name || driver.username} · {driver.active_order_count || 0}/{driver.max_active_orders || 5}</option>)}</select><button className="ds-btn ds-btn-primary" onClick={() => assign(order.id)}><Send size={17}/> Asignar</button></div></article>)}</div> : <div className="delivery-map-empty compact"><Package/><p>No hay pedidos en estado Listo pendientes de reparto.</p></div>}
+      {orders.length ? <div className="delivery-order-grid">{orders.map((order) => <article key={order.id}><div><span className="ds-badge ds-badge-success">Listo</span><b>Pedido #{order.id}</b><small>{dateTime(order.createdAt)}</small></div><h3>{order.customerName}</h3><p><MapPin size={16}/> {order.address}, {order.barrio}</p><div className="delivery-order-meta"><span>{order.paymentMethod}</span><strong>{money.format(order.deliveryFee)}</strong></div><div className="delivery-assign"><select className="ds-input" value={assignments[order.id] ?? order.deliveryUserId ?? ''} onChange={(event) => setAssignments({ ...assignments, [order.id]: event.target.value })}><option value="">Todos los domiciliarios</option>{drivers.filter((driver) => Number(driver.active_order_count || 0) < Number(driver.max_active_orders || 5) || Number(driver.id) === Number(order.deliveryUserId)).map((driver) => <option value={driver.id} key={driver.id}>{driver.name || driver.username} · {driver.active_order_count || 0}/{driver.max_active_orders || 5}</option>)}</select><button className="ds-btn ds-btn-primary" onClick={() => assign(order.id)}><Send size={17}/> Asignar</button></div></article>)}</div> : <div className="delivery-map-empty compact"><Package/><p>No hay pedidos en estado Listo pendientes de reparto.</p></div>}
     </section>
   </div>;
 }

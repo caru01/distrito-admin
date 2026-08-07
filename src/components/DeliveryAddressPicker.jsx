@@ -309,7 +309,7 @@ export default function DeliveryAddressPicker({
       const longitude = place.location.lng();
       const formattedAddress = place.formattedAddress || place.displayName || readableAddress;
       const barrio = addressComponent(place.addressComponents, [
-        'neighborhood', 'sublocality_level_1', 'sublocality',
+        'neighborhood', 'sublocality_level_1', 'sublocality', 'locality',
       ]);
       onChange({
         address: formattedAddress,

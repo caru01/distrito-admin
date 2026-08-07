@@ -386,7 +386,7 @@ export default function TomarPedido() {
         cart:              cart.map(i => ({ id: i.id, title: i.title, price: i.price, quantity: i.qty })),
         total,
         status:            sendToKitchen ? 'En preparación' : 'Nuevo',
-        created_at:        customer.created_at ? customer.created_at : undefined,
+        created_at:        customer.created_at ? customer.created_at : new Date().toISOString(),
         customer: {
           name: customer.name,
           phone: customer.phone,
@@ -995,6 +995,16 @@ export default function TomarPedido() {
                   ? (editId ? 'Actualizando...' : 'Enviando...') 
                   : (editId ? 'Actualizar Pedido →' : 'Enviar a Cocina →')}
               </button>
+              {editId && (
+                <button
+                  type="button"
+                  onClick={() => navigate('/admin/pedidos')}
+                  className="ds-btn ds-btn-full ds-btn-lg"
+                  style={{ backgroundColor: 'transparent', border: '1px solid var(--ds-border)', color: 'var(--ds-text-secondary)', marginTop: '8px' }}
+                >
+                  Cancelar edición
+                </button>
+              )}
             </div>
 
           </div>

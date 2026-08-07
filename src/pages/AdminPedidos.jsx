@@ -193,7 +193,9 @@ export default function AdminPedidos() {
     try {
       const code = String(phone).replace(/\D/g, '').slice(-4);
       const trackingUrl = `${STOREFRONT_URL.replace(/\/$/, '')}/rastrear/${id}?c=${code}`;
-      const msg = encodeURIComponent(`🍔 Distrito BG\n\n¡Buenas noticias!\n\nTu pedido ya está listo.\n\nEn unos minutos será entregado al domiciliario.\n\nPuedes seguir el estado de tu pedido aquí:\n\n${trackingUrl}\n\nGracias por elegir Distrito BG ❤️`);
+      const orderData = order || orders.find(o => o.id === id);
+      const customerName = orderData?.customer_name || orderData?.customerName || 'Cliente';
+      const msg = encodeURIComponent(`🍔 ${customerName}\n\n¡Buenas noticias!\n\nTu pedido ya está listo.\n\nEn unos minutos será entregado al domiciliario.\n\nPuedes seguir el estado de tu pedido aquí:\n\n${trackingUrl}\n\nGracias por elegir Distrito BG ❤️`);
       const digits = String(phone).replace(/\D/g, '');
       const whatsappPhone = digits.length === 10 ? `57${digits}` : digits;
       window.open(`https://wa.me/${whatsappPhone}?text=${msg}`, '_blank', 'noopener,noreferrer');
