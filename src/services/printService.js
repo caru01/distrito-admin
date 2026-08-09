@@ -40,8 +40,9 @@ export const generateSingleComandaHTML = (order, paperWidth = 80) => {
   const is58 = paperWidth === 58;
   const items = Array.isArray(order.cart_json) ? order.cart_json : (order.cart || []);
 
-  const formattedDate = order.created_at ? new Date(order.created_at).toLocaleDateString('es-CO') : new Date().toLocaleDateString('es-CO');
-  const formattedTime = order.created_at ? new Date(order.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true }) : new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true });
+  const orderDate = order.created_at ? new Date(order.created_at) : new Date();
+  const formattedDate = orderDate.toLocaleDateString('es-CO', { timeZone: 'America/Bogota' });
+  const formattedTime = orderDate.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
 
   const originText = order.source || 'Salón';
   const deliveryType = order.delivery_type || order.deliveryType || 'Domicilio';
@@ -51,8 +52,8 @@ export const generateSingleComandaHTML = (order, paperWidth = 80) => {
 
   // Cálculos de Subtotal, Domicilio y Total
   const subtotal = items.reduce((sum, i) => sum + ((i.price || 0) * (i.quantity || i.qty || 1)), 0);
-  const deliveryFee = (deliveryType.toLowerCase() === 'domicilio') ? 6000 : 0;
-  const grandTotal = order.total || (subtotal + deliveryFee);
+  const deliveryFee = (deliveryType.toLowerCase() === 'domicilio') ? Math.max(0, Number(order.delivery_fee || 0)) : 0;
+  const grandTotal = Number(order.total ?? (subtotal + deliveryFee));
 
   let productsRowsHtml = '';
   items.forEach(item => {

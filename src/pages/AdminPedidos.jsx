@@ -2,13 +2,25 @@ import { API_URL, STOREFRONT_URL } from '../config/api';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { printTicket } from '../services/printService';
+import { buildReadyOrderWhatsAppMessage, createWhatsAppUrl, orderStatusMeta } from '@distrito/shared-ui';
+import DeliveryAssignmentModal from '../components/DeliveryAssignmentModal';
+import { readApiJson } from '../utils/http';
 import {
   ShoppingCart, Plus, Search, Filter, Globe, MessageCircle, Store, Phone,
   Clock, Eye, Pencil, Printer, MoreVertical, CheckCircle, ChefHat, Trash2, MapPin,
-  Banknote, CreditCard, Smartphone, X, ChevronLeft, ChevronRight, Zap, Minus, Wallet, User, AlertCircle, Package
+  Banknote, CreditCard, Smartphone, X, ChevronLeft, ChevronRight, Zap, Minus, Wallet, User, AlertCircle, Package, Building2, Truck
 } from 'lucide-react';
 
 const formatter = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
+const colombiaDateKey = (value = new Date()) => {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(new Date(value)).filter(part => part.type !== 'literal').map(part => [part.type, part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+};
+const formatColombiaDateTime = (value) => new Date(value).toLocaleString('es-CO', {
+  dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Bogota'
+});
 
 export default function AdminPedidos() {
   const navigate = useNavigate();
@@ -25,7 +37,7 @@ export default function AdminPedidos() {
   const [loading, setLoading] = useState(orders.length === 0);
   const [activeTab, setActiveTab] = useState('Todos');
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
+  const [filterDate, setFilterDate] = useState(() => colombiaDateKey());
 
   // Modal & Print State
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -33,6 +45,7 @@ export default function AdminPedidos() {
   const [openPrintMenuId, setOpenPrintMenuId] = useState(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [updatingOrderId, setUpdatingOrderId] = useState(null);
+  const [assigningOrder, setAssigningOrder] = useState(null);
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -99,8 +112,12 @@ export default function AdminPedidos() {
 
   const handleUpdateStatus = async (id, newStatus) => {
     const order = orders.find(o => o.id === id);
-    if (newStatus === 'Listo' && order && order.source !== 'Web' && !order.tracking_sent_at) {
-      if (window.confirm('¿Deseas enviar el enlace de seguimiento a este cliente por WhatsApp?')) {
+    const isPickupOrder = order && String(order.delivery_type || '').toLowerCase() !== 'domicilio';
+    if (newStatus === 'Listo' && order && !order.tracking_sent_at && (isPickupOrder || order.source !== 'Web')) {
+      const prompt = isPickupOrder
+        ? '¿Deseas avisar por WhatsApp que el pedido está listo para recoger?'
+        : '¿Deseas enviar el enlace de seguimiento a este cliente por WhatsApp?';
+      if (window.confirm(prompt)) {
         handleSendWhatsApp(order.customer_phone, id, order);
       }
     }
@@ -138,9 +155,10 @@ export default function AdminPedidos() {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'Idempotency-Key': globalThis.crypto?.randomUUID?.() || `order-${id}-${Date.now()}`,
         },
-        body: JSON.stringify({ status: newStatus })
+        body: JSON.stringify({ status: newStatus, version: order?.version })
       });
       if (res.ok) {
         const data = await res.json();
@@ -188,6 +206,28 @@ export default function AdminPedidos() {
     await handleUpdateStatus(order.id, 'En preparación');
   };
 
+  const handleExternalTransition = async (order, action, body = {}) => {
+    setUpdatingOrderId(order.id);
+    try {
+      const response = await fetch(`${API_URL}/admin/delivery/orders/${order.id}/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionStorage.getItem('distrito_admin_token')}` },
+        body: JSON.stringify(body),
+      });
+      const data = await readApiJson(response);
+      if (!response.ok) throw new Error(data.error || 'No fue posible actualizar la entrega.');
+      setSelectedOrder(null);
+      await fetchOrders();
+    } catch (error) { alert(error.message); }
+    finally { setUpdatingOrderId(null); }
+  };
+
+  const confirmExternalCompletion = async (order) => {
+    if (!window.confirm('¿Confirmas que el cliente recibió este pedido?')) return;
+    const notes = window.prompt('Observaciones de entrega (opcional):', '') || '';
+    await handleExternalTransition(order, 'external-complete', { confirmReceived: true, notes });
+  };
+
   const handleSendWhatsApp = async (phone, id, order = null) => {
     if (!phone) return alert('No hay número de teléfono registrado');
     try {
@@ -195,11 +235,16 @@ export default function AdminPedidos() {
       const publicBase = 'https://www.distritobg.app';
       const trackingUrl = `${publicBase}/rastrear/${id}?c=${code}`;
       const orderData = order || orders.find(o => o.id === id);
-      const customerName = orderData?.customer_name || orderData?.customerName || 'Cliente';
-      const msg = encodeURI(`🍔 ${customerName}\n\n¡Buenas noticias!\n\nTu pedido ya está listo.\n\nEn unos minutos será entregado al domiciliario.\n\nPuedes seguir el estado de tu pedido aquí:\n\n${trackingUrl}\n\nGracias por elegir Distrito BG ❤️`);
-      const digits = String(phone).replace(/\D/g, '');
-      const whatsappPhone = digits.length === 10 ? `57${digits}` : digits;
-      window.open(`https://wa.me/${whatsappPhone}?text=${msg}`, '_blank', 'noopener,noreferrer');
+      const message = buildReadyOrderWhatsAppMessage({
+        orderId: id,
+        trackingUrl,
+        restaurantName: 'Distrito BG',
+        deliveryType: orderData?.delivery_type || orderData?.deliveryType,
+        providerType: orderData?.delivery_provider_type || orderData?.deliveryProviderType,
+        externalCompanyName: orderData?.external_company_name || orderData?.externalCompany?.name,
+        status: orderData?.delivery_status || orderData?.status,
+      });
+      window.open(createWhatsAppUrl(phone, message), '_blank', 'noopener,noreferrer');
       const token = sessionStorage.getItem('distrito_admin_token');
       await fetch(`${API_URL}/admin/orders/${id}/tracking-sent`, {
         method: 'POST',
@@ -218,19 +263,19 @@ export default function AdminPedidos() {
     navigate(`/admin/tomar-pedido?edit=${order.id}`);
   };
 
-  const tabs = ['Todos', 'Nuevos', 'En preparación', 'Listos', 'En camino', 'Entregados', 'Pendientes Pago', 'Cancelados'];
+  const tabs = ['Todos', 'Recibidos', 'En cocina', 'Listos para despacho', 'En reparto', 'Entregados', 'Pago pendiente', 'Cancelados'];
 
   // 🚀 OPTIMIZACIÓN 2: Filtrado memoizado ultra-rápido a 60 FPS
   const filteredOrders = useMemo(() => {
     const searchLower = searchQuery.toLowerCase();
     return orders.filter(order => {
       const matchesTab = activeTab === 'Todos' ||
-        (activeTab === 'Nuevos' && order.status === 'Nuevo') ||
-        (activeTab === 'En preparación' && order.status === 'En preparación') ||
-        (activeTab === 'Listos' && order.status === 'Listo') ||
-        (activeTab === 'En camino' && order.status === 'En camino') ||
+        (activeTab === 'Recibidos' && order.status === 'Nuevo') ||
+        (activeTab === 'En cocina' && order.status === 'En preparación') ||
+        (activeTab === 'Listos para despacho' && ['Listo', 'Asignado externo', 'Entregado al operador externo'].includes(order.status)) ||
+        (activeTab === 'En reparto' && order.status === 'En camino') ||
         (activeTab === 'Entregados' && order.status === 'Entregado') ||
-        (activeTab === 'Pendientes Pago' && order.status === 'Pendiente Pago') ||
+        (activeTab === 'Pago pendiente' && order.status === 'Pendiente Pago') ||
         (activeTab === 'Cancelados' && order.status === 'Cancelado');
 
       const matchesSearch = !searchQuery ||
@@ -241,29 +286,19 @@ export default function AdminPedidos() {
       let matchesDate = true;
       if (filterDate && order.created_at) {
         const orderDate = new Date(order.created_at);
-        if (isNaN(orderDate.getTime())) { matchesDate = false; }
-        else {
-          const localDateString = new Date(orderDate.getTime() - (orderDate.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
-          matchesDate = localDateString === filterDate;
-        }
+        matchesDate = !Number.isNaN(orderDate.getTime()) && colombiaDateKey(orderDate) === filterDate;
       }
       return matchesTab && matchesSearch && matchesDate;
     });
   }, [orders, activeTab, searchQuery, filterDate]);
 
   const getStatusBadge = (status, order = null) => {
-    if (status === 'Listo' && (!order || !order.delivery_user_id)) {
-      return <span className="ds-badge ds-badge-success">Listo, esperando que un domiciliario acepte</span>;
-    }
-    let badgeClass = 'ds-badge-neutral';
-    if (status === 'Nuevo') badgeClass = 'ds-badge-info';
-    else if (status === 'En preparación') badgeClass = 'ds-badge-warning';
-    else if (status === 'Listo' || status === 'Entregado') badgeClass = 'ds-badge-success';
-    else if (status === 'En camino') badgeClass = 'ds-badge-warning';
-    else if (status === 'Cancelado') badgeClass = 'ds-badge-danger';
-    else if (status === 'Pendiente Pago') badgeClass = 'ds-badge-info';
-
-    return <span className={`ds-badge ${badgeClass}`}>{status}</span>;
+    const meta = orderStatusMeta(status, {
+      deliveryType: order?.delivery_type,
+      hasDriver: Boolean(order?.delivery_user_id),
+      deliveryStatus: order?.delivery_status,
+    });
+    return <span className={`order-status-badge order-status-${meta.tone}`} title={meta.description}><i aria-hidden="true" /><span>{meta.label}</span></span>;
   };
 
   const getSourceIcon = (source) => {
@@ -366,15 +401,14 @@ export default function AdminPedidos() {
       if (!filterDate || !o.created_at) return true;
       const orderDate = new Date(o.created_at);
       if (isNaN(orderDate.getTime())) return false;
-      const localDateString = new Date(orderDate.getTime() - (orderDate.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
-      return localDateString === filterDate;
+      return colombiaDateKey(orderDate) === filterDate;
     });
   }, [orders, filterDate]);
 
   const statNuevos = ordersInDate.filter(o => o.status === 'Nuevo').length;
   const statPreparacion = ordersInDate.filter(o => o.status === 'En preparación').length;
   const statEntregados = ordersInDate.filter(o => o.status === 'Entregado').length;
-  const completedOrders = ordersInDate.filter(o => o.status === 'Entregado' || o.status === 'Listo' || o.status === 'Completado');
+  const completedOrders = ordersInDate.filter(o => o.status === 'Entregado' || o.status === 'Completado');
   const totalVentas = completedOrders.reduce((s, o) => s + (o.total || 0), 0);
   const totalEfectivo = completedOrders.filter(o => (o.payment_method || '').toLowerCase() === 'efectivo').reduce((s, o) => s + (o.total || 0), 0);
   const totalTransferencia = completedOrders.filter(o => ['transferencia', 'nequi', 'tarjeta'].includes((o.payment_method || '').toLowerCase())).reduce((s, o) => s + (o.total || 0), 0);
@@ -400,7 +434,7 @@ export default function AdminPedidos() {
       <div className="ds-cards-grid" style={{ marginBottom: '40px' }}>
         {[
           { label: filterDate ? 'Pedidos' : 'Total Histórico', value: ordersInDate.length, icon: <ShoppingCart size={24} /> },
-          { label: 'Pedidos pendientes', value: statNuevos, icon: <Clock size={24} /> },
+          { label: 'Recién recibidos', value: statNuevos, icon: <Clock size={24} /> },
           { label: 'En preparación', value: statPreparacion, icon: <ChefHat size={24} /> },
           { label: 'Pedidos entregados', value: statEntregados, icon: <CheckCircle size={24} /> },
           { label: 'Ventas del día', value: `$${totalVentas.toLocaleString()}`, icon: <Banknote size={24} /> },
@@ -441,12 +475,12 @@ export default function AdminPedidos() {
           const isActive = activeTab === tab;
           let count = 0;
           if (tab === 'Todos') count = orders.length;
-          else if (tab === 'Nuevos') count = statNuevos;
-          else if (tab === 'En preparación') count = statPreparacion;
-          else if (tab === 'Listos') count = orders.filter(o => o.status === 'Listo').length;
-          else if (tab === 'En camino') count = orders.filter(o => o.status === 'En camino').length;
+          else if (tab === 'Recibidos') count = statNuevos;
+          else if (tab === 'En cocina') count = statPreparacion;
+          else if (tab === 'Listos para despacho') count = orders.filter(o => ['Listo', 'Asignado externo', 'Entregado al operador externo'].includes(o.status)).length;
+          else if (tab === 'En reparto') count = orders.filter(o => o.status === 'En camino').length;
           else if (tab === 'Entregados') count = statEntregados;
-          else if (tab === 'Pendientes Pago') count = orders.filter(o => o.status === 'Pendiente Pago').length;
+          else if (tab === 'Pago pendiente') count = orders.filter(o => o.status === 'Pendiente Pago').length;
           else if (tab === 'Cancelados') count = orders.filter(o => o.status === 'Cancelado').length;
           return (
             <button key={tab} onClick={() => setActiveTab(tab)} className={`ds-tab ${isActive ? 'active' : ''}`}>
@@ -473,7 +507,7 @@ export default function AdminPedidos() {
                   <tr key={order.id}>
                     <td>
                       <div style={{ color: 'var(--ds-text-primary)', fontWeight: '700', fontSize: '16px' }}>#{order.id.toString().padStart(4, '0')}</div>
-                      <div style={{ color: 'var(--ds-text-muted)', fontSize: '13px', marginTop: '4px' }}>{new Date(order.created_at).toLocaleDateString()} {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                      <div style={{ color: 'var(--ds-text-muted)', fontSize: '13px', marginTop: '4px' }}>{formatColombiaDateTime(order.created_at)}</div>
                     </td>
                     <td>
                       <div style={{ color: 'var(--ds-text-primary)', fontWeight: '600', fontSize: '15px' }}>{order.customer_name || 'Sin nombre'}</div>
@@ -524,7 +558,7 @@ export default function AdminPedidos() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
                   <div>
                     <div style={{ color: 'var(--ds-text-primary)', fontWeight: '700', fontSize: '16px' }}>#{order.id.toString().padStart(4, '0')}</div>
-                    <div style={{ color: 'var(--ds-text-muted)', fontSize: '13px', marginTop: '4px' }}>{new Date(order.created_at).toLocaleDateString()} {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                    <div style={{ color: 'var(--ds-text-muted)', fontSize: '13px', marginTop: '4px' }}>{formatColombiaDateTime(order.created_at)}</div>
                   </div>
                   <div style={{ display: 'grid', justifyItems: 'end', gap: '5px' }}>{getStatusBadge(order.status || 'Nuevo', order)}{order.status === 'Entregado' && getDeliveryDurationText(order) && <small style={{ color: '#10B981', fontWeight: 700 }}>{getDeliveryDurationText(order)}</small>}</div>
                 </div>
@@ -584,13 +618,13 @@ export default function AdminPedidos() {
             <div className="ds-modal-header">
               <div>
                 <h2 className="ds-modal-title">Pedido #{selectedOrder.id.toString().padStart(4, '0')}</h2>
-                <div style={{ color: 'var(--ds-text-secondary)', fontSize: '14px', marginTop: '4px' }}>{new Date(selectedOrder.created_at).toLocaleString()}</div>
+                <div style={{ color: 'var(--ds-text-secondary)', fontSize: '14px', marginTop: '4px' }}>{formatColombiaDateTime(selectedOrder.created_at)}</div>
               </div>
               <button className="ds-modal-close" onClick={() => setSelectedOrder(null)}><X size={24} /></button>
             </div>
             <div className="ds-modal-body">
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>{getStatusBadge(selectedOrder.status || 'Nuevo', selectedOrder)}{selectedOrder.status === 'Entregado' && getDeliveryDurationText(selectedOrder) && <strong style={{ color: '#10B981', fontSize: '13px' }}>Entregado en {getDeliveryDurationText(selectedOrder)}</strong>}</div>
+                <div className="order-status-detail"><div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>{getStatusBadge(selectedOrder.status || 'Nuevo', selectedOrder)}{selectedOrder.status === 'Entregado' && getDeliveryDurationText(selectedOrder) && <strong style={{ color: '#10B981', fontSize: '13px' }}>Entregado en {getDeliveryDurationText(selectedOrder)}</strong>}</div><small>{orderStatusMeta(selectedOrder.status, { deliveryType: selectedOrder.delivery_type, hasDriver: Boolean(selectedOrder.delivery_user_id), deliveryStatus: selectedOrder.delivery_status }).description}</small></div>
                 <div style={{ color: 'var(--ds-text-primary)', fontSize: '14px', fontWeight: '500' }}>{getSourceIcon(selectedOrder.source || 'Web')}</div>
               </div>
               <div className="ds-card" style={{ padding: '20px', marginBottom: '24px' }}>
@@ -619,6 +653,10 @@ export default function AdminPedidos() {
                   )}
                 </div>
               </div>
+              {String(selectedOrder.delivery_type || '').toLowerCase() === 'domicilio' && (selectedOrder.delivery_provider_type || selectedOrder.delivery_user_id) && <div className="ds-card" style={{ padding: '20px', marginBottom: '24px' }}>
+                <h3 style={{ color: 'var(--ds-text-secondary)', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 12px 0' }}>Logística de entrega</h3>
+                {String(selectedOrder.delivery_provider_type || '').startsWith('external_') ? <div className="order-logistics-grid"><div><span>Tipo de entrega</span><strong><Building2 size={15}/> Empresa externa</strong></div><div><span>Empresa</span><strong>{selectedOrder.external_company_name || 'Operador aliado'}</strong></div><div><span>Domiciliario</span><strong>{selectedOrder.external_driver_name || 'Pendiente de informar'}</strong></div><div><span>Teléfono</span><strong>{selectedOrder.external_driver_phone || 'No informado'}</strong></div><div><span>Placa / identificación</span><strong>{selectedOrder.external_vehicle_id || 'No informada'}</strong></div><div><span>ETA</span><strong>{selectedOrder.external_eta_minutes ? `${selectedOrder.external_eta_minutes} min` : 'No informado'}</strong></div><div><span>Domicilio cliente</span><strong>{formatter.format(selectedOrder.delivery_fee || 0)}</strong></div><div><span>Costo externo</span><strong>{formatter.format(selectedOrder.external_delivery_cost || 0)}</strong></div><div><span>Margen logístico</span><strong style={{ color: Number(selectedOrder.logistics_margin ?? ((selectedOrder.delivery_fee || 0) - (selectedOrder.external_delivery_cost || 0))) < 0 ? '#EF4444' : '#22C55E' }}>{formatter.format(selectedOrder.logistics_margin ?? ((selectedOrder.delivery_fee || 0) - (selectedOrder.external_delivery_cost || 0)))}</strong></div></div> : <div className="order-logistics-own"><Truck size={19}/><div><strong>Domiciliario Distrito BG</strong><small>El mapa del cliente solo se activa cuando existe una señal GPS real.</small></div></div>}
+              </div>}
               <div className="ds-card" style={{ padding: '20px', marginBottom: '24px' }}>
                 <h3 style={{ color: 'var(--ds-text-secondary)', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 12px 0' }}>Productos</h3>
                 {selectedOrder.cart_json && selectedOrder.cart_json.map((item, idx) => (
@@ -643,18 +681,27 @@ export default function AdminPedidos() {
             <div className="ds-modal-footer" style={{ borderTop: '1px solid var(--ds-border)', backgroundColor: 'var(--ds-bg-elevated)' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '12px', width: '100%' }}>
                 {selectedOrder.status === 'Nuevo' && <button disabled={updatingOrderId === selectedOrder.id} onClick={() => handlePrepareOrder(selectedOrder)} className="ds-btn ds-btn-full ds-btn-info" style={{ gridColumn: '1 / -1', backgroundColor: '#3B82F6' }}><Printer size={17}/> {updatingOrderId === selectedOrder.id ? 'Preparando…' : 'Preparar e imprimir cocina'}</button>}
-                {selectedOrder.status === 'En preparación' && <button disabled={updatingOrderId === selectedOrder.id} onClick={() => handleUpdateStatus(selectedOrder.id, 'Listo')} className="ds-btn ds-btn-full ds-btn-success" style={{ gridColumn: '1 / -1', backgroundColor: '#22C55E' }}><Package size={17}/> {updatingOrderId === selectedOrder.id ? 'Actualizando…' : 'Pedido listo'}</button>}
-                {selectedOrder.status === 'Listo' && String(selectedOrder.delivery_type || '').toLowerCase() === 'domicilio' && <button type="button" disabled className="ds-btn ds-btn-full" style={{ gridColumn: '1 / -1', backgroundColor: '#374151', color: '#fff', opacity: 1 }}><Clock size={17}/> Esperando que un domiciliario acepte</button>}
-                {selectedOrder.status === 'Listo' && String(selectedOrder.delivery_type || '').toLowerCase() !== 'domicilio' && <button disabled={updatingOrderId === selectedOrder.id} onClick={() => handleUpdateStatus(selectedOrder.id, 'Entregado')} className="ds-btn ds-btn-full ds-btn-success" style={{ gridColumn: '1 / -1', backgroundColor: '#22C55E' }}><CheckCircle size={17}/> Entregar pedido para recoger</button>}
-                {selectedOrder.status === 'En camino' && <button type="button" disabled className="ds-btn ds-btn-full" style={{ gridColumn: '1 / -1', backgroundColor: '#D4A017', color: '#111', opacity: 1 }}><MapPin size={17}/> Pedido en seguimiento con el domiciliario</button>}
+                {selectedOrder.status === 'Pendiente Pago' && <button disabled={updatingOrderId === selectedOrder.id} onClick={() => handlePrepareOrder(selectedOrder)} className="ds-btn ds-btn-full ds-btn-info" style={{ gridColumn: '1 / -1', backgroundColor: '#3B82F6' }}><Printer size={17}/> {updatingOrderId === selectedOrder.id ? 'Confirmando…' : 'Pago confirmado: enviar a cocina'}</button>}
+                {selectedOrder.status === 'En preparación' && <button disabled={updatingOrderId === selectedOrder.id} onClick={() => handleUpdateStatus(selectedOrder.id, 'Listo')} className="ds-btn ds-btn-full ds-btn-success" style={{ gridColumn: '1 / -1', backgroundColor: '#22C55E' }}><Package size={17}/> {updatingOrderId === selectedOrder.id ? 'Actualizando…' : 'Marcar listo para despacho'}</button>}
+                {selectedOrder.status === 'Listo' && String(selectedOrder.delivery_type || '').toLowerCase() === 'domicilio' && <button type="button" onClick={() => { setAssigningOrder(selectedOrder); setSelectedOrder(null); }} className="ds-btn ds-btn-full order-ready-action" style={{ gridColumn: '1 / -1', opacity: 1 }}><Truck size={17}/> Asignar entrega</button>}
+                {selectedOrder.status === 'Asignado externo' && <button disabled={updatingOrderId === selectedOrder.id} onClick={() => handleExternalTransition(selectedOrder, 'external-handoff')} className="ds-btn ds-btn-full ds-btn-info" style={{ gridColumn: '1 / -1' }}><Building2 size={17}/> Confirmar entrega al operador externo</button>}
+                {selectedOrder.status === 'Entregado al operador externo' && <button disabled={updatingOrderId === selectedOrder.id} onClick={() => handleExternalTransition(selectedOrder, 'external-start')} className="ds-btn ds-btn-full order-delivery-action" style={{ gridColumn: '1 / -1' }}><Truck size={17}/> Confirmar que va en camino</button>}
+                {selectedOrder.status === 'Listo' && String(selectedOrder.delivery_type || '').toLowerCase() !== 'domicilio' && <button disabled={updatingOrderId === selectedOrder.id} onClick={() => handleUpdateStatus(selectedOrder.id, 'Entregado')} className="ds-btn ds-btn-full ds-btn-success" style={{ gridColumn: '1 / -1', backgroundColor: '#22C55E' }}><CheckCircle size={17}/> Confirmar entrega en el local</button>}
+                {selectedOrder.status === 'En camino' && String(selectedOrder.delivery_provider_type || '').startsWith('external_') && <button type="button" disabled={updatingOrderId === selectedOrder.id} onClick={() => confirmExternalCompletion(selectedOrder)} className="ds-btn ds-btn-full ds-btn-success" style={{ gridColumn: '1 / -1' }}><CheckCircle size={17}/> Confirmar entrega externa</button>}
+                {selectedOrder.status === 'En camino' && !String(selectedOrder.delivery_provider_type || '').startsWith('external_') && <button type="button" disabled className="ds-btn ds-btn-full order-delivery-action" style={{ gridColumn: '1 / -1', opacity: 1 }}><MapPin size={17}/> Entrega en curso</button>}
                 {selectedOrder.status === 'Entregado' && <div style={{ gridColumn: '1 / -1', padding: '12px', borderRadius: '10px', backgroundColor: 'rgba(34,197,94,.12)', color: '#22C55E', textAlign: 'center', fontWeight: 800 }}><CheckCircle size={17} style={{ verticalAlign: 'middle', marginRight: '7px' }}/> Entregado{getDeliveryDurationText(selectedOrder) ? ` en ${getDeliveryDurationText(selectedOrder)}` : ''}</div>}
-                {!['Entregado', 'Completado', 'Cancelado'].includes(selectedOrder.status) && <button disabled={updatingOrderId === selectedOrder.id} onClick={() => handleUpdateStatus(selectedOrder.id, 'Pendiente Pago')} className="ds-btn ds-btn-full" style={{ backgroundColor: '#8B5CF6', color: '#FFFFFF' }}>Pendiente Pago</button>}
+                {!['Pendiente Pago', 'Entregado', 'Completado', 'Cancelado', 'En camino', 'Asignado externo', 'Entregado al operador externo'].includes(selectedOrder.status) && <button disabled={updatingOrderId === selectedOrder.id} onClick={() => handleUpdateStatus(selectedOrder.id, 'Pendiente Pago')} className="ds-btn ds-btn-full" style={{ backgroundColor: '#8B5CF6', color: '#FFFFFF' }}>Marcar pago pendiente</button>}
                 {!['Entregado', 'Completado', 'Cancelado'].includes(selectedOrder.status) && <button disabled={updatingOrderId === selectedOrder.id} onClick={() => handleUpdateStatus(selectedOrder.id, 'Cancelado')} className="ds-btn ds-btn-full ds-btn-danger">Cancelar pedido</button>}
               </div>
             </div>
           </div>
         </div>
       )}
+      {assigningOrder && <DeliveryAssignmentModal
+        order={assigningOrder}
+        onClose={() => setAssigningOrder(null)}
+        onSuccess={() => { setAssigningOrder(null); fetchOrders(); }}
+      />}
     </div>
   );
 }

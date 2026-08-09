@@ -1,10 +1,10 @@
 import { API_URL } from '../config/api';
 import React, { useState, useEffect } from 'react';
-import DeliveryAddressPicker from '../components/DeliveryAddressPicker.jsx';
+import { DeliveryAddressPicker, NOTIFICATION_LANGUAGES, NOTIFICATION_VOICES, speakNotification, unlockNotificationAudio } from '@distrito/shared-ui';
 import { 
   Settings, Building2, CreditCard, Bike,
   Upload, Save, Clock, Phone,
-  Mail, MapPin, Globe, Check, Palette, LocateFixed
+  Mail, MapPin, Globe, Check, Palette, LocateFixed, BellRing, Volume2
 } from 'lucide-react';
 
 
@@ -21,13 +21,23 @@ export default function AdminConfiguración() {
     store_latitude: 10.4631, store_longitude: -73.2532,
     prep_time: '', min_order: 0, delivery_cost: 0, max_distance: '', delivery_schedule: '', default_order_type: 'Domicilio',
     delivery_completion_radius_meters: 150,
+    gps_delivery_interval_seconds: 7, gps_free_interval_seconds: 45,
+    presence_heartbeat_interval_seconds: 30, presence_timeout_seconds: 90,
+    gps_max_age_seconds: 180, gps_max_accuracy_meters: 200,
+    offline_location_queue_limit: 2000,
+    default_max_driver_capacity: 5, sse_reconnect_initial_ms: 1500, sse_reconnect_max_ms: 30000,
     payment_efectivo: true, payment_nequi: true, payment_daviplata: true, payment_tarjeta: true, payment_transferencia: false, payment_pse: false,
     instagram: '', facebook: '', tiktok: '', whatsapp_number: '',
     welcome_message: '',
     currency: 'COP', timezone: 'America/Bogota', language: 'es', date_format: 'DD/MM/YYYY', time_format: '12h',
     nequi_number: '', bancolombia_number: '',
     web_primary_color: '#D4A017', web_background_color: '#0D0D0D', web_surface_color: '#171717', web_text_color: '#FFFFFF',
-    admin_primary_color: '#D4A017', admin_background_color: '#0D0D0D', admin_surface_color: '#151515', admin_text_color: '#FFFFFF'
+    admin_primary_color: '#D4A017', admin_background_color: '#0D0D0D', admin_surface_color: '#151515', admin_text_color: '#FFFFFF',
+    delivery_primary_color: '#D4A017', delivery_background_color: '#090909', delivery_surface_color: '#151515', delivery_text_color: '#FFFFFF',
+    web_logo: '', web_page_title: 'Distrito BG', web_hero_title: 'Más que comida, una experiencia', web_hero_subtitle: 'Pedidos preparados al momento.', web_font_family: 'modern', web_card_style: 'rounded',
+    admin_logo: '', admin_page_title: 'Distrito BG Admin', admin_sidebar_title: 'Distrito BG', admin_font_family: 'modern', admin_density: 'comfortable',
+    delivery_logo: '', delivery_page_title: 'Distrito BG Delivery', delivery_heading: 'Pedidos disponibles', delivery_subtitle: 'Acepta, recoge y entrega desde un solo lugar.', delivery_font_family: 'modern', delivery_card_style: 'rounded',
+    notification_voice: 'female-clear', notification_language: 'es-CO'
   });
   const [kitchenLocationConfirmed, setKitchenLocationConfirmed] = useState(false);
 
@@ -296,16 +306,69 @@ export default function AdminConfiguración() {
                 </div>
               </div>
             </div>
+
+            <div className="ds-card">
+              <div className="ds-card-header">
+                <h2 className="ds-card-title"><BellRing size={24} color="#D4A017" /> Alertas de pedidos</h2>
+              </div>
+              <div className="ds-card-body ds-form">
+                <p className="ds-text-muted">La misma preferencia se aplica al panel y a Distrito Delivery. La voz disponible puede variar según el dispositivo.</p>
+                <div className="ds-form-grid">
+                  <div className="ds-form-group">
+                    <label className="ds-form-label">Tipo de voz</label>
+                    <select className="ds-select" value={settings.notification_voice} onChange={e => handleChange('notification_voice', e.target.value)}>
+                      {NOTIFICATION_VOICES.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                  </div>
+                  <div className="ds-form-group">
+                    <label className="ds-form-label">Idioma de las alertas</label>
+                    <select className="ds-select" value={settings.notification_language} onChange={e => handleChange('notification_language', e.target.value)}>
+                      {NOTIFICATION_LANGUAGES.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <button type="button" className="ds-btn ds-btn-secondary" onClick={async () => { await unlockNotificationAudio(); speakNotification('new_order', settings); }}><Volume2 size={18} /> Probar voz: Nuevo pedido</button>
+              </div>
+            </div>
           </div>
         )}
 
         {activeTab === 'Apariencia' && (
-          <div className="settings-theme-grid">
-            <ThemeCard title="Tienda web / app" prefix="web" settings={settings} onChange={handleChange} />
-            <ThemeCard title="Panel administrativo" prefix="admin" settings={settings} onChange={handleChange} />
-            <div className="ds-card settings-theme-preview" style={{ '--preview-primary': settings[`${activeTab === 'Apariencia' ? 'web' : 'admin'}_primary_color`] }}>
-              <div className="ds-card-header"><h2 className="ds-card-title"><Palette size={22} /> Vista previa</h2></div>
-              <div className="ds-card-body"><div className="theme-preview" style={{ background: settings.web_background_color, color: settings.web_text_color }}><div style={{ background: settings.web_surface_color }}><strong>{settings.restaurant_name || 'Tu restaurante'}</strong><p>Los cambios publicados se aplican a todos los usuarios.</p><button style={{ background: settings.web_primary_color }}>Hacer pedido</button></div></div></div>
+          <div className="settings-branding-stack">
+            <div className="ds-card">
+              <div className="ds-card-header"><div><span className="ds-page-kicker">Identidad por aplicación</span><h2 className="ds-card-title"><Palette size={22} /> Logos, nombres y textos</h2></div></div>
+              <div className="ds-card-body settings-surface-grid">
+                <SurfaceBrandCard title="Tienda virtual" prefix="web" settings={settings} onChange={handleChange} fields={[
+                  ['web_page_title', 'Nombre de la página'], ['web_hero_title', 'Título principal'], ['web_hero_subtitle', 'Texto de apoyo'],
+                ]} />
+                <SurfaceBrandCard title="Panel administrativo" prefix="admin" settings={settings} onChange={handleChange} fields={[
+                  ['admin_page_title', 'Nombre de la página'], ['admin_sidebar_title', 'Título del menú lateral'],
+                ]} />
+                <SurfaceBrandCard title="Distrito Delivery" prefix="delivery" settings={settings} onChange={handleChange} fields={[
+                  ['delivery_page_title', 'Nombre de la página'], ['delivery_heading', 'Título principal'], ['delivery_subtitle', 'Texto de apoyo'],
+                ]} />
+              </div>
+            </div>
+
+            <div className="settings-theme-grid">
+              <ThemeCard title="Tienda web / app" prefix="web" settings={settings} onChange={handleChange} />
+              <ThemeCard title="Panel administrativo" prefix="admin" settings={settings} onChange={handleChange} />
+              <ThemeCard title="Distrito Delivery" prefix="delivery" settings={settings} onChange={handleChange} />
+            </div>
+
+            <div className="ds-card">
+              <div className="ds-card-header"><h2 className="ds-card-title">Tipografía y diseño</h2></div>
+              <div className="ds-card-body ds-form-grid">
+                {['web', 'admin', 'delivery'].map(prefix => <label className="ds-form-group" key={`${prefix}-font`}><span className="ds-form-label">Letra · {prefix === 'web' ? 'Tienda' : prefix === 'admin' ? 'Admin' : 'Delivery'}</span><select className="ds-select" value={settings[`${prefix}_font_family`]} onChange={e => handleChange(`${prefix}_font_family`, e.target.value)}><option value="modern">Moderna</option><option value="friendly">Amigable</option><option value="classic">Clásica</option><option value="system">Del dispositivo</option></select></label>)}
+                <label className="ds-form-group"><span className="ds-form-label">Tarjetas de la tienda</span><select className="ds-select" value={settings.web_card_style} onChange={e => handleChange('web_card_style', e.target.value)}><option value="rounded">Redondeadas</option><option value="compact">Compactas</option><option value="outlined">Contorno destacado</option></select></label>
+                <label className="ds-form-group"><span className="ds-form-label">Tarjetas de Delivery</span><select className="ds-select" value={settings.delivery_card_style} onChange={e => handleChange('delivery_card_style', e.target.value)}><option value="rounded">Redondeadas</option><option value="compact">Compactas</option><option value="outlined">Contorno destacado</option></select></label>
+                <label className="ds-form-group"><span className="ds-form-label">Densidad del panel</span><select className="ds-select" value={settings.admin_density} onChange={e => handleChange('admin_density', e.target.value)}><option value="comfortable">Cómoda</option><option value="compact">Compacta</option></select></label>
+              </div>
+            </div>
+
+            <div className="ds-card settings-theme-preview">
+              <div className="ds-card-header"><h2 className="ds-card-title"><Palette size={22} /> Vista previa de la tienda</h2></div>
+              <div className="ds-card-body"><div className="theme-preview" style={{ background: settings.web_background_color, color: settings.web_text_color }}><div style={{ background: settings.web_surface_color }}><strong>{settings.web_hero_title || settings.restaurant_name || 'Tu restaurante'}</strong><p>{settings.web_hero_subtitle || 'Los cambios publicados se aplican a todos los usuarios.'}</p><button style={{ background: settings.web_primary_color }}>Hacer pedido</button></div></div></div>
             </div>
           </div>
         )}
@@ -381,6 +444,51 @@ export default function AdminConfiguración() {
                     <label className="ds-form-label">Radio para finalizar la entrega</label>
                     <input type="number" min="50" max="500" step="10" className="ds-input" value={settings.delivery_completion_radius_meters} onChange={e => handleChange('delivery_completion_radius_meters', parseInt(e.target.value, 10) || 150)} />
                     <small className="ds-text-muted">El botón Finalizar se habilita cuando el GPS del domiciliario está dentro de este radio (50 a 500 metros).</small>
+                  </div>
+                  <div className="ds-form-group">
+                    <label className="ds-form-label">GPS con entrega activa (segundos)</label>
+                    <input type="number" min="3" max="60" className="ds-input" value={settings.gps_delivery_interval_seconds} onChange={e => handleChange('gps_delivery_interval_seconds', Number(e.target.value))} />
+                    <small className="ds-text-muted">Frecuencia de ubicación mientras lleva uno o más pedidos.</small>
+                  </div>
+                  <div className="ds-form-group">
+                    <label className="ds-form-label">GPS en turno libre (segundos)</label>
+                    <input type="number" min="15" max="300" className="ds-input" value={settings.gps_free_interval_seconds} onChange={e => handleChange('gps_free_interval_seconds', Number(e.target.value))} />
+                    <small className="ds-text-muted">Reduce consumo de batería cuando no tiene entregas.</small>
+                  </div>
+                  <div className="ds-form-group">
+                    <label className="ds-form-label">Latido de presencia (segundos)</label>
+                    <input type="number" min="10" max="120" className="ds-input" value={settings.presence_heartbeat_interval_seconds} onChange={e => handleChange('presence_heartbeat_interval_seconds', Number(e.target.value))} />
+                  </div>
+                  <div className="ds-form-group">
+                    <label className="ds-form-label">Marcar desconectado después de (segundos)</label>
+                    <input type="number" min="30" max="600" className="ds-input" value={settings.presence_timeout_seconds} onChange={e => handleChange('presence_timeout_seconds', Number(e.target.value))} />
+                  </div>
+                  <div className="ds-form-group">
+                    <label className="ds-form-label">Antigüedad GPS permitida (segundos)</label>
+                    <input type="number" min="30" max="900" className="ds-input" value={settings.gps_max_age_seconds} onChange={e => handleChange('gps_max_age_seconds', Number(e.target.value))} />
+                    <small className="ds-text-muted">Una posición más antigua no permite finalizar sin autorización.</small>
+                  </div>
+                  <div className="ds-form-group">
+                    <label className="ds-form-label">Precisión GPS máxima (metros)</label>
+                    <input type="number" min="20" max="1000" className="ds-input" value={settings.gps_max_accuracy_meters} onChange={e => handleChange('gps_max_accuracy_meters', Number(e.target.value))} />
+                  </div>
+                  <div className="ds-form-group">
+                    <label className="ds-form-label">Cola GPS sin conexión (puntos)</label>
+                    <input type="number" min="100" max="20000" step="100" className="ds-input" value={settings.offline_location_queue_limit} onChange={e => handleChange('offline_location_queue_limit', Number(e.target.value))} />
+                    <small className="ds-text-muted">Se sincroniza en orden al recuperar Internet.</small>
+                  </div>
+                  <div className="ds-form-group">
+                    <label className="ds-form-label">Capacidad inicial de nuevos domiciliarios</label>
+                    <input type="number" min="1" max="5" className="ds-input" value={settings.default_max_driver_capacity} onChange={e => handleChange('default_max_driver_capacity', Number(e.target.value))} />
+                    <small className="ds-text-muted">La capacidad individual se puede ajustar desde Usuarios.</small>
+                  </div>
+                  <div className="ds-form-group">
+                    <label className="ds-form-label">Reconexión en vivo inicial (ms)</label>
+                    <input type="number" min="500" max="10000" step="250" className="ds-input" value={settings.sse_reconnect_initial_ms} onChange={e => handleChange('sse_reconnect_initial_ms', Number(e.target.value))} />
+                  </div>
+                  <div className="ds-form-group">
+                    <label className="ds-form-label">Reconexión en vivo máxima (ms)</label>
+                    <input type="number" min="5000" max="120000" step="1000" className="ds-input" value={settings.sse_reconnect_max_ms} onChange={e => handleChange('sse_reconnect_max_ms', Number(e.target.value))} />
                   </div>
                   <div className="ds-form-group">
                     <label className="ds-form-label">Tipo de pedido predeterminado</label>
@@ -527,4 +635,9 @@ const ThemeCard = ({ title, prefix, settings, onChange }) => {
     ['surface_color', 'Tarjetas y superficies'], ['text_color', 'Texto principal'],
   ];
   return <div className="ds-card"><div className="ds-card-header"><h2 className="ds-card-title"><Palette size={22} /> {title}</h2></div><div className="ds-card-body settings-color-list">{fields.map(([field, label]) => { const key = `${prefix}_${field}`; return <label className="settings-color-field" key={key}><span>{label}</span><input type="color" value={settings[key]} onChange={e => onChange(key, e.target.value.toUpperCase())} /><input className="ds-input" value={settings[key]} pattern="#[0-9A-Fa-f]{6}" onChange={e => onChange(key, e.target.value)} /></label>; })}</div></div>;
+};
+
+const SurfaceBrandCard = ({ title, prefix, settings, onChange, fields }) => {
+  const logoKey = `${prefix}_logo`;
+  return <section className="settings-surface-card"><div className="settings-surface-heading">{settings[logoKey] ? <img src={settings[logoKey]} alt="" /> : <Building2 size={26} />}<div><strong>{title}</strong><small>Configuración independiente con respaldo del logo general.</small></div></div><label className="announcement-upload"><Upload size={17} /><span>Subir logo</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={event => { const file = event.target.files?.[0]; if (!file || file.size > 2 * 1024 * 1024) return; const reader = new FileReader(); reader.onload = () => onChange(logoKey, reader.result); reader.readAsDataURL(file); }} /></label>{settings[logoKey] && <button type="button" className="ds-btn ds-btn-ghost ds-btn-sm" onClick={() => onChange(logoKey, '')}>Usar logo general</button>}<div className="ds-form">{fields.map(([key, label]) => <label className="ds-form-group" key={key}><span className="ds-form-label">{label}</span>{key.endsWith('subtitle') ? <textarea className="ds-textarea" value={settings[key] || ''} onChange={event => onChange(key, event.target.value)} /> : <input className="ds-input" value={settings[key] || ''} onChange={event => onChange(key, event.target.value)} />}</label>)}</div></section>;
 };

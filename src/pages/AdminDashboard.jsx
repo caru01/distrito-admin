@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { API_URL, STOREFRONT_URL } from '../config/api';
 import { AuthContext } from '../context/AuthContext';
+import { orderStatusMeta } from '@distrito/shared-ui';
 
 const DASHBOARD_CACHE_KEY = 'distrito_admin_dashboard_cache';
 const money = new Intl.NumberFormat('es-CO', {
@@ -35,20 +36,6 @@ function getCachedDashboard() {
   } catch {
     return null;
   }
-}
-
-function statusMeta(status) {
-  const values = {
-    Nuevo: { label: 'Nuevo', className: 'ds-badge-info' },
-    'En preparación': { label: 'En preparación', className: 'ds-badge-warning' },
-    Listo: { label: 'Listo', className: 'ds-badge-success' },
-    'En camino': { label: 'En camino', className: 'ds-badge-warning' },
-    Entregado: { label: 'Entregado', className: 'ds-badge-success' },
-    Completado: { label: 'Completado', className: 'ds-badge-success' },
-    'Pendiente Pago': { label: 'Pendiente de pago', className: 'ds-badge-info' },
-    Cancelado: { label: 'Cancelado', className: 'ds-badge-danger' },
-  };
-  return values[status] || { label: status || 'Sin estado', className: 'ds-badge-neutral' };
 }
 
 function relativeTime(value) {
@@ -130,11 +117,11 @@ export default function AdminDashboard() {
   ];
 
   const pipeline = [
-    { label: 'Nuevos', value: orders.new, icon: Zap, tone: 'info' },
-    { label: 'En preparación', value: orders.preparing, icon: ChefHat, tone: 'warning' },
-    { label: 'Listos', value: orders.ready, icon: CheckCircle, tone: 'success' },
-    { label: 'En camino', value: orders.onTheWay, icon: Truck, tone: 'violet' },
-    { label: 'Pendientes de pago', value: orders.pendingPayment, icon: CreditCard, tone: 'danger' },
+    { label: 'Recibidos', value: orders.new, icon: Zap, tone: 'info' },
+    { label: 'En cocina', value: orders.preparing, icon: ChefHat, tone: 'warning' },
+    { label: 'Listos para despacho', value: orders.ready, icon: CheckCircle, tone: 'success' },
+    { label: 'En reparto', value: orders.onTheWay, icon: Truck, tone: 'violet' },
+    { label: 'Pago pendiente', value: orders.pendingPayment, icon: CreditCard, tone: 'danger' },
   ];
   const pipelineMaximum = Math.max(...pipeline.map(item => Number(item.value || 0)), 1);
 
@@ -286,7 +273,7 @@ export default function AdminDashboard() {
                 <p className="ds-empty-state-text">El primer pedido de la tienda aparecerá aquí.</p>
               </div>
             ) : recentOrders.map(order => {
-              const meta = statusMeta(order.status);
+              const meta = orderStatusMeta(order.status, { deliveryType: order.delivery_type, hasDriver: Boolean(order.delivery_user_id), deliveryStatus: order.delivery_status });
               return (
                 <button type="button" key={order.id} className="dashboard-order-row" onClick={() => navigate('/admin/pedidos')}>
                   <span className="dashboard-order-id">#{String(order.id).padStart(4, '0')}</span>
@@ -294,7 +281,7 @@ export default function AdminDashboard() {
                     <strong>{order.customer_name || 'Cliente sin nombre'}</strong>
                     <small>{order.source || 'Web'} · {relativeTime(order.created_at)}</small>
                   </span>
-                  <span className={`ds-badge ${meta.className}`}>{meta.label}</span>
+                  <span className={`ds-badge order-status-${meta.tone}`} title={meta.description}>{meta.label}</span>
                   <strong className="dashboard-order-total">{money.format(Number(order.total || 0))}</strong>
                   <ArrowRight size={17} className="dashboard-order-arrow" />
                 </button>

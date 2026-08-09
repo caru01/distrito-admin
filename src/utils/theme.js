@@ -11,4 +11,13 @@ export function applyAdminTheme(settings = {}) {
   Object.entries(values).forEach(([property, value]) => {
     if (HEX.test(String(value || ''))) root.style.setProperty(property, value);
   });
+  const fonts = {
+    modern: "'Inter', 'Montserrat', sans-serif",
+    friendly: "'Poppins', 'Nunito', sans-serif",
+    classic: "Georgia, 'Times New Roman', serif",
+    system: "system-ui, -apple-system, 'Segoe UI', sans-serif",
+  };
+  root.style.setProperty('--ds-font', fonts[settings.admin_font_family] || fonts.modern);
+  root.dataset.adminDensity = settings.admin_density || 'comfortable';
+  document.title = settings.admin_page_title || 'Distrito BG Admin';
 }

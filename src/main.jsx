@@ -26,6 +26,9 @@ const ResetPassword = lazy(() => import('./pages/ResetPassword.jsx'))
 const AdminUsuarios = lazy(() => import('./pages/AdminUsuarios.jsx'))
 const AdminRoles = lazy(() => import('./pages/AdminRoles.jsx'))
 const AdminDeliveryMap = lazy(() => import('./pages/AdminDeliveryMap.jsx'))
+const AdminClientes = lazy(() => import('./pages/AdminClientes.jsx'))
+const AdminDeliveryCompanies = lazy(() => import('./pages/AdminDeliveryCompanies.jsx'))
+const AdminCRM = lazy(() => import('./pages/AdminCRM.jsx'))
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
@@ -41,11 +44,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route index element={<AdminDashboard />} />
             <Route path="pedidos" element={<AdminPedidos />} />
             <Route path="mapa-domicilios" element={<AdminDeliveryMap />} />
+            <Route path="empresas-domicilios" element={<AdminDeliveryCompanies />} />
             <Route path="productos" element={<AdminProductos />} />
             <Route path="categorias" element={<AdminCategorias />} />
             <Route path="usuarios" element={<AdminUsuarios />} />
             <Route path="roles" element={<AdminRoles />} />
-            <Route path="clientes" element={<div style={{ padding: 20 }}>Vista de Clientes (En construcción)</div>} />
+            <Route path="clientes" element={<AdminClientes />} />
+            <Route path="crm/*" element={<AdminCRM />} />
             <Route path="inventario" element={<AdminInventario />} />
             <Route path="reportes" element={<AdminReportes />} />
             <Route path="gastos" element={<AdminGastos />} />

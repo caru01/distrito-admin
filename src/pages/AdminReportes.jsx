@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, BarChart3, CalendarDays, CheckCircle, Download, Eye,
   Package, RefreshCw, ShoppingCart, TrendingDown, TrendingUp, Users,
-  Wallet, X,
+  Wallet, X, Truck,
 } from 'lucide-react';
 import {
   Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer,
@@ -152,6 +152,9 @@ export default function AdminReportes() {
       ['Clientes atendidos', report.kpis.clientesAtendidos || 0],
       ['Ticket promedio', report.kpis.ticketPromedio || 0],
       ['Utilidad bruta', report.kpis.utilidadBruta || 0],
+      ['Domicilios externos', report.kpis.domiciliosExternos || 0],
+      ['Costo operadores externos', report.kpis.costoDomiciliosExternos || 0],
+      ['Margen logístico externo', report.kpis.margenLogisticoExterno || 0],
       [], ['Productos', 'Categoría', 'Unidades', 'Ventas'],
       ...report.lists.productos.map((item) => [item.name, item.category, item.quantity, item.total]),
       [], ['Clientes', 'Teléfono', 'Pedidos', 'Compras'],
@@ -173,7 +176,7 @@ export default function AdminReportes() {
     { label: 'Pedidos recibidos', value: formatNumber(report.kpis.pedidosRealizados), trend: report.trends.pedidosRealizados, icon: ShoppingCart },
     { label: 'Clientes atendidos', value: formatNumber(report.kpis.clientesAtendidos), trend: report.trends.clientesAtendidos, icon: Users },
     { label: 'Ticket promedio', value: formatCurrency(report.kpis.ticketPromedio), trend: report.trends.ticketPromedio, icon: BarChart3 },
-    { label: 'Utilidad bruta', value: formatCurrency(report.kpis.utilidadBruta), trend: report.trends.utilidadBruta, icon: TrendingUp },
+    { label: 'Utilidad estimada', value: formatCurrency(report.kpis.utilidadBruta), trend: report.trends.utilidadBruta, icon: TrendingUp },
   ];
   const tabs = ['Resumen', 'Ventas', 'Productos', 'Clientes'];
 
@@ -243,7 +246,8 @@ export default function AdminReportes() {
             <div className="ds-card-body report-finance-list">
               <div><span>Ventas</span><strong>{formatCurrency(report.kpis.totalVentas)}</strong></div>
               <div><span>Compras registradas</span><strong className="negative">− {formatCurrency(report.kpis.totalCompras)}</strong></div>
-              <div className="total"><span>Utilidad bruta</span><strong>{formatCurrency(report.kpis.utilidadBruta)}</strong></div>
+              <div><span>Operadores externos</span><strong className="negative">− {formatCurrency(report.kpis.costoDomiciliosExternos)}</strong></div>
+              <div className="total"><span>Utilidad estimada</span><strong>{formatCurrency(report.kpis.utilidadBruta)}</strong></div>
               <div><span>Margen estimado</span><strong>{formatNumber(report.kpis.margenUtilidad)}%</strong></div>
             </div>
           </article>
@@ -260,6 +264,16 @@ export default function AdminReportes() {
             <div className="ds-card-body">
               <button onClick={() => navigate('/admin/inventario')}><Package size={20} /><span><strong>{report.alerts.out_of_stock || 0} agotados</strong><small>Productos sin existencias</small></span></button>
               <button onClick={() => navigate('/admin/inventario')}><AlertTriangle size={20} /><span><strong>{report.alerts.low_stock || 0} con stock bajo</strong><small>Requieren reposición</small></span></button>
+            </div>
+          </article>
+          <article className="ds-card">
+            <div className="ds-card-header"><h2 className="ds-card-title">Logística externa</h2><Truck size={20} color="var(--ds-primary)" /></div>
+            <div className="ds-card-body report-finance-list">
+              <div><span>Entregas completadas</span><strong>{formatNumber(report.kpis.domiciliosExternos)}</strong></div>
+              <div><span>Cobrado por domicilio</span><strong>{formatCurrency(report.kpis.ingresoDomiciliosExternos)}</strong></div>
+              <div><span>Pagado a operadores</span><strong className="negative">− {formatCurrency(report.kpis.costoDomiciliosExternos)}</strong></div>
+              <div className="total"><span>Margen logístico</span><strong>{formatCurrency(report.kpis.margenLogisticoExterno)}</strong></div>
+              <button className="ds-btn ds-btn-secondary ds-btn-sm" onClick={() => navigate('/admin/empresas-domicilios')}>Ver empresas</button>
             </div>
           </article>
         </div>

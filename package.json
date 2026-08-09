@@ -1,6 +1,7 @@
 {
   "name": "distrito-admin",
   "version": "1.0.0",
+  "type": "module",
   "description": "Panel administrativo de Distrito BG",
   "main": "index.js",
   "scripts": {
@@ -15,11 +16,12 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@distrito/shared-ui": "file:../distrito-shared",
     "@googlemaps/js-api-loader": "^2.1.1",
     "lucide-react": "^0.260.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.30.4",
+    "react-router-dom": "^7.18.2",
     "recharts": "^3.9.0"
   },
   "devDependencies": {

@@ -11,15 +11,17 @@ seguridad.
 | Dashboard | Centro operativo con ventas, pedidos, catálogo, stock, estado de tienda y accesos por permiso |
 | Tomar pedido | Creación y edición asistida con dirección exacta, Google Places, mapa y marcador ajustable |
 | Pedidos | Seguimiento, estados, impresión, contacto por WhatsApp y cierre automático del detalle tras cada acción exitosa |
+| Empresas de Domicilios | Operadores aliados, tarifas, ETA, estado, volumen, pendientes y dinero pagado |
 | Categorías | Administración de categorías del catálogo |
 | Productos | Catálogo, precios, imagen, disponibilidad, inventario unificado, filtros y paginación real |
-| Clientes | Vista reservada; actualmente en construcción |
+| Clientes | CRM funcional con perfiles, segmentos, etiquetas, consentimiento, historial, métricas, búsqueda remota moderna, filtros, paginación y CSV |
+| CRM | Dashboard comercial, contactos 360°, Inbox WhatsApp, segmentos, plantillas, campañas, automatizaciones, atribución y reportes |
 | Inventario | Existencias, costos, umbrales y movimientos por producto vendible |
 | Gastos | Registro de egresos |
 | Cierre contable | Vista previa, cierre y reapertura de periodos |
 | Reportes | Periodos de 7/30/90 días o personalizados, comparativos reales, ventas, clientes, productos y exportación CSV |
 | Anuncios | Campañas programables, frecuencia por cliente, CTA, vista previa y notificaciones Push |
-| Configuración | Identidad, contacto, logo, pagos, temas visuales y punto exacto de la cocina |
+| Configuración | Identidad, contacto, logo, pagos, costo del domicilio, temas, cocina y voz/idioma de alertas |
 | Horarios | Semana regular, anticipación, cierre y excepciones |
 | Perfil | Información, contraseña y dispositivos propios |
 | Usuarios | Cuentas reales, estados, roles, sesiones y cupo de 1-5 pedidos por domiciliario |
@@ -47,7 +49,8 @@ Comandos:
 ## Configuración de API
 
 ```env
-VITE_API_URL=http://localhost:3001
+VITE_API_URL=auto
+VITE_API_PORT=3001
 ```
 
 La variable contiene solo el origen, sin `/api/pedidos`. `src/config/api.js` es la
@@ -67,12 +70,18 @@ En ejecución local, `auto` conserva el hostname usado para abrir el panel. En u
 despliegue público, `VITE_STOREFRONT_URL` debe contener la URL HTTPS definitiva de
 la tienda.
 
+Si un módulo muestra `Unexpected token '<'`, el panel recibió HTML en lugar de
+JSON. En desarrollo, verifica que `VITE_API_URL=auto`, reinicia Vite y confirma
+`http://localhost:3001/api/pedidos/health`. Clientes y Anuncios usan además una
+lectura defensiva que presenta un error de API comprensible sin dejar la pantalla
+vacía.
+
 ## Dashboard operativo
 
 `/admin` consume `GET /admin/dashboard`, una respuesta agregada que incluye:
 
 - pedidos, ventas confirmadas y ticket promedio del día;
-- flujo de pedidos nuevos, en preparación, listos, en camino y pendientes de pago;
+- flujo de pedidos recibidos, en cocina, listos para despacho, en reparto y con pago pendiente;
 - productos activos, inactivos y destacados;
 - inventario crítico y agotado;
 - últimos seis pedidos y productos más solicitados del día;
@@ -93,6 +102,7 @@ distrito-admin/
 │   ├── components/PermissionGate.jsx
 │   ├── layouts/AdminLayout.jsx     # Navegación protegida
 │   ├── pages/                      # Módulos funcionales
+│   │   └── crm/                    # Vistas CRM, Inbox y Marketing
 │   ├── services/printService.js    # Impresión de comprobantes
 │   └── styles/design-system.css    # Componentes visuales compartidos
 ├── vercel.json                     # Reescritura SPA a index.html
@@ -148,9 +158,14 @@ Usuarios:crear
 repite la autorización para las operaciones sensibles; ocultar un botón nunca se
 considera una medida de seguridad suficiente.
 
+Además, una frontera global verifica el rol real en PostgreSQL y bloquea a las
+cuentas `Domiciliario`/`Repartidor` de las rutas del ERP. Solo `GET
+/admin/settings` permanece disponible para que Delivery consuma identidad y tema.
+
 Los módulos declarados en la interfaz deben coincidir exactamente con los módulos
-sembrados por las migraciones. El rol Administrador quedó alineado con las 68
-capacidades vigentes.
+sembrados por las migraciones. Los roles Administrador y Super Administrador
+quedaron alineados con las 85 capacidades vigentes, incluidas 13 acciones CRM
+separadas.
 
 ## Pedidos e inventario
 
@@ -158,14 +173,24 @@ capacidades vigentes.
 - La edición completa usa `/admin/orders/:id/edit`.
 - Crear o editar un domicilio guarda dirección, barrio, coordenadas, Place ID,
   referencia, apartamento, torre y piso con el mismo contrato de la tienda pública.
+- El costo del domicilio no está codificado en Tomar pedido: se obtiene de
+  Configuración y la API vuelve a calcularlo dentro de la transacción.
+- La fecha manual es `datetime-local` interpretada como hora Colombia; si queda
+  vacía, PostgreSQL usa la hora actual. La lista, los filtros y la comanda se
+  presentan explícitamente con `America/Bogota`.
 - Al editar un carrito, el panel envía identificadores y cantidades; la API recupera
   los precios y recalcula el total.
 - El stock del producto se reserva al crear el pedido.
-- Cancelar, editar o eliminar reconcilia las existencias transaccionalmente.
+- Cancelar o editar reconcilia las existencias transaccionalmente.
 - Los cierres contables bloquean pedidos retroactivos dentro de un periodo cerrado.
 - En el detalle de un pedido nuevo, **Preparar e imprimir cocina** abre la comanda
   térmica antes de cambiar a `En preparación`; el siguiente control publica
-  **Pedido listo** para los domiciliarios.
+  **Marcar listo para despacho** para los domiciliarios.
+- Los estados visibles, descripciones y colores vienen de
+  `@distrito/shared-ui`; las transiciones se validan en la API y los estados
+  terminales no se pueden reabrir mediante el endpoint genérico.
+- Si un pedido quedó en **Pago pendiente**, la acción **Pago confirmado: enviar a
+  cocina** lo reincorpora al flujo e imprime la comanda.
 - Pedidos se mantiene conectado a SSE: aceptación, GPS operativo y entrega se
   reflejan sin recargar. Los domicilios `Listo` no pueden marcarse manualmente en
   camino o entregados desde esta vista; Delivery controla esa transición.
@@ -190,6 +215,7 @@ capacidades vigentes.
 | `/admin/cierre-contable` | Cierre contable |
 | `/admin/reportes` | Reportes |
 | `/admin/anuncios` | Anuncios |
+| `/admin/crm/*` | CRM, contactos, Inbox, marketing, reportes y configuración WhatsApp |
 | `/admin/configuracion` | Configuración |
 | `/admin/horarios` | Horarios |
 | `/admin/usuarios` | Usuarios |
@@ -200,16 +226,29 @@ capacidades vigentes.
 `vercel.json` reescribe las rutas a `index.html` para que React Router pueda resolver
 accesos directos y recargas.
 
+## CRM y WhatsApp
+
+El módulo se carga de forma diferida desde `AdminCRM.jsx`. En escritorio el Inbox
+usa dos paneles; en móvil alterna lista y conversación sin perder la sesión. El
+directorio usa paginación real, exporta los filtros actuales y busca nombre,
+teléfono, correo, barrio o número de pedido. La ficha muestra pedidos, timeline,
+etiquetas operables, consentimiento, notas sensibles y preferencias derivadas del
+carrito real.
+
+La interfaz no conoce tokens de Meta. **CRM → Configuración** muestra únicamente
+estado del webhook, número conectado, sufijo del Phone Number ID, última actividad
+y profundidad de cola. La configuración y el paso externo de activación están en
+[`../distrito-docs/CRM_WHATSAPP_2026-08-09.md`](../distrito-docs/CRM_WHATSAPP_2026-08-09.md).
+
 ## Rendimiento y dependencias
 
-- JavaScript inicial validado: aproximadamente 189 KB.
 - Los módulos se generan como chunks independientes.
 - Reportes y gráficas se descargan únicamente al visitar esa sección.
 - Las imágenes de productos usan carga diferida.
-
-La auditoría actual de React Router 6 reporta dos avisos moderados cuya corrección
-automática requiere una migración mayor a Router 7. No debe ejecutarse
-`npm audit fix --force` sin probar autenticación, navegación y build completo.
+- React Router se actualizó a 7.18.2 conservando el modo declarativo compatible.
+- `npm audit` no reporta vulnerabilidades conocidas al 9 de agosto de 2026.
+- El módulo de Reportes continúa siendo el chunk más pesado, con unos 109 KB gzip;
+  queda diferido y es candidato a una optimización posterior de gráficas.
 
 ## Diseño adaptativo
 
@@ -246,8 +285,20 @@ siendo navegables sin habilitar scroll independiente en cada página.
   en valores de texto.
 - Anuncios guarda contenido, CTA, programación y frecuencia en PostgreSQL. La vista
   previa administrativa usa exactamente esos mismos campos.
+- Configuración administra la identidad de las tres aplicaciones: logo, nombre,
+  títulos, paleta, tipografía, densidad y estilo de tarjetas. Cada aplicación lee
+  la misma fila de ajustes y aplica únicamente su prefijo.
+- Anuncios conserva varias campañas y permite formato modal/banner, audiencias,
+  prioridad, cupón, programación y métricas de vista/clic. Las notificaciones push
+  no alteran la campaña publicada.
+- Clientes deriva compras, ticket, recencia y segmento desde Pedidos; el perfil CRM
+  solo guarda datos de contacto, etiquetas, notas, estado y consentimiento.
+- Cierre contable reconcilia efectivo, incluye costos por producto e inventario
+  valorizado, exporta CSV y exige motivo al reabrir. La API recalcula y bloquea
+  solapamientos para que el navegador no sea la fuente financiera.
 - Mapa de Domicilios consume `/admin/delivery/overview`, muestra presencia, GPS,
-  capacidad y pedidos activos, y permite asignar pedidos `Listo`. Los cambios se reciben por SSE
+  capacidad y pedidos activos, y permite asignar pedidos `Listo` únicamente a
+  domiciliarios conectados y con cupo. Los cambios se reciben por SSE
   y el refresco cada 20 segundos funciona como recuperación ante una reconexión.
 - La vista dibuja en un único Google Maps el restaurante y todos los domiciliarios
   que ya reportaron coordenadas. Cada repartidor aparece como motocicleta con su
@@ -255,6 +306,10 @@ siendo navegables sin habilitar scroll independiente en cada página.
 - El punto de salida se administra en **Configuración → Domicilios → Ubicación de
   la cocina** mediante Google Places, mapa y marcador movible. Dirección, Place ID
   y coordenadas se guardan una vez y alimentan los mapas público y administrativo.
+- El layout escucha `order_created` en todas las rutas. Reproduce un patrón sonoro,
+  muestra el aviso visual y pronuncia “Nuevo pedido” con el idioma y estilo de voz
+  elegidos en Configuración. El navegador selecciona la voz instalada que mejor
+  coincida con esa preferencia.
 
 ## Validación y despliegue
 

@@ -2,7 +2,7 @@ import { API_URL } from '../config/api';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { printTicket } from '../services/printService';
-import DeliveryAddressPicker from '../components/DeliveryAddressPicker.jsx';
+import { DeliveryAddressPicker } from '@distrito/shared-ui';
 import {
   Zap, Search, ShoppingCart, Trash2, Plus, Minus, ChefHat, Printer,
   MessageCircle, Phone, Globe, Store, Banknote, Wallet, CreditCard,
@@ -11,7 +11,22 @@ import {
 } from 'lucide-react';
 
 const formatter = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
-const DELIVERY_COST = 6000;
+
+const colombiaParts = (value = new Date()) => Object.fromEntries(
+  new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  }).formatToParts(new Date(value)).filter(part => part.type !== 'literal').map(part => [part.type, part.value])
+);
+const colombiaDateKey = (value = new Date()) => {
+  const parts = colombiaParts(value);
+  return `${parts.year}-${parts.month}-${parts.day}`;
+};
+const toColombiaDateTimeLocal = (value) => {
+  if (!value) return '';
+  const parts = colombiaParts(value);
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+};
 
 const EMPTY_CUSTOMER = {
   name: '', phone: '', address: '', barrio: '', notes: '', reference: '',
@@ -110,6 +125,7 @@ export default function TomarPedido() {
   const [mapsAvailable, setMapsAvailable] = useState(
     import.meta.env.VITE_GOOGLE_MAPS_API_KEY ? null : false
   );
+  const [deliveryCost, setDeliveryCost] = useState(0);
 
   const updateDeliveryLocation = useCallback((changes) => {
     setCustomer((current) => ({ ...current, ...changes }));
@@ -141,7 +157,7 @@ export default function TomarPedido() {
           source: editOrder.source || 'WhatsApp',
           paymentMethod: editOrder.payment_method || 'efectivo',
           voucher_reference: editOrder.voucher_reference || '',
-          created_at: editOrder.created_at ? editOrder.created_at.slice(0, 10) : ''
+          created_at: toColombiaDateTimeLocal(editOrder.created_at)
         });
         setCart((editOrder.cart_json || []).map(i => ({
           ...i,
@@ -237,6 +253,15 @@ export default function TomarPedido() {
     const token = sessionStorage.getItem('distrito_admin_token');
     if (!token) { setLoading(false); return; }
 
+    // La configuración administrativa es la única fuente del valor del domicilio.
+    try {
+      const settingsRes = await fetch(`${API_URL}/admin/settings`, { headers: { Authorization: `Bearer ${token}` } });
+      const settingsData = await settingsRes.json();
+      if (settingsRes.ok) setDeliveryCost(Math.max(0, Number(settingsData.settings?.delivery_cost || 0)));
+    } catch (err) {
+      console.error('Error cargando el costo del domicilio:', err);
+    }
+
     // 1️⃣ Cargar productos PRIMERO (Sin esperar por los pedidos pasados)
     try {
       const prodRes = await fetch(`${API_URL}/admin/products`, { headers: { Authorization: `Bearer ${token}` } });
@@ -274,8 +299,8 @@ export default function TomarPedido() {
       const ordData = await ordRes.json();
 
       if (ordData.status === 'ok' && ordData.orders) {
-        const today = new Date().toISOString().split('T')[0];
-        const todayOrders = ordData.orders.filter(o => o.created_at?.startsWith(today));
+        const today = colombiaDateKey();
+        const todayOrders = ordData.orders.filter(o => o.created_at && colombiaDateKey(o.created_at) === today);
         const inKitchen  = todayOrders.filter(o => o.status === 'Nuevo').length;
         const preparing  = todayOrders.filter(o => o.status === 'En preparación').length;
         const ready      = todayOrders.filter(o => o.status === 'Listo').length;
@@ -344,7 +369,7 @@ export default function TomarPedido() {
   const clearCart = () => setCart([]);
 
   const subtotal  = cart.reduce((s, i) => s + i.price * i.qty, 0);
-  const delivery  = customer.deliveryType === 'domicilio' ? DELIVERY_COST : 0;
+  const delivery  = customer.deliveryType === 'domicilio' ? deliveryCost : 0;
   const total     = subtotal + delivery;
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
 
@@ -386,7 +411,7 @@ export default function TomarPedido() {
         cart:              cart.map(i => ({ id: i.id, title: i.title, price: i.price, quantity: i.qty })),
         total,
         status:            sendToKitchen ? 'En preparación' : 'Nuevo',
-        created_at:        customer.created_at ? customer.created_at : new Date().toISOString(),
+        created_at:        customer.created_at || undefined,
         customer: {
           name: customer.name,
           phone: customer.phone,
@@ -418,7 +443,9 @@ export default function TomarPedido() {
       const data = await res.json();
 
       if (res.ok || data.status === 'ok') {
-        const orderIdToPrint = data.order?.id || data.id || editId || nextOrderId || 1;
+        const orderIdToPrint = data.order?.id || data.order_id || data.id || editId || nextOrderId || 1;
+        const authoritativeDelivery = Number(data.order?.delivery_fee ?? data.delivery_fee ?? delivery);
+        const authoritativeTotal = Number(data.order?.total ?? data.total ?? total);
         const printOrder = {
           id: orderIdToPrint,
           customer_name: customer.name,
@@ -430,9 +457,10 @@ export default function TomarPedido() {
           voucher_reference: customer.voucher_reference || '',
           source: customer.source,
           notes: customer.notes,
-          total,
+          total: authoritativeTotal,
+          delivery_fee: authoritativeDelivery,
           cart_json: cart,
-          created_at: customer.created_at || new Date().toISOString()
+          created_at: data.order?.created_at || customer.created_at || new Date().toISOString()
         };
 
         // 🖨️ Generar e imprimir comanda de cocina automáticamente
@@ -757,7 +785,7 @@ export default function TomarPedido() {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--ds-text-secondary)', marginBottom: '8px' }}>
                   <span>Domicilio</span>
-                  <span style={{ color: 'var(--ds-text-primary)', fontWeight: 600 }}>{customer.deliveryType === 'domicilio' ? formatter.format(DELIVERY_COST) : '$0'}</span>
+                  <span style={{ color: 'var(--ds-text-primary)', fontWeight: 600 }}>{customer.deliveryType === 'domicilio' ? formatter.format(deliveryCost) : '$0'}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: '17px', color: 'var(--ds-text-primary)' }}>
                   <span>TOTAL</span>
@@ -872,9 +900,9 @@ export default function TomarPedido() {
               </div>
 
               <div className="ds-form-group" style={{ marginBottom: '12px' }}>
-                <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--ds-text-secondary)', display: 'block', marginBottom: '4px' }}>📅 Fecha del Pedido (Opcional - por defecto HOY)</span>
+                <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--ds-text-secondary)', display: 'block', marginBottom: '4px' }}>📅 Fecha y hora del pedido (Colombia, opcional)</span>
                 <input 
-                  type="date" 
+                  type="datetime-local"
                   value={customer.created_at || ''} 
                   onChange={e => setCustomer(c => ({ ...c, created_at: e.target.value }))}
                   onClick={e => e.target.showPicker && e.target.showPicker()}

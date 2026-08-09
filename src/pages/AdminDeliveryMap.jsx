@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bike, Clock3, MapPin, Navigation, Package, Radio, RefreshCw, Send, Signal, SignalZero, UserCheck } from 'lucide-react';
-import LiveDeliveryMap from '../components/LiveDeliveryMap.jsx';
+import { LiveDeliveryMap } from '@distrito/shared-ui';
 import { API_URL } from '../config/api';
 
 const money = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
@@ -137,33 +137,35 @@ export default function AdminDeliveryMap() {
   }, [selected]);
   const connected = drivers.filter((driver) => driver.live_status !== 'Desconectado').length;
   const busy = drivers.filter((driver) => driver.live_status === 'Ocupado').length;
+  const eligibleDrivers = useMemo(() => drivers.filter((driver) => (
+    driver.live_status !== 'Desconectado'
+    && Number(driver.active_order_count || 0) < Number(driver.max_active_orders || 5)
+  )), [drivers]);
 
   const assign = async (orderId) => {
     const userId = assignments[orderId] || '';
+    if (!userId) {
+      setError('Selecciona un domiciliario conectado para asignar el pedido.');
+      return;
+    }
     try {
       const response = await fetch(`${API_URL}/admin/delivery/orders/${orderId}/assign`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+          'Content-Type': 'application/json',
+          'Idempotency-Key': globalThis.crypto?.randomUUID?.() || `assign-${orderId}-${Date.now()}`,
+        },
         body: JSON.stringify({ userId }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
+      setAssignments((current) => ({ ...current, [orderId]: '' }));
+      setError('');
       await load(true);
     } catch (assignError) {
       setError(assignError.message);
     }
-  };
-
-  const updateOrderStatus = async (orderId, newStatus) => {
-    try {
-      const response = await fetch(`${API_URL}/admin/orders/${orderId}`, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
-      });
-      if (response.ok) await load(true);
-      else alert('Error actualizando pedido');
-    } catch (err) { alert('Error de red'); }
   };
 
   return <div className="ds-page delivery-map-page">
@@ -193,7 +195,7 @@ export default function AdminDeliveryMap() {
           ariaLabel="Mapa con todos los domiciliarios y la cocina"
         />
         <div className="delivery-map-legend"><span><i className="is-store">🏪</i> Cocina — punto de salida</span><span><i className="is-driver">🛵</i> Domiciliario en vivo</span>{selectedDestinations && selectedDestinations.length > 0 && <span><i>📍</i> {selectedDestinations.length} destino(s)</span>}</div>
-        <div className="delivery-map-footer"><span><Clock3/> Último GPS: {dateTime(selected?.last_location_at)}</span>{selected?.current_latitude && selected?.current_longitude && <a className="ds-btn ds-btn-primary" target="_blank" rel="noreferrer" href={`https://www.google.com/maps/search/?api=1&query=${selected.current_latitude},${selected.current_longitude}`}><Navigation size={17}/> Abrir Google Maps</a>}</div>
+        <div className="delivery-map-footer"><span><Clock3/> Último GPS: {dateTime(selected?.last_location_at)}{selected?.current_accuracy != null ? ` · ±${Math.round(Number(selected.current_accuracy))} m` : ''}</span><span>Presencia: {dateTime(selected?.last_seen_at)} · GPS {selected?.tracking_mode || 'OFF'}</span>{selected?.current_latitude && selected?.current_longitude && <a className="ds-btn ds-btn-primary" target="_blank" rel="noreferrer" href={`https://www.google.com/maps/search/?api=1&query=${selected.current_latitude},${selected.current_longitude}`}><Navigation size={17}/> Abrir Google Maps</a>}</div>
       </section>
       <section className="ds-card delivery-driver-panel">
         <div className="delivery-panel-heading"><div><h2>Domiciliarios</h2><p>Selecciona uno para resaltarlo</p></div></div>
@@ -209,7 +211,7 @@ export default function AdminDeliveryMap() {
                       <strong style={{ display: 'block', fontSize: '13px' }}>#{o.id} - {o.customer_name}</strong>
                       <span style={{ fontSize: '12px', color: 'var(--ds-text-secondary)' }}>{o.address}</span>
                     </div>
-                    <button onClick={() => updateOrderStatus(o.id, 'Entregado')} className="ds-btn ds-btn-sm ds-btn-success" style={{ padding: '4px 8px', fontSize: '11px' }}>Entregado</button>
+                    <span className="ds-badge ds-badge-neutral">{o.status}</span>
                   </div>
                 ))}
               </div>
@@ -220,7 +222,7 @@ export default function AdminDeliveryMap() {
     </div>
     <section className="ds-card delivery-queue">
       <div className="delivery-panel-heading"><div><h2>Pedidos listos</h2><p>Asignación manual sin salir del mapa operativo</p></div><span className="ds-badge ds-badge-warning">{orders.length} pendientes</span></div>
-      {orders.length ? <div className="delivery-order-grid">{orders.map((order) => <article key={order.id}><div><span className="ds-badge ds-badge-success">Listo</span><b>Pedido #{order.id}</b><small>{dateTime(order.createdAt)}</small></div><h3>{order.customerName}</h3><p><MapPin size={16}/> {order.address}, {order.barrio}</p><div className="delivery-order-meta"><span>{order.paymentMethod}</span><strong>{money.format(order.deliveryFee)}</strong></div><div className="delivery-assign"><select className="ds-input" value={assignments[order.id] ?? order.deliveryUserId ?? ''} onChange={(event) => setAssignments({ ...assignments, [order.id]: event.target.value })}><option value="">Todos los domiciliarios</option>{drivers.filter((driver) => Number(driver.active_order_count || 0) < Number(driver.max_active_orders || 5) || Number(driver.id) === Number(order.deliveryUserId)).map((driver) => <option value={driver.id} key={driver.id}>{driver.name || driver.username} · {driver.active_order_count || 0}/{driver.max_active_orders || 5}</option>)}</select><button className="ds-btn ds-btn-primary" onClick={() => assign(order.id)}><Send size={17}/> Asignar</button></div></article>)}</div> : <div className="delivery-map-empty compact"><Package/><p>No hay pedidos en estado Listo pendientes de reparto.</p></div>}
+      {orders.length ? <div className="delivery-order-grid">{orders.map((order) => <article key={order.id}><div><span className="ds-badge ds-badge-success">Listo</span><b>Pedido #{order.id}</b><small>{dateTime(order.createdAt)}</small></div><h3>{order.customerName}</h3><p><MapPin size={16}/> {order.address}, {order.barrio}</p><div className="delivery-order-meta"><span>{order.paymentMethod}</span><strong>{money.format(order.deliveryFee)}</strong></div><div className="delivery-assign"><select className="ds-input" value={assignments[order.id] || ''} onChange={(event) => setAssignments({ ...assignments, [order.id]: event.target.value })}><option value="">Selecciona un domiciliario conectado</option>{eligibleDrivers.map((driver) => <option value={driver.id} key={driver.id}>{driver.name || driver.username} · {driver.live_status} · {driver.active_order_count || 0}/{driver.max_active_orders || 5}</option>)}</select><button className="ds-btn ds-btn-primary" disabled={!assignments[order.id]} onClick={() => assign(order.id)}><Send size={17}/> Asignar</button></div>{!eligibleDrivers.length && <small className="ds-text-muted">No hay domiciliarios conectados con cupo disponible.</small>}</article>)}</div> : <div className="delivery-map-empty compact"><Package/><p>No hay pedidos en estado Listo pendientes de reparto.</p></div>}
     </section>
   </div>;
 }

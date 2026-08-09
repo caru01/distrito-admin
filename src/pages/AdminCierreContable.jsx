@@ -1,451 +1,92 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  AlertTriangle, Banknote, Calendar, CheckCircle, Download, FileText, Lock,
+  Package, Printer, RefreshCw, RotateCcw, ShoppingBag, TrendingDown, TrendingUp,
+} from 'lucide-react';
 import { API_URL } from '../config/api';
-import React, { useState, useEffect } from 'react';
-import { Lock, Unlock, Calendar, TrendingUp, TrendingDown, DollarSign, ShoppingBag, PieChart, FileText, Download, Printer } from 'lucide-react';
+import { formatCurrency, formatDateTime } from '../utils/formatters';
+
+const token = () => sessionStorage.getItem('distrito_admin_token');
+const colombiaDate = (date = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(date);
+function shift(date, days) { const value = new Date(`${date}T12:00:00Z`); value.setUTCDate(value.getUTCDate() + days); return value.toISOString().slice(0, 10); }
 
 export default function AdminCierreContable() {
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
-  
-  const [previewData, setPreviewData] = useState(null);
+  const today = colombiaDate();
+  const [period, setPeriod] = useState({ start: today, end: today });
+  const [preview, setPreview] = useState(null);
   const [history, setHistory] = useState([]);
-  const [isClosed, setIsClosed] = useState(false);
-  const [closedInfo, setClosedInfo] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-  
-  const formatter = new Intl.NumberFormat('es-CO', {
-    style: 'currency', currency: 'COP', minimumFractionDigits: 0
-  });
+  const [cashCounted, setCashCounted] = useState('');
+  const [notes, setNotes] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState(null);
+  const exactClosure = useMemo(() => history.find((item) => item.start_date.slice(0, 10) === period.start && item.end_date.slice(0, 10) === period.end && item.status === 'Cerrado'), [history, period]);
+  const data = exactClosure?.summary_json || preview;
+  const expectedCash = Number(data?.efectivoEsperado || 0);
+  const counted = cashCounted === '' ? expectedCash : Number(cashCounted || 0);
+  const difference = counted - expectedCash;
 
-  const fetchHistory = async () => {
-    try {
-      const token = sessionStorage.getItem('distrito_admin_token');
-      const res = await fetch(`${API_URL}/admin/closures`, { headers: { 'Authorization': `Bearer ${token}` } });
-      const json = await res.json();
-      if (json.status === 'ok') setHistory(json.data);
-    } catch (err) { console.error(err); }
-  };
-
-  const fetchPreview = async (start, end) => {
-    setLoading(true);
-    try {
-      const token = sessionStorage.getItem('distrito_admin_token');
-      const res = await fetch(`${API_URL}/admin/closures/preview?startDate=${start}&endDate=${end}`, { headers: { 'Authorization': `Bearer ${token}` } });
-      const json = await res.json();
-      if (json.status === 'ok') {
-        setPreviewData(json.data);
-        
-        // Check if this exact period is closed in history
-        const closedPeriod = history.find(h => 
-          h.start_date.split('T')[0] === start && 
-          h.end_date.split('T')[0] === end && 
-          h.status === 'Cerrado'
-        );
-        if (closedPeriod) {
-          setIsClosed(true);
-          setClosedInfo(closedPeriod);
-          // Overwrite preview with locked snapshot
-          setPreviewData(closedPeriod.summary_json);
-        } else {
-          setIsClosed(false);
-          setClosedInfo(null);
-        }
-      }
-    } catch (err) { console.error(err); }
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', handleResize);
-    fetchHistory();
-    return () => window.removeEventListener('resize', handleResize);
+  const loadHistory = useCallback(async () => {
+    const response = await fetch(`${API_URL}/admin/closures`, { headers: { Authorization: `Bearer ${token()}` } });
+    const json = await response.json(); if (!response.ok) throw new Error(json.error); setHistory(json.data || []);
   }, []);
-
-  useEffect(() => {
-    if (startDate && endDate) {
-      fetchPreview(startDate, endDate);
-    }
-  }, [startDate, endDate, history]);
-
-  const setDateRange = (type) => {
-    const today = new Date();
-    const tzOffset = today.getTimezoneOffset() * 60000;
-    const localISOTime = (new Date(today - tzOffset)).toISOString().slice(0, -1);
-    const todayStr = localISOTime.split('T')[0];
-
-    if (type === 'hoy') {
-      setStartDate(todayStr);
-      setEndDate(todayStr);
-    } else if (type === 'mes') {
-      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-      const localFirst = (new Date(firstDay - tzOffset)).toISOString().slice(0, -1).split('T')[0];
-      setStartDate(localFirst);
-      setEndDate(todayStr);
-    }
-  };
-
-  const handleCierre = async () => {
-    if(!window.confirm(`¿Desea cerrar el período del ${startDate} al ${endDate}?\nUna vez cerrado no podrán modificarse los pedidos ni movimientos de este período sin autorización.`)) return;
+  const loadPreview = useCallback(async () => {
+    if (!period.start || !period.end || period.start > period.end) return;
+    setLoading(true); setNotice(null);
     try {
-      const token = sessionStorage.getItem('distrito_admin_token');
-      const res = await fetch(`${API_URL}/admin/closures`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({
-          startDate, endDate, summary: previewData, closedBy: 'Administrador'
-        })
-      });
-      const json = await res.json();
-      if (json.status === 'ok') {
-        alert('Período Cerrado Exitosamente');
-        fetchHistory();
-      }
-    } catch(err) { console.error(err); }
+      const response = await fetch(`${API_URL}/admin/closures/preview?startDate=${period.start}&endDate=${period.end}`, { headers: { Authorization: `Bearer ${token()}` } });
+      const json = await response.json(); if (!response.ok) throw new Error(json.error); setPreview(json.data); setCashCounted(String(json.data.efectivoEsperado || 0));
+    } catch (error) { setNotice({ type: 'error', text: error.message || 'No fue posible calcular el cierre.' }); }
+    finally { setLoading(false); }
+  }, [period]);
+  useEffect(() => { loadHistory().catch((error) => setNotice({ type: 'error', text: error.message })); }, [loadHistory]);
+  useEffect(() => { const timer = setTimeout(loadPreview, 200); return () => clearTimeout(timer); }, [loadPreview]);
+
+  const preset = (type) => {
+    if (type === 'today') setPeriod({ start: today, end: today });
+    if (type === 'week') setPeriod({ start: shift(today, -6), end: today });
+    if (type === 'month') setPeriod({ start: `${today.slice(0, 8)}01`, end: today });
+  };
+  const closePeriod = async () => {
+    if (!data || exactClosure || !window.confirm(`¿Cerrar el período ${period.start} a ${period.end}? Los valores serán recalculados por el servidor.`)) return;
+    setBusy(true); setNotice(null);
+    try {
+      const response = await fetch(`${API_URL}/admin/closures`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify({ startDate: period.start, endDate: period.end, cashCounted: counted, notes }) });
+      const json = await response.json(); if (!response.ok) throw new Error(json.error);
+      setNotice({ type: 'success', text: `Cierre #${json.data.id} creado con conciliación de efectivo.` }); setNotes(''); await loadHistory();
+    } catch (error) { setNotice({ type: 'error', text: error.message || 'No fue posible cerrar el período.' }); }
+    finally { setBusy(false); }
+  };
+  const reopen = async (closure) => {
+    const reason = window.prompt(`Motivo para reabrir el cierre #${closure.id}:`); if (!reason) return;
+    try {
+      const response = await fetch(`${API_URL}/admin/closures/${closure.id}/reopen`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` }, body: JSON.stringify({ reason }) });
+      const json = await response.json(); if (!response.ok) throw new Error(json.error); setNotice({ type: 'success', text: `Cierre #${closure.id} reabierto.` }); await loadHistory();
+    } catch (error) { setNotice({ type: 'error', text: error.message || 'No fue posible reabrir.' }); }
+  };
+  const exportCsv = () => {
+    if (!data) return;
+    const rows = [['Concepto','Valor'],['Ventas',data.totalVentas],['Pedidos',data.totalPedidos],['Cancelados',data.pedidosCancelados],['Costo de productos',data.totalCostoProduccion],['Gastos',data.totalGastos],['Utilidad neta',data.utilidadNeta],['Efectivo esperado',expectedCash],['Efectivo contado',counted],['Diferencia',difference]];
+    const url = URL.createObjectURL(new Blob([`\uFEFF${rows.map((row) => row.join(',')).join('\n')}`], { type: 'text/csv' })); const link = document.createElement('a'); link.href = url; link.download = `cierre-${period.start}-${period.end}.csv`; link.click(); URL.revokeObjectURL(url);
   };
 
-  const handleImprimir = () => {
-    window.print();
-  };
-
-  return (
-    <div className="ds-page print-container">
-      
-      {/* ENCABEZADO */}
-      <div className="ds-page-header">
-        <div>
-          <div style={{ color: '#BDBDBD', fontSize: '12px', marginBottom: '8px' }}>Dashboard &gt; Cierre Contable</div>
-          <h1 className="ds-page-title" style={{ color: '#D4A017' }}>Cierre Contable</h1>
-          <p style={{ margin: 0, color: '#BDBDBD' }}>Consolida las ventas, costos, gastos y utilidades de un período para generar el cierre financiero del restaurante.</p>
-        </div>
+  return <div className="ds-page closure-page">
+    <header className="ds-page-header"><div><span className="ds-page-kicker">Control financiero</span><h1 className="ds-page-title">Cierre contable</h1><p className="ds-page-subtitle">Concilia ventas, efectivo, costos, gastos e inventario con cálculos protegidos en el servidor.</p></div><div className="ds-page-actions"><button className="ds-btn ds-btn-secondary" onClick={exportCsv} disabled={!data}><Download size={18} /> CSV</button><button className="ds-btn ds-btn-secondary" onClick={() => window.print()}><Printer size={18} /> Imprimir</button></div></header>
+    {notice && <div className={`ds-inline-alert ds-inline-alert-${notice.type === 'success' ? 'success' : 'danger'}`}>{notice.type === 'success' ? <CheckCircle /> : <AlertTriangle />}<span>{notice.text}</span></div>}
+    <section className="ds-card closure-period no-print"><div className="closure-period-fields"><Calendar /><input className="ds-input" type="date" value={period.start} onChange={(e) => setPeriod({ ...period, start: e.target.value })} /><span>a</span><input className="ds-input" type="date" min={period.start} value={period.end} onChange={(e) => setPeriod({ ...period, end: e.target.value })} /></div><div className="closure-presets"><button className="ds-btn ds-btn-ghost ds-btn-sm" onClick={() => preset('today')}>Hoy</button><button className="ds-btn ds-btn-ghost ds-btn-sm" onClick={() => preset('week')}>7 días</button><button className="ds-btn ds-btn-ghost ds-btn-sm" onClick={() => preset('month')}>Este mes</button><button className="ds-btn ds-btn-secondary ds-btn-sm" onClick={loadPreview}><RefreshCw size={16} /> Recalcular</button></div><span className={`ds-badge ds-badge-${exactClosure ? 'danger' : 'success'}`}>{exactClosure ? <Lock size={14} /> : null}{exactClosure ? `Cerrado #${exactClosure.id}` : 'Período abierto'}</span></section>
+    {loading ? <div className="ds-loader-container"><div className="ds-loader" /><p>Calculando con datos actuales…</p></div> : data && <>
+      <section className="closure-kpis"><article><TrendingUp /><div><strong>{formatCurrency(data.totalVentas)}</strong><span>Ventas finalizadas</span></div></article><article><ShoppingBag /><div><strong>{data.totalPedidos || 0}</strong><span>Pedidos entregados</span></div></article><article><TrendingDown /><div><strong>{formatCurrency(data.totalCostoProduccion)}</strong><span>Costo de productos</span></div></article><article><FileText /><div><strong>{formatCurrency(data.totalGastos)}</strong><span>Gastos operativos</span></div></article><article className={Number(data.utilidadNeta) < 0 ? 'danger' : 'success'}><Banknote /><div><strong>{formatCurrency(data.utilidadNeta)}</strong><span>Utilidad neta</span></div></article></section>
+      <div className="closure-grid"><section className="ds-card"><div className="ds-card-header"><h2 className="ds-card-title">Conciliación de caja</h2></div><div className="ds-card-body ds-form"><div className="closure-reconciliation"><div><span>Efectivo esperado</span><strong>{formatCurrency(expectedCash)}</strong></div><label><span>Efectivo contado</span><input className="ds-input" type="number" min="0" value={cashCounted} disabled={Boolean(exactClosure)} onChange={(e) => setCashCounted(e.target.value)} /></label><div className={difference === 0 ? 'balanced' : 'unbalanced'}><span>Diferencia</span><strong>{formatCurrency(exactClosure ? exactClosure.cash_difference : difference)}</strong></div></div><label className="ds-form-group"><span className="ds-form-label">Notas del cierre</span><textarea className="ds-textarea" value={exactClosure?.notes || notes} disabled={Boolean(exactClosure)} onChange={(e) => setNotes(e.target.value)} placeholder="Novedades de caja, comprobantes o responsables…" /></label>{!exactClosure && <button className="ds-btn ds-btn-primary ds-w-full" onClick={closePeriod} disabled={busy}><Lock size={18} /> {busy ? 'Cerrando…' : 'Confirmar y cerrar período'}</button>}</div></section>
+        <section className="ds-card"><div className="ds-card-header"><h2 className="ds-card-title">Resumen financiero</h2></div><div className="ds-card-body closure-equation"><div><span>Ventas</span><strong>{formatCurrency(data.totalVentas)}</strong></div><div><span>− Costos de productos</span><strong>{formatCurrency(data.totalCostoProduccion)}</strong></div><div><span>− Gastos operativos</span><strong>{formatCurrency(data.totalGastos)}</strong></div><div className="total"><span>= Utilidad neta</span><strong>{formatCurrency(data.utilidadNeta)}</strong></div><small>Margen bruto: {Number(data.margenBruto || 0).toFixed(1)}% · Cancelados: {data.pedidosCancelados || 0}</small></div></section>
       </div>
+      <div className="closure-breakdowns"><Breakdown title="Métodos de pago" rows={data.metodosPago} /><Breakdown title="Ventas por categoría" rows={data.categoriasVentas} /><Breakdown title="Costo por producto" rows={data.desgloseCostos} /><Breakdown title="Gastos por categoría" rows={data.desgloseGastos} /></div>
+      <section className="ds-card"><div className="ds-card-header"><h2 className="ds-card-title"><Package size={19} /> Inventario valorizado al momento del cálculo</h2></div><div className="ds-table-container"><table className="ds-table"><thead><tr><th>Producto</th><th>Unidad</th><th>Existencias</th><th>Valor</th></tr></thead><tbody>{(data.inventarioSnapshot || []).map((item) => <tr key={item.name}><td>{item.name}</td><td>{item.unit}</td><td>{item.quantity}</td><td>{formatCurrency(item.value)}</td></tr>)}</tbody></table></div></section>
+    </>}
+    <section className="ds-card closure-history no-print"><div className="ds-card-header"><h2 className="ds-card-title">Historial de cierres</h2></div>{history.length ? <div className="closure-history-list">{history.map((item) => <article key={item.id}><div><strong>#{item.id} · {item.start_date.slice(0, 10)} a {item.end_date.slice(0, 10)}</strong><span className={`ds-badge ds-badge-${item.status === 'Cerrado' ? 'danger' : 'warning'}`}>{item.status}</span></div><dl><div><dt>Ventas</dt><dd>{formatCurrency(item.total_sales)}</dd></div><div><dt>Pedidos</dt><dd>{item.orders_count || 0}</dd></div><div><dt>Diferencia caja</dt><dd>{formatCurrency(item.cash_difference)}</dd></div><div><dt>Cerrado</dt><dd>{formatDateTime(item.closed_at)}</dd></div></dl>{item.status === 'Cerrado' ? <button className="ds-btn ds-btn-ghost ds-btn-sm" onClick={() => reopen(item)}><RotateCcw size={16} /> Reabrir con motivo</button> : <small>Reabierto: {item.reopen_reason || 'Sin detalle'}</small>}</article>)}</div> : <div className="ds-empty-state">No hay cierres registrados.</div>}</section>
+  </div>;
+}
 
-      {/* BARRA SUPERIOR NO IMPRIMIBLE */}
-      <div className="ds-card no-print" style={{ marginBottom: '24px' }}>
-        <div className="ds-card-body" style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <Calendar size={18} color="#D4A017" />
-              <input type="date" className="ds-input" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ colorScheme: 'dark' }} />
-              <span style={{ color: '#888' }}>-</span>
-              <input type="date" className="ds-input" value={endDate} onChange={e => setEndDate(e.target.value)} style={{ colorScheme: 'dark' }} />
-            </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={() => setDateRange('hoy')} className="ds-btn ds-btn-secondary ds-btn-sm">Hoy</button>
-              <button onClick={() => setDateRange('mes')} className="ds-btn ds-btn-secondary ds-btn-sm">Este mes</button>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flexWrap: 'wrap' }}>
-            {isClosed ? (
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ color: '#EF4444', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '18px' }}><Lock size={18} /> PERÍODO CERRADO</div>
-                <div style={{ color: '#888', fontSize: '12px' }}>{new Date(closedInfo.closed_at).toLocaleString()}</div>
-              </div>
-            ) : (
-              <div style={{ color: '#22C55E', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '18px' }}><Unlock size={18} /> PERÍODO ABIERTO</div>
-            )}
-
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <button onClick={handleImprimir} className="ds-btn ds-btn-secondary">
-                <Printer size={18} /> Imprimir / PDF
-              </button>
-              {!isClosed && previewData && (
-                <button onClick={handleCierre} className="ds-btn ds-btn-primary">
-                  <Lock size={18} /> Realizar Cierre
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {loading && (
-        <div className="ds-loader-container">
-          <div className="ds-loader"></div>
-          <p>Cargando cálculos financieros...</p>
-        </div>
-      )}
-
-      {previewData && (
-        <>
-          {/* TARJETAS KPI */}
-          <div className="ds-cards-grid" style={{ marginBottom: '24px' }}>
-            
-            <div className="ds-stat-card">
-              <div className="ds-stat-label"><DollarSign size={16} color="#D4A017"/> Ventas Totales</div>
-              <div className="ds-stat-value">{formatter.format(previewData.totalVentas)}</div>
-            </div>
-
-            <div className="ds-stat-card">
-              <div className="ds-stat-label"><ShoppingBag size={16} color="#3B82F6"/> Pedidos</div>
-              <div className="ds-stat-value">{previewData.totalPedidos}</div>
-            </div>
-
-            <div className="ds-stat-card">
-              <div className="ds-stat-label"><TrendingDown size={16} color="#EF4444"/> Costo Producción</div>
-              <div className="ds-stat-value">{formatter.format(previewData.totalCostoProduccion)}</div>
-            </div>
-
-            <div className="ds-stat-card">
-              <div className="ds-stat-label"><FileText size={16} color="#F59E0B"/> Gastos Operativos</div>
-              <div className="ds-stat-value">{formatter.format(previewData.totalGastos)}</div>
-            </div>
-
-            <div className="ds-stat-card" style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', borderColor: 'rgba(34, 197, 94, 0.2)' }}>
-              <div className="ds-stat-label" style={{ color: '#22C55E', fontWeight: '600' }}><TrendingUp size={16}/> Utilidad Neta</div>
-              <div className="ds-stat-value" style={{ color: '#22C55E' }}>{formatter.format(previewData.utilidadNeta)}</div>
-            </div>
-
-          </div>
-
-          <div className="ds-form-grid" style={{ marginBottom: '24px' }}>
-            
-            {/* VENTAS POR CATEGORIA */}
-            <div className="ds-card">
-              <div className="ds-card-header">
-                <h3 className="ds-card-title"><PieChart size={18}/> Ventas por Categoría</h3>
-              </div>
-              <div className="ds-card-body" style={{ padding: 0 }}>
-                <table className="ds-table">
-                  <tbody>
-                    {Object.entries(previewData.categoriasVentas || {}).map(([cat, val]) => (
-                      <tr key={cat}>
-                        <td>{cat}</td>
-                        <td style={{ textAlign: 'right', fontWeight: '600', color: '#FFF' }}>{formatter.format(val)}</td>
-                        <td style={{ textAlign: 'right', color: '#888' }}>{((val / (previewData.totalVentas || 1)) * 100).toFixed(1)}%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* METODOS DE PAGO */}
-            <div className="ds-card">
-              <div className="ds-card-header">
-                <h3 className="ds-card-title"><DollarSign size={18}/> Métodos de Pago</h3>
-              </div>
-              <div className="ds-card-body" style={{ padding: 0 }}>
-                <table className="ds-table">
-                  <tbody>
-                    {Object.entries(previewData.metodosPago || {}).map(([mp, val]) => (
-                      <tr key={mp}>
-                        <td style={{ textTransform: 'capitalize' }}>{mp}</td>
-                        <td style={{ textAlign: 'right', fontWeight: '600', color: '#FFF' }}>{formatter.format(val)}</td>
-                        <td style={{ textAlign: 'right', color: '#888' }}>{((val / (previewData.totalVentas || 1)) * 100).toFixed(1)}%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* DESGLOSE COSTOS */}
-            <div className="ds-card">
-              <div className="ds-card-header">
-                <h3 className="ds-card-title"><ShoppingBag size={18}/> Costos de Producción</h3>
-              </div>
-              <div className="ds-card-body" style={{ padding: 0 }}>
-                <table className="ds-table">
-                  <tbody>
-                    {Object.entries(previewData.desgloseCostos || {}).map(([ing, cost]) => (
-                      <tr key={ing}>
-                        <td>{ing}</td>
-                        <td style={{ textAlign: 'right', fontWeight: '600', color: '#EF4444' }}>- {formatter.format(cost)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* DESGLOSE GASTOS */}
-            <div className="ds-card">
-              <div className="ds-card-header">
-                <h3 className="ds-card-title"><FileText size={18}/> Gastos Operativos</h3>
-              </div>
-              <div className="ds-card-body" style={{ padding: 0 }}>
-                <table className="ds-table">
-                  <tbody>
-                    {Object.entries(previewData.desgloseGastos || {}).map(([cat, val]) => (
-                      <tr key={cat}>
-                        <td>{cat}</td>
-                        <td style={{ textAlign: 'right', fontWeight: '600', color: '#EF4444' }}>- {formatter.format(val)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-          </div>
-
-          {/* RESUMEN MATEMATICO */}
-          <div className="ds-card" style={{ marginBottom: '24px', display: 'flex', justifyContent: 'center' }}>
-            <div className="ds-card-body" style={{ width: '100%', maxWidth: '500px' }}>
-              <h3 style={{ margin: '0 0 24px 0', textAlign: 'center', color: '#D4A017', fontSize: '24px' }}>Resumen Financiero</h3>
-              
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', fontSize: '18px' }}>
-                <span style={{ color: '#BDBDBD' }}>Ventas Brutas</span>
-                <span style={{ color: '#FFF', fontWeight: '600' }}>{formatter.format(previewData.totalVentas)}</span>
-              </div>
-              
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', fontSize: '18px' }}>
-                <span style={{ color: '#EF4444' }}>(-) Costo Producción</span>
-                <span style={{ color: '#EF4444', fontWeight: '600' }}>- {formatter.format(previewData.totalCostoProduccion)}</span>
-              </div>
-              
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', fontSize: '18px' }}>
-                <span style={{ color: '#EF4444' }}>(-) Gastos Operativos</span>
-                <span style={{ color: '#EF4444', fontWeight: '600' }}>- {formatter.format(previewData.totalGastos)}</span>
-              </div>
-              
-              <div className="ds-divider" style={{ borderStyle: 'dashed', margin: '16px 0' }}></div>
-              
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px', fontSize: '24px', backgroundColor: 'rgba(34, 197, 94, 0.1)', borderRadius: '8px' }}>
-                <span style={{ color: '#22C55E', fontWeight: '800' }}>= UTILIDAD NETA</span>
-                <span style={{ color: '#22C55E', fontWeight: '800' }}>{formatter.format(previewData.utilidadNeta)}</span>
-              </div>
-
-            </div>
-          </div>
-
-          {/* INVENTARIO FINAL */}
-          <div className="ds-card no-print" style={{ marginBottom: '40px' }}>
-            <div className="ds-card-header">
-              <h3 className="ds-card-title">Inventario Final al Cierre</h3>
-            </div>
-            <div className="ds-card-body" style={{ padding: 0 }}>
-              {isMobile ? (
-                <div className="ds-table-cards">
-                  {(previewData.inventarioSnapshot || []).map((inv, idx) => (
-                    <div key={idx} className="ds-table-card">
-                      <div className="ds-table-card-row">
-                        <span className="ds-table-card-label">INGREDIENTE</span>
-                        <span className="ds-table-card-value">{inv.name}</span>
-                      </div>
-                      <div className="ds-table-card-row">
-                        <span className="ds-table-card-label">UNIDAD</span>
-                        <span className="ds-table-card-value">{inv.unit}</span>
-                      </div>
-                      <div className="ds-table-card-row">
-                        <span className="ds-table-card-label">CANTIDAD</span>
-                        <span className="ds-table-card-value" style={{ fontWeight: '600' }}>{inv.quantity}</span>
-                      </div>
-                      <div className="ds-table-card-row">
-                        <span className="ds-table-card-label">VALORIZADO</span>
-                        <span className="ds-table-card-value" style={{ color: '#D4A017' }}>{formatter.format(inv.value)}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="ds-table-container">
-                  <table className="ds-table">
-                    <thead>
-                      <tr>
-                        <th>INGREDIENTE</th>
-                        <th style={{ textAlign: 'center' }}>UNIDAD</th>
-                        <th style={{ textAlign: 'right' }}>CANTIDAD RESTANTE</th>
-                        <th style={{ textAlign: 'right' }}>VALORIZADO</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(previewData.inventarioSnapshot || []).map((inv, idx) => (
-                        <tr key={idx}>
-                          <td>{inv.name}</td>
-                          <td style={{ textAlign: 'center', color: '#BDBDBD' }}>{inv.unit}</td>
-                          <td style={{ textAlign: 'right', fontWeight: '600' }}>{inv.quantity}</td>
-                          <td style={{ textAlign: 'right', color: '#D4A017' }}>{formatter.format(inv.value)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* HISTORIAL NO IMPRIMIBLE */}
-      <div className="no-print" style={{ marginTop: '40px' }}>
-        <h2 style={{ color: '#FFF', marginBottom: '20px' }}>Historial de Cierres</h2>
-        <div className="ds-card">
-          {history.length === 0 ? (
-            <div className="ds-empty-state">No hay cierres registrados.</div>
-          ) : (
-            isMobile ? (
-              <div className="ds-table-cards">
-                {history.map(h => (
-                  <div key={h.id} className="ds-table-card">
-                    <div className="ds-table-card-row">
-                      <span className="ds-table-card-label">PERÍODO</span>
-                      <span className="ds-table-card-value">{h.start_date.split('T')[0]} a {h.end_date.split('T')[0]}</span>
-                    </div>
-                    <div className="ds-table-card-row">
-                      <span className="ds-table-card-label">ESTADO</span>
-                      <span className="ds-table-card-value">
-                        <span className={`ds-badge ${h.status === 'Cerrado' ? 'ds-badge-danger' : 'ds-badge-success'}`}>
-                          {h.status}
-                        </span>
-                      </span>
-                    </div>
-                    <div className="ds-table-card-row">
-                      <span className="ds-table-card-label">VENTAS</span>
-                      <span className="ds-table-card-value" style={{ fontWeight: '600' }}>{formatter.format(h.total_sales)}</span>
-                    </div>
-                    <div className="ds-table-card-row">
-                      <span className="ds-table-card-label">UTILIDAD</span>
-                      <span className="ds-table-card-value" style={{ color: '#22C55E', fontWeight: '600' }}>{formatter.format(h.net_profit)}</span>
-                    </div>
-                    <div className="ds-table-card-row">
-                      <span className="ds-table-card-label">FECHA DE CIERRE</span>
-                      <span className="ds-table-card-value">{new Date(h.closed_at).toLocaleDateString()}</span>
-                    </div>
-                    <div className="ds-table-card-row">
-                      <span className="ds-table-card-label">USUARIO</span>
-                      <span className="ds-table-card-value">{h.closed_by}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="ds-table-container">
-                <table className="ds-table">
-                  <thead>
-                    <tr>
-                      <th>PERÍODO</th>
-                      <th>ESTADO</th>
-                      <th style={{ textAlign: 'right' }}>VENTAS</th>
-                      <th style={{ textAlign: 'right' }}>UTILIDAD</th>
-                      <th style={{ textAlign: 'right' }}>FECHA DE CIERRE</th>
-                      <th style={{ textAlign: 'center' }}>USUARIO</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {history.map(h => (
-                      <tr key={h.id}>
-                        <td>{h.start_date.split('T')[0]} a {h.end_date.split('T')[0]}</td>
-                        <td>
-                          <span className={`ds-badge ${h.status === 'Cerrado' ? 'ds-badge-danger' : 'ds-badge-success'}`}>
-                            {h.status}
-                          </span>
-                        </td>
-                        <td style={{ textAlign: 'right', fontWeight: '600' }}>{formatter.format(h.total_sales)}</td>
-                        <td style={{ textAlign: 'right', color: '#22C55E', fontWeight: '600' }}>{formatter.format(h.net_profit)}</td>
-                        <td style={{ textAlign: 'right', color: '#BDBDBD' }}>{new Date(h.closed_at).toLocaleDateString()}</td>
-                        <td style={{ textAlign: 'center', color: '#BDBDBD' }}>{h.closed_by}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )
-          )}
-        </div>
-      </div>
-    </div>
-  );
+function Breakdown({ title, rows = {} }) {
+  const entries = Object.entries(rows || {});
+  return <section className="ds-card"><div className="ds-card-header"><h3 className="ds-card-title">{title}</h3></div>{entries.length ? <div className="closure-breakdown-list">{entries.map(([name, value]) => <div key={name}><span>{name}</span><strong>{formatCurrency(value)}</strong></div>)}</div> : <div className="ds-empty-state">Sin movimientos</div>}</section>;
 }
