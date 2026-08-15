@@ -126,6 +126,10 @@ export const AuthProvider = ({ children }) => {
       return true;
     } catch (error) {
       if (error?.code === STALE_AUTH_OPERATION || revision !== authRevision.current) return false;
+      if (error instanceof TypeError || error.message?.toLowerCase().includes('fetch') || error.message?.toLowerCase().includes('network')) {
+        console.warn('Network error during session verification, keeping session alive:', error);
+        return true; 
+      }
       clearAuth(error.message || 'Tu sesión caducó por inactividad.', revision);
       return false;
     }
@@ -179,7 +183,11 @@ export const AuthProvider = ({ children }) => {
         const revision = authRevision.current;
         try { await refreshSession(); }
         catch (error) {
-          if (error?.code !== STALE_AUTH_OPERATION) clearAuth(error.message, revision);
+          if (error?.code !== STALE_AUTH_OPERATION) {
+            if (!(error instanceof TypeError || error.message?.toLowerCase().includes('fetch') || error.message?.toLowerCase().includes('network'))) {
+              clearAuth(error.message, revision);
+            }
+          }
         }
       }
     }, 60_000);

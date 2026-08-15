@@ -1,5 +1,6 @@
 import { API_URL, STOREFRONT_URL } from '../config/api';
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useContext } from 'react';
+import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { printTicket } from '../services/printService';
 import { buildReadyOrderWhatsAppMessage, createWhatsAppUrl, orderStatusMeta } from '@distrito/shared-ui';
@@ -24,6 +25,8 @@ const formatColombiaDateTime = (value) => new Date(value).toLocaleString('es-CO'
 
 export default function AdminPedidos() {
   const navigate = useNavigate();
+  const { user } = useContext(AuthContext);
+  const isAdmin = ['Admin', 'Administrador', 'Super Administrador', 'super_admin'].includes(user?.role || user?.role_name || '');
 
   // 🚀 OPTIMIZACIÓN 1: Inicialización inmediata desde Caché en 0ms
   const getInitialOrders = () => {
@@ -301,6 +304,15 @@ export default function AdminPedidos() {
     return <span className={`order-status-badge order-status-${meta.tone}`} title={meta.description}><i aria-hidden="true" /><span>{meta.label}</span></span>;
   };
 
+  const getDeliveryTypeBadge = (type) => {
+    const t = String(type || '').toLowerCase();
+    if (t === 'domicilio') return <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#3B82F6', fontWeight: 600 }}><Truck size={14}/> Domicilio</div>;
+    if (t === 'recoger') return <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#F59E0B', fontWeight: 600 }}><Package size={14}/> Recoger</div>;
+    if (t === 'mostrador') return <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#8B5CF6', fontWeight: 600 }}><Store size={14}/> Mostrador</div>;
+    if (t === 'mesa') return <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#EC4899', fontWeight: 600 }}><ChefHat size={14}/> Mesa</div>;
+    return <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--ds-text-muted)' }}>{type || '-'}</div>;
+  };
+
   const getSourceIcon = (source) => {
     if (source === 'WhatsApp') return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><MessageCircle size={16} color="#22C55E" /> WhatsApp</div>;
     if (source === 'Presencial' || source === 'Mostrador') return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Store size={16} color="#D4A017" /> {source}</div>;
@@ -512,6 +524,7 @@ export default function AdminPedidos() {
                     <td>
                       <div style={{ color: 'var(--ds-text-primary)', fontWeight: '600', fontSize: '15px' }}>{order.customer_name || 'Sin nombre'}</div>
                       <div style={{ color: 'var(--ds-text-secondary)', fontSize: '13px', marginTop: '4px' }}>{order.customer_phone || 'Sin teléfono'}</div>
+                      <div style={{ marginTop: '4px' }}>{getDeliveryTypeBadge(order.delivery_type)}</div>
                       {(order.barrio || order.address) && <div style={{ color: 'var(--ds-text-muted)', fontSize: '12px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}><MapPin size={12} />{[order.barrio, order.address].filter(Boolean).join(', ')}</div>}
                       {order.notes && <div style={{ color: '#FCD34D', fontSize: '12px', marginTop: '6px', fontStyle: 'italic', padding: '4px 8px', backgroundColor: 'rgba(252,211,77,0.1)', borderRadius: '4px', display: 'inline-block' }}>Nota: {order.notes}</div>}
                     </td>
@@ -569,6 +582,10 @@ export default function AdminPedidos() {
                     <div style={{ fontWeight: '600' }}>{order.customer_name || 'Sin nombre'}</div>
                     <div style={{ color: 'var(--ds-text-secondary)' }}>{order.customer_phone || 'Sin teléfono'}</div>
                   </span>
+                </div>
+                <div className="ds-table-card-row">
+                  <span className="ds-table-card-label">Tipo Entrega</span>
+                  <span className="ds-table-card-value">{getDeliveryTypeBadge(order.delivery_type)}</span>
                 </div>
                 <div className="ds-table-card-row">
                   <span className="ds-table-card-label">Origen</span>
@@ -687,6 +704,7 @@ export default function AdminPedidos() {
                 {selectedOrder.status === 'Asignado externo' && <button disabled={updatingOrderId === selectedOrder.id} onClick={() => handleExternalTransition(selectedOrder, 'external-handoff')} className="ds-btn ds-btn-full ds-btn-info" style={{ gridColumn: '1 / -1' }}><Building2 size={17}/> Confirmar entrega al operador externo</button>}
                 {selectedOrder.status === 'Entregado al operador externo' && <button disabled={updatingOrderId === selectedOrder.id} onClick={() => handleExternalTransition(selectedOrder, 'external-start')} className="ds-btn ds-btn-full order-delivery-action" style={{ gridColumn: '1 / -1' }}><Truck size={17}/> Confirmar que va en camino</button>}
                 {selectedOrder.status === 'Listo' && String(selectedOrder.delivery_type || '').toLowerCase() !== 'domicilio' && <button disabled={updatingOrderId === selectedOrder.id} onClick={() => handleUpdateStatus(selectedOrder.id, 'Entregado')} className="ds-btn ds-btn-full ds-btn-success" style={{ gridColumn: '1 / -1', backgroundColor: '#22C55E' }}><CheckCircle size={17}/> Confirmar entrega en el local</button>}
+                {isAdmin && (selectedOrder.status === 'En camino' || selectedOrder.status === 'Entregado al operador externo') && <button disabled={updatingOrderId === selectedOrder.id} onClick={() => handleUpdateStatus(selectedOrder.id, 'Entregado')} className="ds-btn ds-btn-full ds-btn-success" style={{ gridColumn: '1 / -1', backgroundColor: '#10B981' }}><CheckCircle size={17}/> Forzar Entrega (Manual)</button>}
                 {selectedOrder.status === 'En camino' && String(selectedOrder.delivery_provider_type || '').startsWith('external_') && <button type="button" disabled={updatingOrderId === selectedOrder.id} onClick={() => confirmExternalCompletion(selectedOrder)} className="ds-btn ds-btn-full ds-btn-success" style={{ gridColumn: '1 / -1' }}><CheckCircle size={17}/> Confirmar entrega externa</button>}
                 {selectedOrder.status === 'En camino' && !String(selectedOrder.delivery_provider_type || '').startsWith('external_') && <button type="button" disabled className="ds-btn ds-btn-full order-delivery-action" style={{ gridColumn: '1 / -1', opacity: 1 }}><MapPin size={17}/> Entrega en curso</button>}
                 {selectedOrder.status === 'Entregado' && <div style={{ gridColumn: '1 / -1', padding: '12px', borderRadius: '10px', backgroundColor: 'rgba(34,197,94,.12)', color: '#22C55E', textAlign: 'center', fontWeight: 800 }}><CheckCircle size={17} style={{ verticalAlign: 'middle', marginRight: '7px' }}/> Entregado{getDeliveryDurationText(selectedOrder) ? ` en ${getDeliveryDurationText(selectedOrder)}` : ''}</div>}
