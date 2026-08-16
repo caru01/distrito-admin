@@ -34,7 +34,9 @@ export function normalizeWhatsAppMessage(value) {
 
 export function createWhatsAppUrl(phone, message) {
   const normalizedMessage = normalizeWhatsAppMessage(message);
-  return `https://wa.me/${normalizeWhatsAppPhone(phone)}?text=${encodeURIComponent(normalizedMessage)}`;
+  // Usamos api.whatsapp.com/send directamente para evitar el redirect 302 de wa.me,
+  // cuyo servidor corrompe emojis fuera del BMP (U+1F000+) convirtiéndolos en U+FFFD.
+  return `https://api.whatsapp.com/send/?phone=${normalizeWhatsAppPhone(phone)}&text=${encodeURIComponent(normalizedMessage)}`;
 }
 
 function paymentLines({ paymentMethod, cashAmount, change, transferBank }) {
