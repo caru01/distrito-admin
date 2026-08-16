@@ -587,6 +587,21 @@ export default function AdminPedidos() {
                   <span className="ds-table-card-label">Tipo Entrega</span>
                   <span className="ds-table-card-value">{getDeliveryTypeBadge(order.delivery_type)}</span>
                 </div>
+                {(order.address || order.barrio) && (
+                  <div className="ds-table-card-row">
+                    <span className="ds-table-card-label">Dirección</span>
+                    <span className="ds-table-card-value" style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
+                      <MapPin size={13} style={{ marginTop: '2px', flexShrink: 0, color: 'var(--ds-primary)' }} />
+                      <span>{[order.barrio, order.address].filter(Boolean).join(' · ')}</span>
+                    </span>
+                  </div>
+                )}
+                {order.notes && (
+                  <div className="ds-table-card-row">
+                    <span className="ds-table-card-label">Observaciones</span>
+                    <span className="ds-table-card-value" style={{ fontStyle: 'italic', color: 'var(--ds-text-secondary)' }}>{order.notes}</span>
+                  </div>
+                )}
                 <div className="ds-table-card-row">
                   <span className="ds-table-card-label">Origen</span>
                   <span className="ds-table-card-value">{getSourceIcon(order.source || 'Web')}</span>
