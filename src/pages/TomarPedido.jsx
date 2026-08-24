@@ -188,27 +188,23 @@ export default function TomarPedido() {
     }
   }, [editId]);
 
-  const searchClient = async (query) => {
+  const searchClient = (query) => {
     if (!query || query.length < 1) { setClientSearch([]); setShowClientSearch(false); return; }
-    try {
-      const token = sessionStorage.getItem('distrito_admin_token');
-      const res = await fetch(`${API_URL}/admin/clientes/buscar?q=${encodeURIComponent(query)}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (data.status === 'ok') {
-        setClientSearch(data.clientes.slice(0, 5));
-        setShowClientSearch(data.clientes.length > 0);
-      }
-    } catch (err) {
-      console.error(err);
-    }
+    const lowerQuery = String(query).toLowerCase();
+    const results = pastClients.filter(c => {
+      if (!c) return false;
+      const nameStr = c.name ? String(c.name).toLowerCase() : '';
+      const phoneStr = c.phone ? String(c.phone).toLowerCase() : '';
+      return nameStr.includes(lowerQuery) || phoneStr.includes(lowerQuery);
+    });
+    setClientSearch(results.slice(0, 5));
+    setShowClientSearch(results.length > 0);
   };
 
   const handleClientSelect = (client) => {
     setCustomer(c => ({
       ...c,
-      name: client.name || client.username || '',
+      name: client.name || '',
       phone: client.phone || '',
       address: client.address || '',
       barrio: client.barrio || '',
@@ -224,10 +220,7 @@ export default function TomarPedido() {
       deliveryType: client.delivery_type || 'domicilio',
       paymentMethod: client.payment_method || 'efectivo',
       source: client.source || 'WhatsApp',
-      notes: client.notes || '',
-      crm_contact_id: client.crm_contact_id || null,
-      bsuid: client.bsuid || null,
-      username: client.username || null
+      notes: client.notes || ''
     }));
     setShowClientSearch(false);
   };
@@ -388,7 +381,7 @@ export default function TomarPedido() {
   const handleSubmit = async (sendToKitchen = false) => {
     if (cart.length === 0) { showToast('Agrega al menos un producto', 'error'); return; }
     if (!customer.name.trim()) { showToast('Escribe el nombre del cliente', 'error'); return; }
-    if (!customer.phone.trim() && !customer.crm_contact_id) { showToast('Escribe el teléfono del cliente', 'error'); return; }
+    if (!customer.phone.trim()) { showToast('Escribe el teléfono del cliente', 'error'); return; }
     if (customer.deliveryType === 'domicilio' && (!customer.address.trim() || !customer.barrio.trim())) {
       showToast('Selecciona la dirección y completa el barrio', 'error'); return;
     }
@@ -835,21 +828,12 @@ export default function TomarPedido() {
                   />
                   {showClientSearch && activeSearchField === 'name' && clientSearch.length > 0 && (
                     <div className="ds-autocomplete" style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'var(--ds-bg-elevated)', border: '1px solid var(--ds-primary)', borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.6)', zIndex: 100, marginTop: '4px', maxHeight: '200px', overflowY: 'auto' }}>
-                      {clientSearch.map((c, i) => {
-                        const isPrivate = !c.phone && c.bsuid;
-                        return (
+                      {clientSearch.map((c, i) => (
                         <div key={i} className="ds-autocomplete-item" onClick={() => handleClientSelect(c)} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: i < clientSearch.length - 1 ? '1px solid var(--ds-border)' : 'none' }}>
-                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ds-text-primary)' }}>
-                            {isPrivate ? `👤 @${c.username || 'Usuario'}` : c.name}
-                          </div>
-                          <div style={{ fontSize: '11px', color: 'var(--ds-text-secondary)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                            {isPrivate ? <span>📱 🔒 Número privado</span> : <span>📱 {c.phone}</span>}
-                            {c.bsuid && <span style={{ color: '#25D366' }}>| 🟢 WhatsApp identificado</span>}
-                            {c.address ? <span>| 📍 {c.address}</span> : ''}
-                          </div>
+                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ds-text-primary)' }}>{c.name}</div>
+                          <div style={{ fontSize: '11px', color: 'var(--ds-text-secondary)', marginTop: '2px' }}>📱 {c.phone} {c.address ? `| 📍 ${c.address}` : ''}</div>
                         </div>
-                        );
-                      })}
+                      ))}
                     </div>
                   )}
                 </div>
@@ -857,7 +841,7 @@ export default function TomarPedido() {
                 <div className="ds-form-group" style={{ position: 'relative', marginBottom: 0 }}>
                   <Phone size={16} style={{ position: 'absolute', left: '10px', top: '13px', color: 'var(--ds-text-muted)', zIndex: 1 }} />
                   <input 
-                    placeholder={customer.bsuid && !customer.phone ? "🔒 Número privado" : "Teléfono"} 
+                    placeholder="Teléfono" 
                     value={customer.phone} 
                     onChange={e => { 
                       setCustomer(c => ({ ...c, phone: e.target.value })); 
@@ -871,21 +855,12 @@ export default function TomarPedido() {
                   />
                   {showClientSearch && activeSearchField === 'phone' && clientSearch.length > 0 && (
                     <div className="ds-autocomplete" style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'var(--ds-bg-elevated)', border: '1px solid var(--ds-primary)', borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.6)', zIndex: 100, marginTop: '4px', maxHeight: '200px', overflowY: 'auto' }}>
-                      {clientSearch.map((c, i) => {
-                        const isPrivate = !c.phone && c.bsuid;
-                        return (
+                      {clientSearch.map((c, i) => (
                         <div key={i} className="ds-autocomplete-item" onClick={() => handleClientSelect(c)} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: i < clientSearch.length - 1 ? '1px solid var(--ds-border)' : 'none' }}>
-                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ds-text-primary)' }}>
-                            {isPrivate ? `👤 @${c.username || 'Usuario'}` : c.name}
-                          </div>
-                          <div style={{ fontSize: '11px', color: 'var(--ds-text-secondary)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                            {isPrivate ? <span>📱 🔒 Número privado</span> : <span>📱 {c.phone}</span>}
-                            {c.bsuid && <span style={{ color: '#25D366' }}>| 🟢 WhatsApp identificado</span>}
-                            {c.address ? <span>| 📍 {c.address}</span> : ''}
-                          </div>
+                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ds-text-primary)' }}>{c.name}</div>
+                          <div style={{ fontSize: '11px', color: 'var(--ds-text-secondary)', marginTop: '2px' }}>📱 {c.phone} {c.address ? `| 📍 ${c.address}` : ''}</div>
                         </div>
-                        );
-                      })}
+                      ))}
                     </div>
                   )}
                 </div>
