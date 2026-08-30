@@ -178,7 +178,7 @@ export default function AdminReportes() {
     { label: 'Ticket promedio', value: formatCurrency(report.kpis.ticketPromedio), trend: report.trends.ticketPromedio, icon: BarChart3 },
     { label: 'Utilidad estimada', value: formatCurrency(report.kpis.utilidadBruta), trend: report.trends.utilidadBruta, icon: TrendingUp },
   ];
-  const tabs = ['Resumen', 'Ventas', 'Productos', 'Clientes'];
+  const tabs = ['Resumen', 'Ventas', 'Productos', 'Clientes', 'Domicilios'];
 
   return (
     <div className="ds-page report-page">
@@ -229,7 +229,7 @@ export default function AdminReportes() {
             <div className="ds-card-header"><div><span className="ds-page-kicker">Ventas completadas</span><h2 className="ds-card-title">Comportamiento diario</h2></div><strong>{formatCurrency(report.kpis.totalVentas)}</strong></div>
             <div className="ds-card-body report-chart">
               {report.charts.ventas.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={report.charts.ventas} margin={{ left: 4, right: 8, top: 10 }}>
-                <XAxis dataKey="date" tickFormatter={(value) => value.slice(5)} stroke="#777" fontSize={11} tickLine={false} axisLine={false} />
+                <XAxis dataKey="date" tickFormatter={(value) => value ? String(value).slice(5) : ''} stroke="#777" fontSize={11} tickLine={false} axisLine={false} />
                 <YAxis tickFormatter={(value) => `$${Math.round(value / 1000)}k`} stroke="#777" fontSize={11} tickLine={false} axisLine={false} width={52} />
                 <RechartsTooltip formatter={(value) => formatCurrency(value)} labelFormatter={(value) => `Fecha: ${value}`} cursor={{ fill: 'rgba(212,160,23,.08)' }} contentStyle={{ background: '#111', border: '1px solid #333', borderRadius: 10 }} />
                 <Bar dataKey="ventas" fill="var(--ds-primary)" radius={[6, 6, 0, 0]} />
@@ -299,6 +299,53 @@ export default function AdminReportes() {
             {!report.lists.clientes.length && <div className="ds-empty-state">No hay clientes en el periodo.</div>}
           </div>
         </section>
+      )}
+
+      {activeTab === 'Domicilios' && (
+        <div className="report-summary-grid">
+          <article className="ds-card">
+            <div className="ds-card-header"><h2 className="ds-card-title">Resumen Domicilios</h2><Truck size={20} color="var(--ds-primary)" /></div>
+            <div className="ds-card-body report-finance-list">
+              <div><span>Entregas completadas</span><strong>{formatNumber(report.kpis.domiciliosExternos)}</strong></div>
+              <div><span>Ingreso por domicilio</span><strong>{formatCurrency(report.kpis.ingresoDomiciliosExternos)}</strong></div>
+              <div><span>Costo a operadores</span><strong className="negative">− {formatCurrency(report.kpis.costoDomiciliosExternos)}</strong></div>
+              <div className="total"><span>Margen logístico</span><strong>{formatCurrency(report.kpis.margenLogisticoExterno)}</strong></div>
+            </div>
+          </article>
+
+          <article className="ds-card" style={{ gridColumn: '1 / -1' }}>
+            <div className="ds-card-header"><h2 className="ds-card-title">Operadores Logísticos</h2></div>
+            <div className="ds-table-container">
+              <table className="ds-table">
+                <thead>
+                  <tr>
+                    <th>Operador</th>
+                    <th>Viajes Realizados</th>
+                    <th>Ingresos (Cobrado)</th>
+                    <th>Costo (Pagado)</th>
+                    <th>Margen</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(report.lists.domicilios || []).map((dom) => (
+                    <tr key={dom.name}>
+                      <td style={{ textTransform: 'capitalize' }}>{dom.name}</td>
+                      <td>{dom.count}</td>
+                      <td style={{ color: 'var(--ds-success)' }}>{formatCurrency(dom.revenue)}</td>
+                      <td style={{ color: 'var(--ds-danger)' }}>{formatCurrency(dom.cost)}</td>
+                      <td style={{ fontWeight: '600' }}>{formatCurrency(dom.revenue - dom.cost)}</td>
+                    </tr>
+                  ))}
+                  {!(report.lists.domicilios || []).length && (
+                    <tr>
+                      <td colSpan="5" style={{ textAlign: 'center', padding: '24px' }}>No hay registros de domicilios en este periodo.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </article>
+        </div>
       )}
 
       {selectedClient && <div className="ds-modal-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedClient(null); }}>

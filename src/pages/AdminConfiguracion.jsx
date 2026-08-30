@@ -406,6 +406,7 @@ export default function AdminConfiguración() {
                     confirmed: 'Cocina confirmada',
                     confirm: 'Confirmar punto de la cocina',
                   }}
+                  alwaysShowMap
                 />
                 <div className="ds-form-grid kitchen-coordinate-grid">
                   <label className="ds-form-group"><span className="ds-form-label">Latitud</span><input type="number" step="0.0000001" min="-90" max="90" className="ds-input" value={settings.store_latitude ?? ''} onChange={e => { handleChange('store_latitude', e.target.value); setKitchenLocationConfirmed(false); }} /></label>

@@ -54,6 +54,8 @@ export default function DeliveryAddressPicker({
   inputClassName = 'form-input',
   compact = false,
   labels = {},
+  alwaysShowMap = false,
+  defaultCoordinates = DEFAULT_CENTER,
 }) {
   const copy = { ...DEFAULT_LABELS, ...labels };
   const suggestionListId = useId();
@@ -258,18 +260,23 @@ export default function DeliveryAddressPicker({
   useEffect(() => {
     const latitude = Number(value.latitude);
     const longitude = Number(value.longitude);
-    if (value.latitude == null || value.longitude == null
-        || !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    const hasValidCoords = value.latitude != null && value.longitude != null && Number.isFinite(latitude) && Number.isFinite(longitude);
+
+    if (!hasValidCoords && !alwaysShowMap) {
       setSelectionReady(false);
       clearMapRef.current?.();
       return;
     }
+
     setSelectionReady(true);
-    const coordinateKey = `${latitude},${longitude}`;
+    const renderLat = hasValidCoords ? latitude : defaultCoordinates.lat;
+    const renderLng = hasValidCoords ? longitude : defaultCoordinates.lng;
+    const coordinateKey = `${renderLat},${renderLng}`;
+
     if (status === 'ready' && renderedCoordinatesRef.current !== coordinateKey) {
-      renderLocationRef.current?.(latitude, longitude);
+      renderLocationRef.current?.(renderLat, renderLng);
     }
-  }, [status, value.latitude, value.longitude]);
+  }, [status, value.latitude, value.longitude, alwaysShowMap, defaultCoordinates]);
 
   const updateAddress = (event) => {
     const nextAddress = event.target.value;

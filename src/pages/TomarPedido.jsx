@@ -7,7 +7,7 @@ import {
   Zap, Search, ShoppingCart, Trash2, Plus, Minus, ChefHat, Printer,
   MessageCircle, Phone, Globe, Store, Banknote, Wallet, CreditCard,
   MapPin, User, X, CheckCircle, AlertCircle, Clock, TrendingUp,
-  Package, LayoutGrid
+  Package, LayoutGrid, PieChart
 } from 'lucide-react';
 
 const formatter = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
@@ -46,6 +46,7 @@ const SOURCE_OPTIONS = [
 const PAYMENT_OPTIONS = [
   { key: 'efectivo',      label: 'Efectivo',      icon: <Banknote size={15} />, color: '#10B981' },
   { key: 'transferencia', label: 'Transferencia', icon: <Wallet size={15} />,   color: '#8B5CF6' },
+  { key: 'compartido',    label: 'Compartido',    icon: <PieChart size={15} />, color: '#F59E0B' },
 ];
 
 const getCategoryEmoji = (name) => {
@@ -398,6 +399,14 @@ export default function TomarPedido() {
         : `${API_URL}/checkout`;
       const method = editId ? 'PUT' : 'POST';
 
+      let finalNotes = customer.notes || '';
+      if (customer.paymentMethod === 'compartido') {
+        const cSplit = Number(customer.cash_split) || 0;
+        const tSplit = Number(customer.transfer_split) || 0;
+        const splitText = `(Pago Compartido: $${cSplit.toLocaleString('es-CO')} efectivo, $${tSplit.toLocaleString('es-CO')} transferencia)`;
+        finalNotes = finalNotes ? `${finalNotes}\n${splitText}` : splitText;
+      }
+
       const bodyData = {
         customer_name:     customer.name,
         customer_phone:    customer.phone,
@@ -407,7 +416,7 @@ export default function TomarPedido() {
         payment_method:    customer.paymentMethod,
         voucher_reference: customer.voucher_reference || '',
         source:            customer.source,
-        notes:             customer.notes,
+        notes:             finalNotes,
         cart:              cart.map(i => ({ id: i.id, title: i.title, price: i.price, quantity: i.qty })),
         total,
         status:            sendToKitchen ? 'En preparación' : 'Nuevo',
@@ -421,7 +430,7 @@ export default function TomarPedido() {
           paymentMethod: customer.paymentMethod,
           voucher_reference: customer.voucher_reference || '',
           source: customer.source,
-          notes: customer.notes,
+          notes: finalNotes,
           reference: customer.reference,
           apartment: customer.apartment,
           tower: customer.tower,
@@ -456,7 +465,7 @@ export default function TomarPedido() {
           payment_method: customer.paymentMethod,
           voucher_reference: customer.voucher_reference || '',
           source: customer.source,
-          notes: customer.notes,
+          notes: finalNotes,
           total: authoritativeTotal,
           delivery_fee: authoritativeDelivery,
           cart_json: cart,
@@ -955,7 +964,7 @@ export default function TomarPedido() {
 
               <div style={{ marginBottom: '12px' }}>
                 <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--ds-text-secondary)', display: 'block', marginBottom: '6px' }}>Método de Pago</span>
-                <div className="ds-option-group" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px' }}>
+                <div className="ds-option-group" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
                   {PAYMENT_OPTIONS.map(pay => (
                     <button 
                       key={pay.key} 
@@ -966,17 +975,17 @@ export default function TomarPedido() {
                         color: customer.paymentMethod === pay.key ? '#fff' : undefined,
                         borderColor: customer.paymentMethod === pay.key ? pay.color : undefined,
                         padding: '8px 6px',
-                        fontSize: '12px',
+                        fontSize: '11px',
                         fontWeight: 600,
                         justifyContent: 'center',
                         minHeight: '38px'
                       }}
                     >
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>{pay.icon} {pay.label}</span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>{pay.icon} {pay.label}</span>
                     </button>
                   ))}
                 </div>
-                {customer.paymentMethod === 'transferencia' && (
+                {(customer.paymentMethod === 'transferencia' || customer.paymentMethod === 'compartido') && (
                   <div style={{ marginTop: '10px' }}>
                     <span style={{ fontWeight: 700, fontSize: '12px', color: '#A78BFA', display: 'block', marginBottom: '4px' }}>
                       🧾 Número de Comprobante / Referencia
@@ -989,6 +998,32 @@ export default function TomarPedido() {
                       className="ds-input" 
                       style={{ height: '42px', fontSize: '13px', border: '1.5px solid #8B5CF6', backgroundColor: 'rgba(139, 92, 246, 0.1)', color: '#fff' }} 
                     />
+                  </div>
+                )}
+                {customer.paymentMethod === 'compartido' && (
+                  <div style={{ marginTop: '10px', display: 'flex', gap: '8px' }}>
+                    <div style={{ flex: 1 }}>
+                      <span style={{ fontWeight: 700, fontSize: '12px', color: '#10B981', display: 'block', marginBottom: '4px' }}>💵 Efectivo</span>
+                      <input 
+                        type="number" 
+                        placeholder="Ej: 10000" 
+                        value={customer.cash_split || ''} 
+                        onChange={e => setCustomer(c => ({ ...c, cash_split: e.target.value }))} 
+                        className="ds-input" 
+                        style={{ height: '42px', fontSize: '13px', border: '1.5px solid #10B981', backgroundColor: 'rgba(16, 185, 129, 0.1)', color: '#fff' }} 
+                      />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <span style={{ fontWeight: 700, fontSize: '12px', color: '#8B5CF6', display: 'block', marginBottom: '4px' }}>💳 Transferencia</span>
+                      <input 
+                        type="number" 
+                        placeholder="Ej: 15000" 
+                        value={customer.transfer_split || ''} 
+                        onChange={e => setCustomer(c => ({ ...c, transfer_split: e.target.value }))} 
+                        className="ds-input" 
+                        style={{ height: '42px', fontSize: '13px', border: '1.5px solid #8B5CF6', backgroundColor: 'rgba(139, 92, 246, 0.1)', color: '#fff' }} 
+                      />
+                    </div>
                   </div>
                 )}
               </div>

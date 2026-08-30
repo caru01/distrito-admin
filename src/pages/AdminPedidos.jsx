@@ -421,9 +421,10 @@ export default function AdminPedidos() {
   const statPreparacion = ordersInDate.filter(o => o.status === 'En preparación').length;
   const statEntregados = ordersInDate.filter(o => o.status === 'Entregado').length;
   const completedOrders = ordersInDate.filter(o => o.status === 'Entregado' || o.status === 'Completado');
-  const totalVentas = completedOrders.reduce((s, o) => s + (o.total || 0), 0);
-  const totalEfectivo = completedOrders.filter(o => (o.payment_method || '').toLowerCase() === 'efectivo').reduce((s, o) => s + (o.total || 0), 0);
-  const totalTransferencia = completedOrders.filter(o => ['transferencia', 'nequi', 'tarjeta'].includes((o.payment_method || '').toLowerCase())).reduce((s, o) => s + (o.total || 0), 0);
+  const totalDomicilios = completedOrders.reduce((s, o) => s + (o.delivery_fee || 0), 0);
+  const totalVentas = completedOrders.reduce((s, o) => s + ((o.total || 0) - (o.delivery_fee || 0)), 0);
+  const totalEfectivo = completedOrders.filter(o => (o.payment_method || '').toLowerCase() === 'efectivo').reduce((s, o) => s + ((o.total || 0) - (o.delivery_fee || 0)), 0);
+  const totalTransferencia = completedOrders.filter(o => ['transferencia', 'nequi', 'tarjeta'].includes((o.payment_method || '').toLowerCase())).reduce((s, o) => s + ((o.total || 0) - (o.delivery_fee || 0)), 0);
 
   return (
     <div className="ds-page">
@@ -450,6 +451,7 @@ export default function AdminPedidos() {
           { label: 'En preparación', value: statPreparacion, icon: <ChefHat size={24} /> },
           { label: 'Pedidos entregados', value: statEntregados, icon: <CheckCircle size={24} /> },
           { label: 'Ventas del día', value: `$${totalVentas.toLocaleString()}`, icon: <Banknote size={24} /> },
+          { label: 'Domicilios del día', value: `$${totalDomicilios.toLocaleString()}`, icon: <Truck size={24} color="#F59E0B" /> },
           { label: 'Efectivo', value: `$${totalEfectivo.toLocaleString()}`, icon: <Banknote size={24} color="#10B981" /> },
           { label: 'Transferencia', value: `$${totalTransferencia.toLocaleString()}`, icon: <Banknote size={24} color="#8B5CF6" /> },
         ].map((stat, i) => (
@@ -509,8 +511,8 @@ export default function AdminPedidos() {
             <table className="ds-table">
               <thead>
                 <tr>
-                  {['Pedido', 'Cliente', 'Origen', 'Estado', 'Total', 'Método de pago', 'Tiempo', 'Acciones'].map((h, i) => (
-                    <th key={i} style={{ textAlign: i === 7 ? 'right' : 'left' }}>{h}</th>
+                  {['Pedido', 'Cliente', 'Origen', 'Estado', 'Productos', 'Domicilio', 'Método de pago', 'Tiempo', 'Acciones'].map((h, i) => (
+                    <th key={i} style={{ textAlign: i === 8 ? 'right' : 'left' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -525,12 +527,15 @@ export default function AdminPedidos() {
                       <div style={{ color: 'var(--ds-text-primary)', fontWeight: '600', fontSize: '15px' }}>{order.customer_name || 'Sin nombre'}</div>
                       <div style={{ color: 'var(--ds-text-secondary)', fontSize: '13px', marginTop: '4px' }}>{order.customer_phone || 'Sin teléfono'}</div>
                       <div style={{ marginTop: '4px' }}>{getDeliveryTypeBadge(order.delivery_type)}</div>
-                      {(order.barrio || order.address) && <div style={{ color: 'var(--ds-text-muted)', fontSize: '12px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}><MapPin size={12} />{[order.barrio, order.address].filter(Boolean).join(', ')}</div>}
+                      {String(order.delivery_type || '').toLowerCase() === 'domicilio' && (order.barrio || order.address) && <div style={{ color: 'var(--ds-text-muted)', fontSize: '12px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}><MapPin size={12} />{[order.barrio, order.address].filter(Boolean).join(', ')}</div>}
                       {order.notes && <div style={{ color: '#FCD34D', fontSize: '12px', marginTop: '6px', fontStyle: 'italic', padding: '4px 8px', backgroundColor: 'rgba(252,211,77,0.1)', borderRadius: '4px', display: 'inline-block' }}>Nota: {order.notes}</div>}
                     </td>
                     <td>{getSourceIcon(order.source || 'Web')}</td>
                     <td><div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '7px' }}>{getStatusBadge(order.status || 'Nuevo', order)}{order.status === 'Entregado' && getDeliveryDurationText(order) && <small style={{ color: '#10B981', fontWeight: 700 }}>{getDeliveryDurationText(order)}</small>}</div></td>
-                    <td style={{ color: 'var(--ds-text-primary)', fontWeight: '700', fontSize: '15px' }}>${(order.total || 0).toLocaleString()}</td>
+                    <td style={{ color: 'var(--ds-text-primary)', fontWeight: '700', fontSize: '15px' }}>${((order.total || 0) - (order.delivery_fee || 0)).toLocaleString()}</td>
+                    <td style={{ color: order.delivery_fee ? '#F59E0B' : 'var(--ds-text-muted)', fontWeight: order.delivery_fee ? '700' : '400', fontSize: '15px' }}>
+                      {order.delivery_fee ? `$${(order.delivery_fee || 0).toLocaleString()}` : '—'}
+                    </td>
                     <td>
                       {getPaymentIcon(order.payment_method)}
                       {order.voucher_reference && <div style={{ fontSize: '12px', marginTop: '4px', fontWeight: '700' }}>Ref: {order.voucher_reference}</div>}
@@ -587,7 +592,7 @@ export default function AdminPedidos() {
                   <span className="ds-table-card-label">Tipo Entrega</span>
                   <span className="ds-table-card-value">{getDeliveryTypeBadge(order.delivery_type)}</span>
                 </div>
-                {(order.address || order.barrio) && (
+                {String(order.delivery_type || '').toLowerCase() === 'domicilio' && (order.address || order.barrio) && (
                   <div className="ds-table-card-row">
                     <span className="ds-table-card-label">Dirección</span>
                     <span className="ds-table-card-value" style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
@@ -607,9 +612,15 @@ export default function AdminPedidos() {
                   <span className="ds-table-card-value">{getSourceIcon(order.source || 'Web')}</span>
                 </div>
                 <div className="ds-table-card-row">
-                  <span className="ds-table-card-label">Total</span>
-                  <span className="ds-table-card-value" style={{ fontWeight: '700', color: 'var(--ds-text-primary)' }}>${(order.total || 0).toLocaleString()}</span>
+                  <span className="ds-table-card-label">Productos</span>
+                  <span className="ds-table-card-value" style={{ fontWeight: '700', color: 'var(--ds-text-primary)' }}>${((order.total || 0) - (order.delivery_fee || 0)).toLocaleString()}</span>
                 </div>
+                {order.delivery_fee > 0 && (
+                  <div className="ds-table-card-row">
+                    <span className="ds-table-card-label">Domicilio</span>
+                    <span className="ds-table-card-value" style={{ fontWeight: '700', color: '#F59E0B' }}>${(order.delivery_fee || 0).toLocaleString()}</span>
+                  </div>
+                )}
 
                 <div className="ds-table-card-actions" style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
                   <button onClick={() => setSelectedOrder(order)} className="ds-btn ds-btn-secondary" style={{ flex: 1 }}><Eye size={16} /> Ver</button>
