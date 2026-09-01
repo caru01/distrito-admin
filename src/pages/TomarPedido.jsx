@@ -33,7 +33,8 @@ const EMPTY_CUSTOMER = {
   apartment: '', tower: '', floor: '', latitude: null, longitude: null,
   placeId: '', locationAdjusted: false, locationConfirmed: false,
   deliveryType: 'domicilio', source: 'WhatsApp', paymentMethod: 'efectivo',
-  voucher_reference: '', created_at: ''
+  voucher_reference: '', created_at: '',
+  crm_contact_id: null, bsuid: null, username: null
 };
 
 const SOURCE_OPTIONS = [
@@ -142,6 +143,9 @@ export default function TomarPedido() {
         setCustomer({
           name: editOrder.customer_name || '',
           phone: editOrder.customer_phone || '',
+          crm_contact_id: editOrder.crm_contact_id || null,
+          bsuid: editOrder.crm_bsuid || null,
+          username: editOrder.crm_username || null,
           address: editOrder.address || '',
           barrio: editOrder.barrio || '',
           notes: editOrder.notes || '',
@@ -189,14 +193,31 @@ export default function TomarPedido() {
     }
   }, [editId]);
 
-  const searchClient = (query) => {
+  const searchClient = async (query) => {
     if (!query || query.length < 1) { setClientSearch([]); setShowClientSearch(false); return; }
+    const token = sessionStorage.getItem('distrito_admin_token');
+    try {
+      const res = await fetch(`${API_URL}/admin/clientes/buscar?q=${encodeURIComponent(query)}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.status === 'ok' && Array.isArray(data.clientes) && data.clientes.length > 0) {
+        setClientSearch(data.clientes.slice(0, 7));
+        setShowClientSearch(true);
+        return;
+      }
+    } catch (e) {
+      console.error('Error buscando clientes en CRM:', e);
+    }
+
     const lowerQuery = String(query).toLowerCase();
     const results = pastClients.filter(c => {
       if (!c) return false;
       const nameStr = c.name ? String(c.name).toLowerCase() : '';
       const phoneStr = c.phone ? String(c.phone).toLowerCase() : '';
-      return nameStr.includes(lowerQuery) || phoneStr.includes(lowerQuery);
+      const userStr = c.username ? String(c.username).toLowerCase() : '';
+      const bsuidStr = c.bsuid ? String(c.bsuid).toLowerCase() : '';
+      return nameStr.includes(lowerQuery) || phoneStr.includes(lowerQuery) || userStr.includes(lowerQuery) || bsuidStr.includes(lowerQuery);
     });
     setClientSearch(results.slice(0, 5));
     setShowClientSearch(results.length > 0);
@@ -205,8 +226,11 @@ export default function TomarPedido() {
   const handleClientSelect = (client) => {
     setCustomer(c => ({
       ...c,
-      name: client.name || '',
+      name: client.name || (client.username ? `@${client.username}` : ''),
       phone: client.phone || '',
+      crm_contact_id: client.crm_contact_id || null,
+      bsuid: client.bsuid || null,
+      username: client.username || null,
       address: client.address || '',
       barrio: client.barrio || '',
       reference: client.reference || '',
@@ -382,7 +406,10 @@ export default function TomarPedido() {
   const handleSubmit = async (sendToKitchen = false) => {
     if (cart.length === 0) { showToast('Agrega al menos un producto', 'error'); return; }
     if (!customer.name.trim()) { showToast('Escribe el nombre del cliente', 'error'); return; }
-    if (!customer.phone.trim()) { showToast('Escribe el teléfono del cliente', 'error'); return; }
+    if (!customer.phone.trim() && !customer.crm_contact_id) {
+      showToast('Escribe el teléfono del cliente o selecciona un contacto CRM', 'error');
+      return;
+    }
     if (customer.deliveryType === 'domicilio' && (!customer.address.trim() || !customer.barrio.trim())) {
       showToast('Selecciona la dirección y completa el barrio', 'error'); return;
     }
@@ -409,7 +436,8 @@ export default function TomarPedido() {
 
       const bodyData = {
         customer_name:     customer.name,
-        customer_phone:    customer.phone,
+        customer_phone:    customer.phone.trim() || null,
+        crm_contact_id:    customer.crm_contact_id || null,
         address:           customer.address,
         barrio:            customer.barrio,
         delivery_type:     customer.deliveryType,
@@ -423,7 +451,10 @@ export default function TomarPedido() {
         created_at:        customer.created_at || undefined,
         customer: {
           name: customer.name,
-          phone: customer.phone,
+          phone: customer.phone.trim() || null,
+          crm_contact_id: customer.crm_contact_id || null,
+          bsuid: customer.bsuid || null,
+          username: customer.username || null,
           address: customer.address,
           barrio: customer.barrio,
           deliveryType: customer.deliveryType,
@@ -839,8 +870,17 @@ export default function TomarPedido() {
                     <div className="ds-autocomplete" style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'var(--ds-bg-elevated)', border: '1px solid var(--ds-primary)', borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.6)', zIndex: 100, marginTop: '4px', maxHeight: '200px', overflowY: 'auto' }}>
                       {clientSearch.map((c, i) => (
                         <div key={i} className="ds-autocomplete-item" onClick={() => handleClientSelect(c)} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: i < clientSearch.length - 1 ? '1px solid var(--ds-border)' : 'none' }}>
-                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ds-text-primary)' }}>{c.name}</div>
-                          <div style={{ fontSize: '11px', color: 'var(--ds-text-secondary)', marginTop: '2px' }}>📱 {c.phone} {c.address ? `| 📍 ${c.address}` : ''}</div>
+                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ds-text-primary)' }}>
+                            {c.name || (c.username ? `@${c.username}` : 'Contacto WhatsApp')}
+                          </div>
+                          <div style={{ fontSize: '11px', color: 'var(--ds-text-secondary)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            {c.phone ? (
+                              <span>📱 {c.phone}</span>
+                            ) : (
+                              <span style={{ color: '#10B981', fontWeight: 600 }}>🔒 Número privado {c.username ? `(@${c.username})` : ''}</span>
+                            )}
+                            {c.address ? <span>| 📍 {c.address}</span> : ''}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -850,7 +890,7 @@ export default function TomarPedido() {
                 <div className="ds-form-group" style={{ position: 'relative', marginBottom: 0 }}>
                   <Phone size={16} style={{ position: 'absolute', left: '10px', top: '13px', color: 'var(--ds-text-muted)', zIndex: 1 }} />
                   <input 
-                    placeholder="Teléfono" 
+                    placeholder={customer.crm_contact_id && !customer.phone ? "🔒 Número privado" : "Teléfono"} 
                     value={customer.phone} 
                     onChange={e => { 
                       setCustomer(c => ({ ...c, phone: e.target.value })); 
@@ -862,12 +902,35 @@ export default function TomarPedido() {
                     className="ds-input" 
                     style={{ paddingLeft: '34px', height: '42px', fontSize: '13px' }} 
                   />
+                  {(!customer.phone && customer.crm_contact_id) && (
+                    <div style={{ fontSize: '11px', color: '#10B981', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
+                      <span>🔒 Número privado</span>
+                      <span style={{ opacity: 0.8 }}>({customer.username ? `@${customer.username}` : (customer.bsuid ? 'BSUID' : 'WhatsApp')})</span>
+                      <button 
+                        type="button" 
+                        onClick={() => setCustomer(c => ({ ...c, crm_contact_id: null, bsuid: null, username: null }))}
+                        style={{ background: 'none', border: 'none', color: 'var(--ds-text-muted)', cursor: 'pointer', marginLeft: 'auto', fontSize: '11px' }}
+                        title="Desvincular contacto"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
                   {showClientSearch && activeSearchField === 'phone' && clientSearch.length > 0 && (
                     <div className="ds-autocomplete" style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'var(--ds-bg-elevated)', border: '1px solid var(--ds-primary)', borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.6)', zIndex: 100, marginTop: '4px', maxHeight: '200px', overflowY: 'auto' }}>
                       {clientSearch.map((c, i) => (
                         <div key={i} className="ds-autocomplete-item" onClick={() => handleClientSelect(c)} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: i < clientSearch.length - 1 ? '1px solid var(--ds-border)' : 'none' }}>
-                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ds-text-primary)' }}>{c.name}</div>
-                          <div style={{ fontSize: '11px', color: 'var(--ds-text-secondary)', marginTop: '2px' }}>📱 {c.phone} {c.address ? `| 📍 ${c.address}` : ''}</div>
+                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ds-text-primary)' }}>
+                            {c.name || (c.username ? `@${c.username}` : 'Contacto WhatsApp')}
+                          </div>
+                          <div style={{ fontSize: '11px', color: 'var(--ds-text-secondary)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            {c.phone ? (
+                              <span>📱 {c.phone}</span>
+                            ) : (
+                              <span style={{ color: '#10B981', fontWeight: 600 }}>🔒 Número privado {c.username ? `(@${c.username})` : ''}</span>
+                            )}
+                            {c.address ? <span>| 📍 {c.address}</span> : ''}
+                          </div>
                         </div>
                       ))}
                     </div>

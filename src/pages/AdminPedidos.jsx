@@ -232,34 +232,76 @@ export default function AdminPedidos() {
   };
 
   const handleSendWhatsApp = async (phone, id, order = null) => {
-    if (!phone) return alert('No hay número de teléfono registrado');
-    try {
-      const code = String(phone).replace(/\D/g, '').slice(-4);
-      const publicBase = 'https://www.distritobg.app';
-      const trackingUrl = `${publicBase}/rastrear/${id}?c=${code}`;
-      const orderData = order || orders.find(o => o.id === id);
-      const message = buildReadyOrderWhatsAppMessage({
-        orderId: id,
-        trackingUrl,
-        restaurantName: 'Distrito BG',
-        deliveryType: orderData?.delivery_type || orderData?.deliveryType,
-        providerType: orderData?.delivery_provider_type || orderData?.deliveryProviderType,
-        externalCompanyName: orderData?.external_company_name || orderData?.externalCompany?.name,
-        status: orderData?.delivery_status || orderData?.status,
-      });
-      window.open(createWhatsAppUrl(phone, message), '_blank', 'noopener,noreferrer');
-      const token = sessionStorage.getItem('distrito_admin_token');
-      await fetch(`${API_URL}/admin/orders/${id}/tracking-sent`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setOrders(prev => prev.map(o => o.id === id ? { ...o, tracking_sent_at: new Date().toISOString() } : o));
-      if (selectedOrder && selectedOrder.id === id) {
-        setSelectedOrder(cur => ({ ...cur, tracking_sent_at: new Date().toISOString() }));
+    const orderData = order || orders.find(o => o.id === id);
+    const token = sessionStorage.getItem('distrito_admin_token');
+
+    // Caso 1: Tiene teléfono -> usar wa.me
+    if (phone && String(phone).trim()) {
+      try {
+        const code = String(phone).replace(/\D/g, '').slice(-4);
+        const publicBase = 'https://www.distritobg.app';
+        const trackingUrl = `${publicBase}/rastrear/${id}?c=${code}`;
+        const message = buildReadyOrderWhatsAppMessage({
+          orderId: id,
+          trackingUrl,
+          restaurantName: 'Distrito BG',
+          deliveryType: orderData?.delivery_type || orderData?.deliveryType,
+          providerType: orderData?.delivery_provider_type || orderData?.deliveryProviderType,
+          externalCompanyName: orderData?.external_company_name || orderData?.externalCompany?.name,
+          status: orderData?.delivery_status || orderData?.status,
+        });
+        window.open(createWhatsAppUrl(phone, message), '_blank', 'noopener,noreferrer');
+        await fetch(`${API_URL}/admin/orders/${id}/tracking-sent`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setOrders(prev => prev.map(o => o.id === id ? { ...o, tracking_sent_at: new Date().toISOString() } : o));
+        if (selectedOrder && selectedOrder.id === id) {
+          setSelectedOrder(cur => ({ ...cur, tracking_sent_at: new Date().toISOString() }));
+        }
+      } catch (error) {
+        alert(error.message);
       }
-    } catch (error) {
-      alert(error.message);
+      return;
     }
+
+    // Caso 2: No tiene teléfono, pero tiene crm_contact_id (BSUID) -> Notificar por Cloud API
+    if (orderData?.crm_contact_id) {
+      try {
+        const publicBase = 'https://www.distritobg.app';
+        const trackingUrl = `${publicBase}/rastrear/${id}?c=${String(id).padStart(4, '0').slice(-4)}`;
+        const message = buildReadyOrderWhatsAppMessage({
+          orderId: id,
+          trackingUrl,
+          restaurantName: 'Distrito BG',
+          deliveryType: orderData?.delivery_type || orderData?.deliveryType,
+          providerType: orderData?.delivery_provider_type || orderData?.deliveryProviderType,
+          externalCompanyName: orderData?.external_company_name || orderData?.externalCompany?.name,
+          status: orderData?.delivery_status || orderData?.status,
+        });
+
+        const res = await fetch(`${API_URL}/admin/orders/${id}/notify-whatsapp`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ message })
+        });
+        const data = await res.json();
+        if (res.ok && data.status === 'ok') {
+          alert(`Notificación enviada a WhatsApp Cloud API (Destino: ${data.sent_to})`);
+          setOrders(prev => prev.map(o => o.id === id ? { ...o, tracking_sent_at: new Date().toISOString() } : o));
+          if (selectedOrder && selectedOrder.id === id) {
+            setSelectedOrder(cur => ({ ...cur, tracking_sent_at: new Date().toISOString() }));
+          }
+        } else {
+          alert(data.error || 'No fue posible enviar la notificación por WhatsApp');
+        }
+      } catch (error) {
+        alert(error.message);
+      }
+      return;
+    }
+
+    alert('No hay número de teléfono ni contacto de WhatsApp asociado');
   };
 
   const handleEditOrder = (order) => {
@@ -553,7 +595,10 @@ export default function AdminPedidos() {
                         {openMenuId === order.id && (
                           <div className="ds-dropdown" style={{ display: 'block', top: '100%', right: 0, zIndex: 40 }}>
                             <div className="ds-dropdown-menu">
-                              <button onClick={() => { handleSendWhatsApp(order.customer_phone, order.id); setOpenMenuId(null); }} className="ds-dropdown-item"><MessageCircle size={16} color="#22C55E" /> WhatsApp</button>
+                              <button onClick={() => { handleSendWhatsApp(order.customer_phone, order.id, order); setOpenMenuId(null); }} className="ds-dropdown-item">
+                                <MessageCircle size={16} color={order.customer_phone ? "#22C55E" : "#10B981"} />
+                                {order.customer_phone ? ' WhatsApp' : ' WhatsApp (Cloud API)'}
+                              </button>
                               <button onClick={() => { handleUpdateStatus(order.id, 'Cancelado'); setOpenMenuId(null); }} className="ds-dropdown-item" style={{ color: '#F59E0B' }}><X size={16} /> Anular Orden</button>
                               <button onClick={() => { handleDeleteOrder(order.id); setOpenMenuId(null); }} className="ds-dropdown-item ds-dropdown-item-danger"><Trash2 size={16} /> Eliminar</button>
                             </div>
@@ -585,7 +630,9 @@ export default function AdminPedidos() {
                   <span className="ds-table-card-label">Cliente</span>
                   <span className="ds-table-card-value">
                     <div style={{ fontWeight: '600' }}>{order.customer_name || 'Sin nombre'}</div>
-                    <div style={{ color: 'var(--ds-text-secondary)' }}>{order.customer_phone || 'Sin teléfono'}</div>
+                    <div style={{ color: 'var(--ds-text-secondary)' }}>
+                      {order.customer_phone || (order.crm_contact_id ? <span style={{ color: '#10B981', fontWeight: 600 }}>🔒 Número privado</span> : 'Sin teléfono')}
+                    </div>
                   </span>
                 </div>
                 <div className="ds-table-card-row">
@@ -630,7 +677,10 @@ export default function AdminPedidos() {
                   {openMenuId === order.id && (
                     <div className="ds-dropdown" style={{ display: 'block', bottom: '100%', right: 0, marginBottom: '8px' }}>
                       <div className="ds-dropdown-menu">
-                        <button onClick={() => { handleSendWhatsApp(order.customer_phone, order.id); setOpenMenuId(null); }} className="ds-dropdown-item"><MessageCircle size={16} color="#22C55E" /> WhatsApp</button>
+                        <button onClick={() => { handleSendWhatsApp(order.customer_phone, order.id, order); setOpenMenuId(null); }} className="ds-dropdown-item">
+                          <MessageCircle size={16} color={order.customer_phone ? "#22C55E" : "#10B981"} />
+                          {order.customer_phone ? ' WhatsApp' : ' WhatsApp (Cloud API)'}
+                        </button>
                         <button onClick={() => { handleUpdateStatus(order.id, 'Cancelado'); setOpenMenuId(null); }} className="ds-dropdown-item" style={{ color: '#F59E0B' }}><X size={16} /> Anular Orden</button>
                         <button onClick={() => { handleDeleteOrder(order.id); setOpenMenuId(null); }} className="ds-dropdown-item ds-dropdown-item-danger"><Trash2 size={16} /> Eliminar</button>
                       </div>
@@ -673,7 +723,9 @@ export default function AdminPedidos() {
               <div className="ds-card" style={{ padding: '20px', marginBottom: '24px' }}>
                 <h3 style={{ color: 'var(--ds-text-secondary)', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 12px 0' }}>Cliente</h3>
                 <div style={{ color: 'var(--ds-text-primary)', fontWeight: '600', fontSize: '16px', marginBottom: '4px' }}>{selectedOrder.customer_name}</div>
-                <div style={{ color: 'var(--ds-text-secondary)', fontSize: '14px', marginBottom: '12px' }}>{selectedOrder.customer_phone}</div>
+                <div style={{ color: 'var(--ds-text-secondary)', fontSize: '14px', marginBottom: '12px' }}>
+                  {selectedOrder.customer_phone || (selectedOrder.crm_contact_id ? <span style={{ color: '#10B981', fontWeight: 600 }}>🔒 Número privado {selectedOrder.crm_username ? `(@${selectedOrder.crm_username})` : ''}</span> : 'Sin teléfono')}
+                </div>
                 <div style={{ borderTop: '1px solid var(--ds-border)', paddingTop: '12px' }}>
                   <div style={{ color: 'var(--ds-text-secondary)', fontSize: '14px' }}><strong>Dirección:</strong> {selectedOrder.address}, {selectedOrder.barrio}</div>
                   <div style={{ color: 'var(--ds-text-secondary)', fontSize: '14px', marginTop: '4px' }}><strong>Entrega:</strong> {selectedOrder.delivery_type}</div>
