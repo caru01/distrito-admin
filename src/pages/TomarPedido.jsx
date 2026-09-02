@@ -202,7 +202,7 @@ export default function TomarPedido() {
       });
       const data = await res.json();
       if (data.status === 'ok' && Array.isArray(data.clientes) && data.clientes.length > 0) {
-        setClientSearch(data.clientes.slice(0, 7));
+        setClientSearch(data.clientes);
         setShowClientSearch(true);
         return;
       }
@@ -867,7 +867,7 @@ export default function TomarPedido() {
                     style={{ paddingLeft: '34px', height: '42px', fontSize: '13px' }} 
                   />
                   {showClientSearch && activeSearchField === 'name' && clientSearch.length > 0 && (
-                    <div className="ds-autocomplete" style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'var(--ds-bg-elevated)', border: '1px solid var(--ds-primary)', borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.6)', zIndex: 100, marginTop: '4px', maxHeight: '200px', overflowY: 'auto' }}>
+                    <div className="ds-autocomplete" style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'var(--ds-bg-elevated)', border: '1px solid var(--ds-primary)', borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.6)', zIndex: 100, marginTop: '4px', maxHeight: '260px', overflowY: 'auto' }}>
                       {clientSearch.map((c, i) => (
                         <div key={i} className="ds-autocomplete-item" onClick={() => handleClientSelect(c)} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: i < clientSearch.length - 1 ? '1px solid var(--ds-border)' : 'none' }}>
                           <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ds-text-primary)' }}>
@@ -917,7 +917,7 @@ export default function TomarPedido() {
                     </div>
                   )}
                   {showClientSearch && activeSearchField === 'phone' && clientSearch.length > 0 && (
-                    <div className="ds-autocomplete" style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'var(--ds-bg-elevated)', border: '1px solid var(--ds-primary)', borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.6)', zIndex: 100, marginTop: '4px', maxHeight: '200px', overflowY: 'auto' }}>
+                    <div className="ds-autocomplete" style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'var(--ds-bg-elevated)', border: '1px solid var(--ds-primary)', borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.6)', zIndex: 100, marginTop: '4px', maxHeight: '260px', overflowY: 'auto' }}>
                       {clientSearch.map((c, i) => (
                         <div key={i} className="ds-autocomplete-item" onClick={() => handleClientSelect(c)} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: i < clientSearch.length - 1 ? '1px solid var(--ds-border)' : 'none' }}>
                           <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ds-text-primary)' }}>
