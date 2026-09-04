@@ -33,6 +33,7 @@ const EMPTY_CUSTOMER = {
   apartment: '', tower: '', floor: '', latitude: null, longitude: null,
   placeId: '', locationAdjusted: false, locationConfirmed: false,
   deliveryType: 'domicilio', source: 'WhatsApp', paymentMethod: 'efectivo',
+  cash_split: '', transfer_split: '',
   voucher_reference: '', created_at: '',
   crm_contact_id: null, bsuid: null, username: null
 };
@@ -161,6 +162,20 @@ export default function TomarPedido() {
           deliveryType: editOrder.delivery_type || 'domicilio',
           source: editOrder.source || 'WhatsApp',
           paymentMethod: editOrder.payment_method || 'efectivo',
+          cash_split: (() => {
+            if (editOrder.notes && editOrder.notes.includes('Pago Compartido:')) {
+              const m = editOrder.notes.match(/Pago Compartido:\s*\$([0-9.,]+)\s*efectivo/i);
+              if (m) return m[1].replace(/\./g, '').replace(/,/g, '');
+            }
+            return '';
+          })(),
+          transfer_split: (() => {
+            if (editOrder.notes && editOrder.notes.includes('Pago Compartido:')) {
+              const m = editOrder.notes.match(/,\s*\$([0-9.,]+)\s*transferencia/i);
+              if (m) return m[1].replace(/\./g, '').replace(/,/g, '');
+            }
+            return '';
+          })(),
           voucher_reference: editOrder.voucher_reference || '',
           created_at: toColombiaDateTimeLocal(editOrder.created_at)
         });
@@ -418,6 +433,39 @@ export default function TomarPedido() {
       showToast('Selecciona una sugerencia y confirma la ubicación exacta', 'error'); return;
     }
 
+    if (customer.paymentMethod === 'compartido') {
+      const cStr = String(customer.cash_split ?? '').trim();
+      const tStr = String(customer.transfer_split ?? '').trim();
+
+      if (!cStr || !tStr) {
+        showToast('Ingresa los montos de efectivo y transferencia para el pago compartido', 'error');
+        return;
+      }
+
+      const cSplit = Number(cStr);
+      const tSplit = Number(tStr);
+
+      if (!Number.isFinite(cSplit) || isNaN(cSplit) || !Number.isFinite(tSplit) || isNaN(tSplit) || !/^-?\d+(\.\d+)?$/.test(cStr) || !/^-?\d+(\.\d+)?$/.test(tStr)) {
+        showToast('Los montos del pago compartido deben ser números válidos', 'error');
+        return;
+      }
+
+      if (cSplit < 0 || tSplit < 0) {
+        showToast('Los montos del pago compartido no pueden ser negativos', 'error');
+        return;
+      }
+
+      if (!Number.isInteger(cSplit) || !Number.isInteger(tSplit) || !/^\d+$/.test(cStr) || !/^\d+$/.test(tStr)) {
+        showToast('Los montos del pago compartido deben ser números enteros sin decimales', 'error');
+        return;
+      }
+
+      if (cSplit + tSplit !== total) {
+        showToast(`La suma ($${(cSplit + tSplit).toLocaleString('es-CO')}) debe ser exactamente igual al total ($${total.toLocaleString('es-CO')})`, 'error');
+        return;
+      }
+    }
+
     setSending(true);
     try {
       const token = sessionStorage.getItem('distrito_admin_token');
@@ -428,8 +476,9 @@ export default function TomarPedido() {
 
       let finalNotes = customer.notes || '';
       if (customer.paymentMethod === 'compartido') {
-        const cSplit = Number(customer.cash_split) || 0;
-        const tSplit = Number(customer.transfer_split) || 0;
+        const cSplit = Number(customer.cash_split);
+        const tSplit = Number(customer.transfer_split);
+        finalNotes = finalNotes.replace(/\(Pago Compartido:[^\)]+\)\s*/gi, '').trim();
         const splitText = `(Pago Compartido: $${cSplit.toLocaleString('es-CO')} efectivo, $${tSplit.toLocaleString('es-CO')} transferencia)`;
         finalNotes = finalNotes ? `${finalNotes}\n${splitText}` : splitText;
       }
@@ -442,6 +491,8 @@ export default function TomarPedido() {
         barrio:            customer.barrio,
         delivery_type:     customer.deliveryType,
         payment_method:    customer.paymentMethod,
+        cash_split:        customer.paymentMethod === 'compartido' ? customer.cash_split : undefined,
+        transfer_split:    customer.paymentMethod === 'compartido' ? customer.transfer_split : undefined,
         voucher_reference: customer.voucher_reference || '',
         source:            customer.source,
         notes:             finalNotes,
@@ -459,6 +510,8 @@ export default function TomarPedido() {
           barrio: customer.barrio,
           deliveryType: customer.deliveryType,
           paymentMethod: customer.paymentMethod,
+          cash_split: customer.paymentMethod === 'compartido' ? customer.cash_split : undefined,
+          transfer_split: customer.paymentMethod === 'compartido' ? customer.transfer_split : undefined,
           voucher_reference: customer.voucher_reference || '',
           source: customer.source,
           notes: finalNotes,
@@ -1069,6 +1122,8 @@ export default function TomarPedido() {
                       <span style={{ fontWeight: 700, fontSize: '12px', color: '#10B981', display: 'block', marginBottom: '4px' }}>💵 Efectivo</span>
                       <input 
                         type="number" 
+                        min="0"
+                        step="1"
                         placeholder="Ej: 10000" 
                         value={customer.cash_split || ''} 
                         onChange={e => setCustomer(c => ({ ...c, cash_split: e.target.value }))} 
@@ -1080,6 +1135,8 @@ export default function TomarPedido() {
                       <span style={{ fontWeight: 700, fontSize: '12px', color: '#8B5CF6', display: 'block', marginBottom: '4px' }}>💳 Transferencia</span>
                       <input 
                         type="number" 
+                        min="0"
+                        step="1"
                         placeholder="Ej: 15000" 
                         value={customer.transfer_split || ''} 
                         onChange={e => setCustomer(c => ({ ...c, transfer_split: e.target.value }))} 
