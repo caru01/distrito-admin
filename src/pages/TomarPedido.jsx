@@ -946,29 +946,20 @@ export default function TomarPedido() {
                     placeholder={customer.crm_contact_id && !customer.phone ? "🔒 Número privado" : "Teléfono"} 
                     value={customer.phone} 
                     onChange={e => { 
-                      setCustomer(c => ({ ...c, phone: e.target.value })); 
+                      const val = e.target.value;
+                      setCustomer(c => ({ 
+                        ...c, 
+                        phone: val,
+                        ...(c.crm_contact_id ? { crm_contact_id: null, bsuid: null, username: null } : {})
+                      })); 
                       setActiveSearchField('phone');
                       clearTimeout(searchTimeout.current); 
-                      searchTimeout.current = setTimeout(() => searchClient(e.target.value), 300); 
+                      searchTimeout.current = setTimeout(() => searchClient(val), 300); 
                     }} 
                     onFocus={() => { if(customer.phone) { setActiveSearchField('phone'); searchClient(customer.phone); } }}
                     className="ds-input" 
                     style={{ paddingLeft: '34px', height: '42px', fontSize: '13px' }} 
                   />
-                  {(!customer.phone && customer.crm_contact_id) && (
-                    <div style={{ fontSize: '11px', color: '#10B981', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
-                      <span>🔒 Número privado</span>
-                      <span style={{ opacity: 0.8 }}>({customer.username ? `@${customer.username}` : (customer.bsuid ? 'BSUID' : 'WhatsApp')})</span>
-                      <button 
-                        type="button" 
-                        onClick={() => setCustomer(c => ({ ...c, crm_contact_id: null, bsuid: null, username: null }))}
-                        style={{ background: 'none', border: 'none', color: 'var(--ds-text-muted)', cursor: 'pointer', marginLeft: 'auto', fontSize: '11px' }}
-                        title="Desvincular contacto"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  )}
                   {showClientSearch && activeSearchField === 'phone' && clientSearch.length > 0 && (
                     <div className="ds-autocomplete" style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'var(--ds-bg-elevated)', border: '1px solid var(--ds-primary)', borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.6)', zIndex: 100, marginTop: '4px', maxHeight: '260px', overflowY: 'auto' }}>
                       {clientSearch.map((c, i) => (
@@ -990,6 +981,58 @@ export default function TomarPedido() {
                   )}
                 </div>
               </div>
+
+              {customer.crm_contact_id && (
+                <div style={{
+                  backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                  border: '1px solid rgba(16, 185, 129, 0.25)',
+                  borderRadius: '6px',
+                  padding: '6px 10px',
+                  marginBottom: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: '#10B981'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    <span>
+                      {customer.phone 
+                        ? `👤 Cliente CRM #${customer.crm_contact_id}` 
+                        : `🔒 Número privado • CRM #${customer.crm_contact_id}`}
+                    </span>
+                    {customer.username && (
+                      <span style={{ color: 'var(--ds-text-secondary)', fontWeight: 500 }}>
+                        • @{customer.username}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCustomer(c => ({ ...c, crm_contact_id: null, bsuid: null, username: null }))}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--ds-text-muted)',
+                      cursor: 'pointer',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      transition: 'color 0.15s ease'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.color = '#EF4444'}
+                    onMouseLeave={e => e.currentTarget.style.color = 'var(--ds-text-muted)'}
+                    title="Desvincular contacto"
+                  >
+                    ✕ Desvincular
+                  </button>
+                </div>
+              )}
 
               {customer.deliveryType === 'domicilio' && <>
                 <DeliveryAddressPicker
