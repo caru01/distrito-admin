@@ -178,7 +178,7 @@ export default function AdminReportes() {
     { label: 'Ticket promedio', value: formatCurrency(report.kpis.ticketPromedio), trend: report.trends.ticketPromedio, icon: BarChart3 },
     { label: 'Utilidad estimada', value: formatCurrency(report.kpis.utilidadBruta), trend: report.trends.utilidadBruta, icon: TrendingUp },
   ];
-  const tabs = ['Resumen', 'Ventas', 'Productos', 'Clientes', 'Domicilios'];
+  const tabs = ['Resumen', 'Ventas', 'Productos', 'Rentabilidad', 'Clientes', 'Domicilios'];
 
   return (
     <div className="ds-page report-page">
@@ -289,6 +289,91 @@ export default function AdminReportes() {
             {!report.lists.productos.length && <div className="ds-empty-state">No hay productos vendidos en el periodo.</div>}
           </div>
         </section>
+      )}
+
+      {activeTab === 'Rentabilidad' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* CARDS DESTACADAS */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+            <article className="ds-card" style={{ borderLeft: '4px solid #10b981' }}>
+              <span className="ds-eyebrow" style={{ color: '#10b981' }}>Producto Más Rentable</span>
+              <strong style={{ fontSize: '16px', display: 'block', margin: '4px 0' }}>{report.kpis.productoMasRentable || '—'}</strong>
+            </article>
+            <article className="ds-card" style={{ borderLeft: '4px solid #3b82f6' }}>
+              <span className="ds-eyebrow" style={{ color: '#3b82f6' }}>Combo Más Rentable</span>
+              <strong style={{ fontSize: '16px', display: 'block', margin: '4px 0' }}>{report.kpis.comboMasRentable || '—'}</strong>
+            </article>
+            <article className="ds-card" style={{ borderLeft: '4px solid #f59e0b' }}>
+              <span className="ds-eyebrow" style={{ color: '#f59e0b' }}>Producto Menos Rentable</span>
+              <strong style={{ fontSize: '16px', display: 'block', margin: '4px 0' }}>{report.kpis.productoMenosRentable || '—'}</strong>
+            </article>
+            <article className="ds-card" style={{ borderLeft: '4px solid #ef4444' }}>
+              <span className="ds-eyebrow" style={{ color: '#ef4444' }}>Combo Menos Rentable</span>
+              <strong style={{ fontSize: '16px', display: 'block', margin: '4px 0' }}>{report.kpis.comboMenosRentable || '—'}</strong>
+            </article>
+          </div>
+
+          {/* TABLA DE RENTABILIDAD DETALLADA */}
+          <section className="ds-card">
+            <div className="ds-card-header">
+              <div>
+                <span className="ds-page-kicker">Margen Real Unitario & Total</span>
+                <h2 className="ds-card-title">Rentabilidad por Producto y Combo</h2>
+              </div>
+              <span className="ds-badge ds-badge-primary">{(report.lists.rentabilidad || []).length} items analizados</span>
+            </div>
+
+            <div className="ds-table-container">
+              <table className="ds-table">
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th>Tipo</th>
+                    <th>Cant. Vendida</th>
+                    <th>Venta Total</th>
+                    <th>Costo COGS</th>
+                    <th>Ganancia Bruta</th>
+                    <th>Margen %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {!(report.lists.rentabilidad || []).length ? (
+                    <tr>
+                      <td colSpan="7" style={{ textAlign: 'center', padding: '30px' }}>
+                        No hay ventas finalizadas en este periodo para calcular rentabilidad.
+                      </td>
+                    </tr>
+                  ) : (
+                    report.lists.rentabilidad.map((item, idx) => (
+                      <tr key={idx}>
+                        <td>
+                          <strong>{item.name}</strong>
+                          <small>{item.category}</small>
+                        </td>
+                        <td>
+                          <span className={`ds-badge ${item.is_combo ? 'ds-badge-warning' : 'ds-badge-neutral'}`}>
+                            {item.is_combo ? 'Combo' : 'Individual'}
+                          </span>
+                        </td>
+                        <td>{item.quantity} unids</td>
+                        <td>{formatCurrency(item.revenue)}</td>
+                        <td>{formatCurrency(item.cogs)}</td>
+                        <td style={{ color: item.profit >= 0 ? '#10b981' : '#ef4444', fontWeight: 'bold' }}>
+                          {formatCurrency(item.profit)}
+                        </td>
+                        <td>
+                          <span className={`ds-badge ${item.margin >= 40 ? 'ds-badge-success' : item.margin >= 20 ? 'ds-badge-warning' : 'ds-badge-danger'}`}>
+                            {item.margin}%
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
       )}
 
       {activeTab === 'Clientes' && (
