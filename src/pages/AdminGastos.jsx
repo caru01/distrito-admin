@@ -24,6 +24,7 @@ export default function AdminGastos() {
   
   const [viewGasto, setViewGasto] = useState(null);
   const [zoomedImage, setZoomedImage] = useState(null);
+  const [inventario, setInventario] = useState([]);
 
   const getStartOfWeek = () => {
     const d = new Date();
@@ -100,6 +101,12 @@ export default function AdminGastos() {
       });
       const json = await res.json();
       if (json.status === 'ok') setGastos(json.data);
+
+      const resInv = await fetch(`${API_URL}/admin/inventory`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const invJson = await resInv.json();
+      if (invJson.status === 'ok') setInventario(invJson.inventory || []);
     } catch (error) {
       console.error(error);
     }
@@ -472,7 +479,18 @@ export default function AdminGastos() {
                       </datalist>
                       {formData.items.map((item, index) => (
                         <div key={index} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                          <input type="text" className="ds-input" list={item.name.trim().length > 0 ? "item-suggestions" : undefined} placeholder="Nombre (Ej: Jabón)" value={item.name} onChange={e => handleItemChange(index, 'name', e.target.value)} required style={{ flex: 2 }} />
+                          {(formData.category === 'Insumos' || formData.category === 'Empaques' || formData.category === 'Productos') ? (
+                            <select className="ds-input" value={item.inventory_id || ''} onChange={e => {
+                                const sel = inventario.find(i => String(i.id) === e.target.value);
+                                handleItemChange(index, 'inventory_id', e.target.value);
+                                if(sel) handleItemChange(index, 'name', sel.name);
+                              }} required style={{ flex: 2 }}>
+                              <option value="">Seleccione Insumo del Inventario...</option>
+                              {inventario.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                            </select>
+                          ) : (
+                            <input type="text" className="ds-input" list={item.name && item.name.trim().length > 0 ? "item-suggestions" : undefined} placeholder="Nombre (Ej: Jabón)" value={item.name} onChange={e => handleItemChange(index, 'name', e.target.value)} required style={{ flex: 2 }} />
+                          )}
                           <input type="number" className="ds-input" placeholder="Cant." value={item.quantity || ''} onChange={e => handleItemChange(index, 'quantity', e.target.value)} required style={{ flex: '0 0 70px' }} min="1" />
                           <input type="number" className="ds-input" placeholder="Valor c/u ($)" value={item.price} onChange={e => handleItemChange(index, 'price', e.target.value)} required style={{ flex: 1 }} />
                           <button type="button" onClick={() => handleRemoveItem(index)} className="ds-btn ds-btn-icon ds-btn-danger ds-btn-sm" style={{ padding: '6px' }}>
