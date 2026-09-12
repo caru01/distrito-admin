@@ -103,8 +103,17 @@ export default function AdminCategorias() {
     }
   };
 
-  const displayCategories = categories.length > 0 ? categories : [];
-  const activeCategories = displayCategories.filter(c => c.status === 'Activa').length;
+  const [search, setSearch] = useState('');
+
+  const filteredCategories = categories.filter(c => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (c.name && c.name.toLowerCase().includes(q)) || 
+           (c.description && c.description.toLowerCase().includes(q));
+  });
+
+  const displayCategories = filteredCategories;
+  const activeCategories = categories.filter(c => c.status === 'Activa').length;
 
   return (
     <div className="ds-page">
@@ -128,7 +137,7 @@ export default function AdminCategorias() {
         <div className="ds-card">
           <div className="ds-card-body" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <div style={{ fontSize: '32px', fontWeight: '700', color: '#FFFFFF', marginBottom: '4px' }}>{displayCategories.length}</div>
+              <div style={{ fontSize: '32px', fontWeight: '700', color: '#FFFFFF', marginBottom: '4px' }}>{categories.length}</div>
               <div style={{ color: '#BDBDBD', fontSize: '14px', fontWeight: '500' }}>Total de categorías</div>
             </div>
             <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: 'rgba(212, 160, 23, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D4A017' }}>
@@ -158,6 +167,8 @@ export default function AdminCategorias() {
             type="text" 
             className="ds-input"
             placeholder="Buscar categoría..." 
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
             style={{ paddingLeft: '48px' }}
           />
         </div>

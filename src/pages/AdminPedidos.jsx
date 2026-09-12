@@ -1,5 +1,5 @@
 import { API_URL, STOREFRONT_URL } from '../config/api';
-import React, { useState, useEffect, useMemo, useCallback, useContext } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useContext, useRef } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { printTicket } from '../services/printService';
@@ -9,7 +9,8 @@ import { readApiJson } from '../utils/http';
 import {
   ShoppingCart, Plus, Search, Filter, Globe, MessageCircle, Store, Phone,
   Clock, Eye, Pencil, Printer, MoreVertical, CheckCircle, ChefHat, Trash2, MapPin,
-  Banknote, CreditCard, Smartphone, X, ChevronLeft, ChevronRight, Zap, Minus, Wallet, User, AlertCircle, Package, Building2, Truck
+  Banknote, CreditCard, Smartphone, X, ChevronLeft, ChevronRight, Zap, Minus, Wallet, User, AlertCircle, Package, Building2, Truck,
+  Volume2, VolumeX, RefreshCw
 } from 'lucide-react';
 
 const formatter = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
@@ -22,6 +23,45 @@ const colombiaDateKey = (value = new Date()) => {
 const formatColombiaDateTime = (value) => new Date(value).toLocaleString('es-CO', {
   dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Bogota'
 });
+
+// Sintetizador de campana de restaurante nativo (Ding-Dong sin archivos externos)
+function playNewOrderChime() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
+    const now = ctx.currentTime;
+    
+    // Tono 1 (Re5 / 587.33 Hz)
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = 'triangle';
+    osc1.frequency.setValueAtTime(587.33, now);
+    gain1.gain.setValueAtTime(0.28, now);
+    gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.45);
+
+    // Tono 2 (La5 / 880 Hz) - Armónico brillante
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(880, now + 0.12);
+    gain2.gain.setValueAtTime(0.35, now + 0.12);
+    gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start(now + 0.12);
+    osc2.stop(now + 0.9);
+  } catch (e) {
+    console.warn('Audio notice:', e);
+  }
+}
 
 export default function AdminPedidos() {
   const navigate = useNavigate();
@@ -50,19 +90,49 @@ export default function AdminPedidos() {
   const [updatingOrderId, setUpdatingOrderId] = useState(null);
   const [assigningOrder, setAssigningOrder] = useState(null);
 
-  const fetchOrders = useCallback(async () => {
+  // Real-time tracking & Sound
+  const knownOrderIdsRef = useRef(new Set());
+  const isFirstLoadRef = useRef(true);
+  const [soundEnabled, setSoundEnabled] = useState(() => {
+    return localStorage.getItem('distrito_admin_order_sound') !== 'false';
+  });
+  const [refreshInterval, setRefreshInterval] = useState(() => {
+    const saved = localStorage.getItem('distrito_admin_orders_refresh_interval');
+    return saved !== null ? Number(saved) : 10;
+  });
+  const [isFetching, setIsFetching] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState(() => new Date());
+
+  const fetchOrders = useCallback(async (isSilent = false) => {
     try {
       const token = sessionStorage.getItem('distrito_admin_token');
       if (!token) return;
+      if (!isSilent) setIsFetching(true);
       const res = await fetch(`${API_URL}/admin/orders`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
-      if (data.status === 'ok' && data.orders) {
+      if (data.status === 'ok' && Array.isArray(data.orders)) {
+        // Detectar si entraron pedidos nuevos después de la carga inicial
+        if (!isFirstLoadRef.current && knownOrderIdsRef.current.size > 0) {
+          const hasNewIncomingOrder = data.orders.some(o => 
+            !knownOrderIdsRef.current.has(Number(o.id)) && 
+            ['Nuevo', 'En preparación', 'Por preparar'].includes(o.status)
+          );
+          if (hasNewIncomingOrder && soundEnabled) {
+            playNewOrderChime();
+          }
+        }
+
+        // Registrar IDs de pedidos
+        data.orders.forEach(o => knownOrderIdsRef.current.add(Number(o.id)));
+        isFirstLoadRef.current = false;
+
         setOrders(data.orders);
         setSelectedOrder(current => current
           ? data.orders.find(order => Number(order.id) === Number(current.id)) || current
           : null);
+        setLastSyncTime(new Date());
         try {
           sessionStorage.setItem('distrito_admin_orders_cache', JSON.stringify(data.orders));
         } catch (e) { }
@@ -70,9 +140,10 @@ export default function AdminPedidos() {
     } catch (err) {
       console.error('Error fetching orders:', err);
     } finally {
+      setIsFetching(false);
       setLoading(false);
     }
-  }, []);
+  }, [soundEnabled]);
 
   useEffect(() => {
     fetchOrders();
@@ -81,6 +152,31 @@ export default function AdminPedidos() {
     return () => window.removeEventListener('resize', handleResize);
   }, [fetchOrders]);
 
+  // Polling automático de seguridad (por defecto cada 10s) y Smart Focus
+  useEffect(() => {
+    if (!refreshInterval || refreshInterval <= 0) return;
+
+    const intervalId = setInterval(() => {
+      // Si la pestaña está oculta, evitamos saturar
+      if (document.hidden) return;
+      fetchOrders(true);
+    }, refreshInterval * 1000);
+
+    // Smart Focus: cuando vuelve a la pestaña, refresca de inmediato
+    const handleVisibility = () => {
+      if (!document.hidden) {
+        fetchOrders(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [fetchOrders, refreshInterval]);
+
+  // Canal SSE Instantáneo (0ms) con reconexión
   useEffect(() => {
     const controller = new AbortController();
     let reconnectTimer;
@@ -102,7 +198,7 @@ export default function AdminPedidos() {
           buffer += decoder.decode(value, { stream: true });
           const events = buffer.split('\n\n');
           buffer = events.pop() || '';
-          if (events.some(event => event && !event.startsWith(':'))) fetchOrders();
+          if (events.some(event => event && !event.startsWith(':'))) fetchOrders(true);
         }
         reconnectTimer = window.setTimeout(connect, 3000);
       } catch (streamError) {
@@ -470,18 +566,94 @@ export default function AdminPedidos() {
 
   return (
     <div className="ds-page">
-      <div className="ds-page-header">
+      <div className="ds-page-header pedidos-header" style={{ marginBottom: '24px' }}>
         <div>
-          <div style={{ color: 'var(--ds-text-secondary)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>Dashboard <span style={{ margin: '0 8px' }}>/</span> <span style={{ color: 'var(--ds-text-primary)' }}>Pedidos</span></div>
-          <h1 className="ds-page-title">Pedidos</h1>
-          <p style={{ color: 'var(--ds-text-secondary)', fontSize: '16px', margin: 0 }}>Administra todos los pedidos recibidos por web, WhatsApp, teléfono y presencial.</p>
+          <div style={{ color: 'var(--ds-text-secondary)', fontSize: '13px', marginBottom: '6px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span>Dashboard</span>
+            <span style={{ color: 'var(--ds-text-muted)' }}>/</span>
+            <span style={{ color: 'var(--ds-text-primary)', fontWeight: '600' }}>Pedidos</span>
+          </div>
+          <h1 className="ds-page-title" style={{ margin: 0 }}>Pedidos</h1>
+          <p style={{ color: 'var(--ds-text-secondary)', fontSize: '15px', margin: '4px 0 0 0' }}>
+            Administra todos los pedidos recibidos por web, WhatsApp, teléfono y presencial.
+          </p>
         </div>
-        <div className="ds-page-actions">
+
+        <div className="ds-page-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          {/* Barra de Control "En Vivo" Unificada */}
+          <div className="pedidos-live-toolbar" role="region" aria-label="Control de actualización en tiempo real">
+            {/* Indicador ● En Vivo */}
+            <div 
+              className={`pedidos-live-status ${refreshInterval > 0 ? 'active' : 'paused'}`}
+              title={refreshInterval > 0 ? `Sincronización en vivo activa (SSE instantáneo + refresco cada ${refreshInterval}s)` : 'Sincronización automática pausada'}
+            >
+              <span className="pedidos-live-dot" />
+              <span>{refreshInterval > 0 ? 'En Vivo' : 'Pausado'}</span>
+            </div>
+
+            <div className="pedidos-live-divider" />
+
+            {/* Selector de Frecuencia */}
+            <select
+              value={refreshInterval}
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                setRefreshInterval(val);
+                localStorage.setItem('distrito_admin_orders_refresh_interval', String(val));
+              }}
+              className="pedidos-live-select"
+              title="Frecuencia de actualización automática"
+              aria-label="Frecuencia de refresco"
+            >
+              <option value="10">Refresco: 10s (Ideal)</option>
+              <option value="5">Refresco: 5s (Pico)</option>
+              <option value="15">Refresco: 15s</option>
+              <option value="30">Refresco: 30s</option>
+              <option value="0">Pausar auto</option>
+            </select>
+
+            <div className="pedidos-live-divider" />
+
+            {/* Botón de Campana / Sonido */}
+            <button
+              type="button"
+              onClick={() => {
+                const next = !soundEnabled;
+                setSoundEnabled(next);
+                localStorage.setItem('distrito_admin_order_sound', String(next));
+                if (next) {
+                  playNewOrderChime();
+                }
+              }}
+              className={`pedidos-live-btn ${soundEnabled ? 'active' : ''}`}
+              title={soundEnabled ? 'Campana sonora activada para nuevos pedidos (clic para silenciar)' : 'Campana silenciada (clic para activar)'}
+              aria-label={soundEnabled ? 'Silenciar campana' : 'Activar campana'}
+            >
+              {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+            </button>
+
+            <div className="pedidos-live-divider" />
+
+            {/* Botón Refrescar Manual */}
+            <button
+              type="button"
+              onClick={() => fetchOrders()}
+              disabled={isFetching}
+              className="pedidos-live-btn"
+              title={`Refrescar pedidos ahora (Último chequeo: ${lastSyncTime ? lastSyncTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'reciente'})`}
+              aria-label="Refrescar pedidos"
+            >
+              <RefreshCw size={15} className={isFetching ? 'animate-spin' : ''} />
+            </button>
+          </div>
+
+          {/* Botón Principal Nuevo Pedido */}
           <button
-            className="ds-btn ds-btn-primary ds-btn-lg"
+            className="ds-btn ds-btn-primary"
             onClick={() => navigate('/admin/tomar-pedido')}
+            style={{ height: '42px', padding: '0 20px', fontWeight: '700', borderRadius: '12px' }}
           >
-            <Plus size={20} /> Nuevo Pedido
+            <Plus size={18} /> Nuevo Pedido
           </button>
         </div>
       </div>

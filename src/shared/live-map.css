@@ -59,10 +59,10 @@
 }
 
 .live-map-marker__copy small {
-  max-width: 170px;
+  max-width: 210px;
   overflow: hidden;
   color: #d1d5db;
-  font-size: 9px;
+  font-size: 9.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

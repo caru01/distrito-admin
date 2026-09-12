@@ -4,11 +4,12 @@ import { DeliveryAddressPicker, NOTIFICATION_LANGUAGES, NOTIFICATION_VOICES, spe
 import { 
   Settings, Building2, CreditCard, Bike,
   Upload, Save, Clock, Phone,
-  Mail, MapPin, Globe, Check, Palette, LocateFixed, BellRing, Volume2
+  Mail, MapPin, Globe, Check, Palette, LocateFixed, BellRing, Volume2,
+  CheckCircle2, AlertTriangle, Navigation, ExternalLink, RefreshCw, Zap, BatteryCharging, Compass
 } from 'lucide-react';
 
 
-export default function AdminConfiguración() {
+export default function AdminConfiguracion() {
   const [activeTab, setActiveTab] = useState('Apariencia');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -66,8 +67,8 @@ export default function AdminConfiguración() {
   const handleSave = async () => {
     const latitude = Number(settings.store_latitude);
     const longitude = Number(settings.store_longitude);
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !kitchenLocationConfirmed) {
-      setSaveMessage('❌ Confirma el punto exacto de la cocina antes de guardar');
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      setSaveMessage('❌ Las coordenadas de la cocina no son válidas');
       setActiveTab('Domicilios');
       return;
     }
@@ -75,20 +76,26 @@ export default function AdminConfiguración() {
     setSaveMessage('');
     try {
       const token = sessionStorage.getItem('distrito_admin_token');
+      // Sane payload: strip id and updated_at
+      const payload = { ...settings };
+      delete payload.id;
+      delete payload.updated_at;
+
       const res = await fetch(`${API_URL}/admin/settings`, {
         method: 'PUT',
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}` 
         },
-        body: JSON.stringify(settings)
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (res.ok) {
         setSettings(prev => ({ ...prev, ...data.settings }));
+        setKitchenLocationConfirmed(true);
         window.dispatchEvent(new CustomEvent('distrito:settings-updated'));
-        setSaveMessage('✅ Configuración guardada y publicada');
-        setTimeout(() => setSaveMessage(''), 3000);
+        setSaveMessage('✅ Configuración guardada y publicada correctamente');
+        setTimeout(() => setSaveMessage(''), 4000);
       } else {
         setSaveMessage(`❌ ${data.error || 'Error al guardar'}`);
       }
@@ -112,7 +119,11 @@ export default function AdminConfiguración() {
       store_latitude: updates.latitude !== undefined ? updates.latitude : current.store_latitude,
       store_longitude: updates.longitude !== undefined ? updates.longitude : current.store_longitude,
     }));
-    if (updates.locationConfirmed !== undefined) setKitchenLocationConfirmed(Boolean(updates.locationConfirmed));
+    if (updates.locationConfirmed !== undefined) {
+      setKitchenLocationConfirmed(Boolean(updates.locationConfirmed));
+    } else if (updates.latitude != null && updates.longitude != null) {
+      setKitchenLocationConfirmed(true);
+    }
   };
 
   const captureStoreLocation = () => {
@@ -130,11 +141,53 @@ export default function AdminConfiguración() {
       }));
       setKitchenLocationConfirmed(true);
       setLocatingStore(false);
-      setSaveMessage('✅ Punto de la cocina capturado; guarda los cambios');
+      setSaveMessage('✅ Punto GPS de la cocina capturado con éxito; guarda los cambios');
     }, (error) => {
       setLocatingStore(false);
       setSaveMessage(`❌ ${error.message || 'No fue posible obtener la ubicación'}`);
     }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+  };
+
+  const centerOnValledupar = () => {
+    setSettings(prev => ({
+      ...prev,
+      store_latitude: 10.4631,
+      store_longitude: -73.2532,
+      kitchen_address: prev.kitchen_address || 'Valledupar, Cesar, Colombia'
+    }));
+    setKitchenLocationConfirmed(true);
+    setSaveMessage('📍 Ubicación centrada en Valledupar; recuerda guardar los cambios');
+  };
+
+  const applyGpsPreset = (preset) => {
+    if (preset === 'pico') {
+      setSettings(prev => ({
+        ...prev,
+        gps_delivery_interval_seconds: 4,
+        gps_free_interval_seconds: 25,
+        presence_heartbeat_interval_seconds: 15,
+        presence_timeout_seconds: 45,
+      }));
+      setSaveMessage('⚡ Perfil GPS "Alta Demanda" aplicado; guarda los cambios');
+    } else if (preset === 'equilibrado') {
+      setSettings(prev => ({
+        ...prev,
+        gps_delivery_interval_seconds: 7,
+        gps_free_interval_seconds: 45,
+        presence_heartbeat_interval_seconds: 30,
+        presence_timeout_seconds: 90,
+      }));
+      setSaveMessage('⚖️ Perfil GPS "Equilibrado" aplicado; guarda los cambios');
+    } else if (preset === 'ahorro') {
+      setSettings(prev => ({
+        ...prev,
+        gps_delivery_interval_seconds: 15,
+        gps_free_interval_seconds: 90,
+        presence_heartbeat_interval_seconds: 60,
+        presence_timeout_seconds: 180,
+      }));
+      setSaveMessage('🔋 Perfil GPS "Ahorro de Batería" aplicado; guarda los cambios');
+    }
   };
 
   const tabs = [
@@ -375,13 +428,41 @@ export default function AdminConfiguración() {
 
         {/* TAB DOMICILIOS Y PEDIDOS */}
         {activeTab === 'Domicilios' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <div className="ds-card kitchen-location-card">
-              <div className="ds-card-header">
-                <h2 className="ds-card-title"><MapPin size={24} color="#D4A017" /> Ubicación de la cocina</h2>
+          <div className="cfg-domicilios-stack">
+            {/* CARD 1: UBICACIÓN DE LA COCINA */}
+            <div className="ds-card kitchen-location-card" style={{ borderTop: '3px solid #D4A017' }}>
+              <div className="ds-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(212,160,23,0.12)', color: '#D4A017', display: 'grid', placeItems: 'center' }}>
+                    <MapPin size={22} />
+                  </div>
+                  <div>
+                    <h2 className="ds-card-title" style={{ margin: 0 }}>Ubicación de la Cocina & Sede Principal</h2>
+                    <p className="ds-text-muted" style={{ margin: 0, fontSize: '12px' }}>
+                      Punto de partida oficial para el cálculo de distancias, cálculo de fletes y mapa en vivo de domiciliarios.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  {kitchenLocationConfirmed ? (
+                    <span className="ds-badge ds-badge-success" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '5px 10px', fontWeight: 'bold' }}>
+                      <CheckCircle2 size={14} /> Cocina Confirmada
+                    </span>
+                  ) : (
+                    <span className="ds-badge ds-badge-warning" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '5px 10px', fontWeight: 'bold' }}>
+                      <AlertTriangle size={14} /> Pendiente Confirmar
+                    </span>
+                  )}
+
+                  <span className="cfg-coords-badge">
+                    📍 {Number(settings.store_latitude).toFixed(4)}, {Number(settings.store_longitude).toFixed(4)}
+                  </span>
+                </div>
               </div>
-              <div className="ds-card-body ds-form">
-                <p className="ds-text-muted">Este es el único punto de salida usado por el seguimiento del cliente y Mapa de Domicilios.</p>
+
+              <div className="ds-card-body ds-form" style={{ display: 'grid', gap: '18px' }}>
+                {/* Selector de Dirección y Autocompletado de Google Maps */}
                 <DeliveryAddressPicker
                   value={{
                     address: settings.kitchen_address || settings.address || '',
@@ -391,117 +472,302 @@ export default function AdminConfiguración() {
                     locationConfirmed: kitchenLocationConfirmed,
                   }}
                   onChange={updateKitchenLocation}
-                  apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''}
-                  mapId={import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID'}
+                  apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || 'AIzaSyA5SBdtjC4gQOiKcKRWnt_JTaDGnOIfTXg'}
+                  mapId={import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || 'fb19d5ae405357c4eab223c6'}
                   inputClassName="ds-input"
                   compact
                   labels={{
                     title: 'Dirección de la cocina',
-                    readyHelp: 'Busca la sede desde donde salen los pedidos y confirma el marcador.',
-                    manualHelp: 'Escribe la dirección de la cocina.',
-                    placeholder: 'Ej. Cra 19 #15-34, Valledupar',
+                    readyHelp: 'Escribe el nombre o dirección y selecciona la sugerencia para ajustar el marcador.',
+                    manualHelp: 'Escribe la dirección física exacta de la sede.',
+                    placeholder: 'Ej. Calle 12 # 9-45, Valledupar',
                     inputAriaLabel: 'Dirección de la cocina',
                     mapAriaLabel: 'Mapa para confirmar la ubicación de la cocina',
-                    markerTitle: 'Punto exacto de salida de la cocina',
-                    confirmed: 'Cocina confirmada',
-                    confirm: 'Confirmar punto de la cocina',
+                    markerTitle: 'Punto de salida oficial de los pedidos',
+                    confirmed: 'Punto confirmado',
+                    confirm: 'Confirmar ubicación de la cocina',
                   }}
                   alwaysShowMap
                 />
-                <div className="ds-form-grid kitchen-coordinate-grid">
-                  <label className="ds-form-group"><span className="ds-form-label">Latitud</span><input type="number" step="0.0000001" min="-90" max="90" className="ds-input" value={settings.store_latitude ?? ''} onChange={e => { handleChange('store_latitude', e.target.value); setKitchenLocationConfirmed(false); }} /></label>
-                  <label className="ds-form-group"><span className="ds-form-label">Longitud</span><input type="number" step="0.0000001" min="-180" max="180" className="ds-input" value={settings.store_longitude ?? ''} onChange={e => { handleChange('store_longitude', e.target.value); setKitchenLocationConfirmed(false); }} /></label>
+
+                {/* Barra de Acciones Rápidas (Botones Pills) */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', padding: '10px 14px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid var(--ds-border)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="cfg-preset-pill"
+                      disabled={locatingStore}
+                      onClick={captureStoreLocation}
+                      style={{ color: '#D4A017' }}
+                    >
+                      <LocateFixed size={15} className={locatingStore ? 'animate-spin' : ''} />
+                      {locatingStore ? 'Obteniendo GPS…' : 'Usar mi ubicación actual (GPS)'}
+                    </button>
+
+                    <button
+                      type="button"
+                      className="cfg-preset-pill"
+                      onClick={centerOnValledupar}
+                    >
+                      <Compass size={15} /> Centrar en Valledupar
+                    </button>
+
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${settings.store_latitude},${settings.store_longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="cfg-preset-pill"
+                    >
+                      <ExternalLink size={14} /> Abrir en Google Maps
+                    </a>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="ds-btn ds-btn-primary"
+                    style={{ padding: '7px 16px', fontSize: '12.5px', fontWeight: 'bold' }}
+                    onClick={() => {
+                      setKitchenLocationConfirmed(true);
+                      setSaveMessage('✅ Ubicación de la cocina verificada y confirmada');
+                      setTimeout(() => setSaveMessage(''), 3000);
+                    }}
+                  >
+                    <Check size={16} /> Confirmar Punto de Cocina
+                  </button>
                 </div>
-                <button type="button" className="ds-btn ds-btn-secondary" disabled={locatingStore} onClick={captureStoreLocation}>
-                  <LocateFixed size={18} /> {locatingStore ? 'Obteniendo ubicación…' : 'Usar mi ubicación actual como cocina'}
-                </button>
+
+                {/* Mapa Visual de Alta Visibilidad (Iframe interactivo con marcador satelital/calle) */}
+                <div style={{ display: 'grid', gap: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--ds-text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Navigation size={14} color="#D4A017" /> Vista previa satelital y de calles de la sede:
+                    </span>
+                    <small style={{ color: 'var(--ds-text-muted)', fontSize: '11px' }}>
+                      Punto fijado en ({Number(settings.store_latitude).toFixed(6)}, {Number(settings.store_longitude).toFixed(6)})
+                    </small>
+                  </div>
+
+                  <iframe
+                    title="Mapa de la cocina"
+                    className="kitchen-map-frame"
+                    src={`https://maps.google.com/maps?q=${settings.store_latitude || 10.4631},${settings.store_longitude || -73.2532}&z=17&output=embed`}
+                    loading="lazy"
+                  />
+                </div>
+
+                {/* Coordenadas numéricas directas */}
+                <div className="ds-form-grid kitchen-coordinate-grid" style={{ marginTop: '4px' }}>
+                  <label className="ds-form-group">
+                    <span className="ds-form-label">Latitud Decimal</span>
+                    <input
+                      type="number"
+                      step="0.0000001"
+                      min="-90"
+                      max="90"
+                      className="ds-input"
+                      value={settings.store_latitude ?? ''}
+                      onChange={e => { handleChange('store_latitude', e.target.value); }}
+                    />
+                  </label>
+                  <label className="ds-form-group">
+                    <span className="ds-form-label">Longitud Decimal</span>
+                    <input
+                      type="number"
+                      step="0.0000001"
+                      min="-180"
+                      max="180"
+                      className="ds-input"
+                      value={settings.store_longitude ?? ''}
+                      onChange={e => { handleChange('store_longitude', e.target.value); }}
+                    />
+                  </label>
+                </div>
               </div>
             </div>
-            <div className="ds-card">
-              <div className="ds-card-header">
-                <h2 className="ds-card-title">
-                  <Bike size={24} color="#D4A017" /> Configuración Operativa
-                </h2>
+
+            {/* FILA DE 2 CARDS: CONFIGURACIÓN OPERATIVA Y RASTREO GPS */}
+            <div className="cfg-domicilios-grid">
+              {/* CARD 2: PARÁMETROS OPERATIVOS */}
+              <div className="ds-card" style={{ borderTop: '3px solid #3B82F6' }}>
+                <div className="ds-card-header" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(59,130,246,0.12)', color: '#3B82F6', display: 'grid', placeItems: 'center' }}>
+                    <Bike size={20} />
+                  </div>
+                  <div>
+                    <h2 className="ds-card-title" style={{ margin: 0 }}>Parámetros de Entrega</h2>
+                    <p className="ds-text-muted" style={{ margin: 0, fontSize: '12px' }}>Tiempos, tarifas de envío y condiciones mínimas de venta.</p>
+                  </div>
+                </div>
+
+                <div className="ds-card-body ds-form">
+                  <div className="ds-form-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+                    <div className="ds-form-group">
+                      <label className="ds-form-label">Tiempo estimado de preparación</label>
+                      <input
+                        type="text"
+                        className="ds-input"
+                        value={settings.prep_time}
+                        onChange={e => handleChange('prep_time', e.target.value)}
+                        placeholder="Ej. 20-30 min"
+                      />
+                    </div>
+
+                    <div className="ds-form-group">
+                      <label className="ds-form-label">Costo del domicilio ($)</label>
+                      <input
+                        type="number"
+                        className="ds-input"
+                        value={settings.delivery_cost}
+                        onChange={e => handleChange('delivery_cost', parseInt(e.target.value, 10) || 0)}
+                      />
+                    </div>
+
+                    <div className="ds-form-group">
+                      <label className="ds-form-label">Pedido Mínimo ($)</label>
+                      <input
+                        type="number"
+                        className="ds-input"
+                        value={settings.min_order}
+                        onChange={e => handleChange('min_order', parseInt(e.target.value, 10) || 0)}
+                      />
+                    </div>
+
+                    <div className="ds-form-group">
+                      <label className="ds-form-label">Distancia Máxima de Cobertura</label>
+                      <input
+                        type="text"
+                        className="ds-input"
+                        value={settings.max_distance}
+                        onChange={e => handleChange('max_distance', e.target.value)}
+                        placeholder="Ej. 6 km"
+                      />
+                    </div>
+
+                    <div className="ds-form-group">
+                      <label className="ds-form-label">Tipo de pedido predeterminado</label>
+                      <select
+                        className="ds-select"
+                        value={settings.default_order_type}
+                        onChange={e => handleChange('default_order_type', e.target.value)}
+                      >
+                        <option value="Domicilio">Domicilio</option>
+                        <option value="Para Llevar">Para Llevar</option>
+                        <option value="Local">Consumir en el Local</option>
+                      </select>
+                    </div>
+
+                    <div className="ds-form-group">
+                      <label className="ds-form-label">Horario de Domicilios</label>
+                      <input
+                        type="text"
+                        className="ds-input"
+                        value={settings.delivery_schedule}
+                        onChange={e => handleChange('delivery_schedule', e.target.value)}
+                        placeholder="Ej. 11:30 AM a 10:00 PM"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="ds-card-body ds-form">
-                <div className="ds-form-grid">
-                  <div className="ds-form-group">
-                    <label className="ds-form-label">Tiempo estimado de preparación</label>
-                    <input type="text" className="ds-input" value={settings.prep_time} onChange={e => handleChange('prep_time', e.target.value)} placeholder="Ej. 20-30 min" />
+
+              {/* CARD 3: RASTREO GPS Y GEOCERCA */}
+              <div className="ds-card" style={{ borderTop: '3px solid #10B981' }}>
+                <div className="ds-card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(16,185,129,0.12)', color: '#10B981', display: 'grid', placeItems: 'center' }}>
+                      <Navigation size={20} />
+                    </div>
+                    <div>
+                      <h2 className="ds-card-title" style={{ margin: 0 }}>Rastreo GPS y Geocerca</h2>
+                      <p className="ds-text-muted" style={{ margin: 0, fontSize: '12px' }}>Intervalos de sincronización y validación de llegada.</p>
+                    </div>
                   </div>
-                  <div className="ds-form-group">
-                    <label className="ds-form-label">Costo del domicilio ($)</label>
-                    <input type="number" className="ds-input" value={settings.delivery_cost} onChange={e => handleChange('delivery_cost', parseInt(e.target.value)||0)} />
+                </div>
+
+                <div className="ds-card-body ds-form">
+                  {/* Selector de Presets Inteligentes */}
+                  <label className="ds-form-label" style={{ marginBottom: '6px', display: 'block' }}>
+                    Perfil de Rendimiento GPS Rápido:
+                  </label>
+                  <div className="cfg-preset-pills">
+                    <button
+                      type="button"
+                      className={`cfg-preset-pill ${settings.gps_delivery_interval_seconds <= 4 ? 'is-active' : ''}`}
+                      onClick={() => applyGpsPreset('pico')}
+                    >
+                      <Zap size={14} /> Alta Demanda (4s)
+                    </button>
+                    <button
+                      type="button"
+                      className={`cfg-preset-pill ${settings.gps_delivery_interval_seconds === 7 ? 'is-active' : ''}`}
+                      onClick={() => applyGpsPreset('equilibrado')}
+                    >
+                      <Compass size={14} /> Equilibrado (7s)
+                    </button>
+                    <button
+                      type="button"
+                      className={`cfg-preset-pill ${settings.gps_delivery_interval_seconds >= 15 ? 'is-active' : ''}`}
+                      onClick={() => applyGpsPreset('ahorro')}
+                    >
+                      <BatteryCharging size={14} /> Ahorro de Batería (15s)
+                    </button>
                   </div>
-                  <div className="ds-form-group">
-                    <label className="ds-form-label">Pedido Mínimo ($)</label>
-                    <input type="number" className="ds-input" value={settings.min_order} onChange={e => handleChange('min_order', parseInt(e.target.value)||0)} />
-                  </div>
-                  <div className="ds-form-group">
-                    <label className="ds-form-label">Distancia Máxima</label>
-                    <input type="text" className="ds-input" value={settings.max_distance} onChange={e => handleChange('max_distance', e.target.value)} placeholder="Ej. 5 km" />
-                  </div>
-                  <div className="ds-form-group">
-                    <label className="ds-form-label">Radio para finalizar la entrega</label>
-                    <input type="number" min="50" max="500" step="10" className="ds-input" value={settings.delivery_completion_radius_meters} onChange={e => handleChange('delivery_completion_radius_meters', parseInt(e.target.value, 10) || 150)} />
-                    <small className="ds-text-muted">El botón Finalizar se habilita cuando el GPS del domiciliario está dentro de este radio (50 a 500 metros).</small>
-                  </div>
-                  <div className="ds-form-group">
-                    <label className="ds-form-label">GPS con entrega activa (segundos)</label>
-                    <input type="number" min="3" max="60" className="ds-input" value={settings.gps_delivery_interval_seconds} onChange={e => handleChange('gps_delivery_interval_seconds', Number(e.target.value))} />
-                    <small className="ds-text-muted">Frecuencia de ubicación mientras lleva uno o más pedidos.</small>
-                  </div>
-                  <div className="ds-form-group">
-                    <label className="ds-form-label">GPS en turno libre (segundos)</label>
-                    <input type="number" min="15" max="300" className="ds-input" value={settings.gps_free_interval_seconds} onChange={e => handleChange('gps_free_interval_seconds', Number(e.target.value))} />
-                    <small className="ds-text-muted">Reduce consumo de batería cuando no tiene entregas.</small>
-                  </div>
-                  <div className="ds-form-group">
-                    <label className="ds-form-label">Latido de presencia (segundos)</label>
-                    <input type="number" min="10" max="120" className="ds-input" value={settings.presence_heartbeat_interval_seconds} onChange={e => handleChange('presence_heartbeat_interval_seconds', Number(e.target.value))} />
-                  </div>
-                  <div className="ds-form-group">
-                    <label className="ds-form-label">Marcar desconectado después de (segundos)</label>
-                    <input type="number" min="30" max="600" className="ds-input" value={settings.presence_timeout_seconds} onChange={e => handleChange('presence_timeout_seconds', Number(e.target.value))} />
-                  </div>
-                  <div className="ds-form-group">
-                    <label className="ds-form-label">Antigüedad GPS permitida (segundos)</label>
-                    <input type="number" min="30" max="900" className="ds-input" value={settings.gps_max_age_seconds} onChange={e => handleChange('gps_max_age_seconds', Number(e.target.value))} />
-                    <small className="ds-text-muted">Una posición más antigua no permite finalizar sin autorización.</small>
-                  </div>
-                  <div className="ds-form-group">
-                    <label className="ds-form-label">Precisión GPS máxima (metros)</label>
-                    <input type="number" min="20" max="1000" className="ds-input" value={settings.gps_max_accuracy_meters} onChange={e => handleChange('gps_max_accuracy_meters', Number(e.target.value))} />
-                  </div>
-                  <div className="ds-form-group">
-                    <label className="ds-form-label">Cola GPS sin conexión (puntos)</label>
-                    <input type="number" min="100" max="20000" step="100" className="ds-input" value={settings.offline_location_queue_limit} onChange={e => handleChange('offline_location_queue_limit', Number(e.target.value))} />
-                    <small className="ds-text-muted">Se sincroniza en orden al recuperar Internet.</small>
-                  </div>
-                  <div className="ds-form-group">
-                    <label className="ds-form-label">Capacidad inicial de nuevos domiciliarios</label>
-                    <input type="number" min="1" max="5" className="ds-input" value={settings.default_max_driver_capacity} onChange={e => handleChange('default_max_driver_capacity', Number(e.target.value))} />
-                    <small className="ds-text-muted">La capacidad individual se puede ajustar desde Usuarios.</small>
-                  </div>
-                  <div className="ds-form-group">
-                    <label className="ds-form-label">Reconexión en vivo inicial (ms)</label>
-                    <input type="number" min="500" max="10000" step="250" className="ds-input" value={settings.sse_reconnect_initial_ms} onChange={e => handleChange('sse_reconnect_initial_ms', Number(e.target.value))} />
-                  </div>
-                  <div className="ds-form-group">
-                    <label className="ds-form-label">Reconexión en vivo máxima (ms)</label>
-                    <input type="number" min="5000" max="120000" step="1000" className="ds-input" value={settings.sse_reconnect_max_ms} onChange={e => handleChange('sse_reconnect_max_ms', Number(e.target.value))} />
-                  </div>
-                  <div className="ds-form-group">
-                    <label className="ds-form-label">Tipo de pedido predeterminado</label>
-                    <select className="ds-select" value={settings.default_order_type} onChange={e => handleChange('default_order_type', e.target.value)}>
-                      <option value="Domicilio">Domicilio</option>
-                      <option value="Para Llevar">Para Llevar</option>
-                      <option value="Local">Consumir en el Local</option>
-                    </select>
-                  </div>
-                  <div className="ds-form-group">
-                    <label className="ds-form-label">Horario de Domicilios</label>
-                    <input type="text" className="ds-input" value={settings.delivery_schedule} onChange={e => handleChange('delivery_schedule', e.target.value)} placeholder="Ej. 11:30 AM a 9:30 PM" />
+
+                  <div className="ds-form-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+                    <div className="ds-form-group">
+                      <label className="ds-form-label">
+                        Radio para finalizar ({settings.delivery_completion_radius_meters}m)
+                      </label>
+                      <input
+                        type="range"
+                        min="50"
+                        max="500"
+                        step="10"
+                        value={settings.delivery_completion_radius_meters || 150}
+                        onChange={e => handleChange('delivery_completion_radius_meters', parseInt(e.target.value, 10) || 150)}
+                        style={{ width: '100%', accentColor: 'var(--ds-primary)' }}
+                      />
+                      <small className="ds-text-muted">Distancia máxima al cliente para marcar entrega completada.</small>
+                    </div>
+
+                    <div className="ds-form-group">
+                      <label className="ds-form-label">GPS en entrega activa (segundos)</label>
+                      <input
+                        type="number"
+                        min="3"
+                        max="60"
+                        className="ds-input"
+                        value={settings.gps_delivery_interval_seconds}
+                        onChange={e => handleChange('gps_delivery_interval_seconds', Number(e.target.value))}
+                      />
+                      <small className="ds-text-muted">Frecuencia de envío de posición mientras lleva pedidos.</small>
+                    </div>
+
+                    <div className="ds-form-group">
+                      <label className="ds-form-label">GPS en turno libre (segundos)</label>
+                      <input
+                        type="number"
+                        min="15"
+                        max="300"
+                        className="ds-input"
+                        value={settings.gps_free_interval_seconds}
+                        onChange={e => handleChange('gps_free_interval_seconds', Number(e.target.value))}
+                      />
+                      <small className="ds-text-muted">Ahorro de batería cuando el domiciliario está disponible.</small>
+                    </div>
+
+                    <div className="ds-form-group">
+                      <label className="ds-form-label">Capacidad por domiciliario</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="5"
+                        className="ds-input"
+                        value={settings.default_max_driver_capacity}
+                        onChange={e => handleChange('default_max_driver_capacity', Number(e.target.value))}
+                      />
+                      <small className="ds-text-muted">Límite de pedidos simultáneos para nuevos domiciliarios.</small>
+                    </div>
                   </div>
                 </div>
               </div>

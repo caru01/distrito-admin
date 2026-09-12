@@ -24,7 +24,6 @@ export default function AdminGastos() {
   
   const [viewGasto, setViewGasto] = useState(null);
   const [zoomedImage, setZoomedImage] = useState(null);
-  const [inventario, setInventario] = useState([]);
 
   const getStartOfWeek = () => {
     const d = new Date();
@@ -101,12 +100,6 @@ export default function AdminGastos() {
       });
       const json = await res.json();
       if (json.status === 'ok') setGastos(json.data);
-
-      const resInv = await fetch(`${API_URL}/admin/inventory`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const invJson = await resInv.json();
-      if (invJson.status === 'ok') setInventario(invJson.inventory || []);
     } catch (error) {
       console.error(error);
     }
@@ -436,15 +429,18 @@ export default function AdminGastos() {
                   <select className="ds-select" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}>
                     <option>Arriendo</option>
                     <option>Nómina</option>
-                    <option>Servicios Públicos</option>
-                    <option>Publicidad</option>
-                    <option>Empaques</option>
-                    <option>Mantenimiento</option>
-                    <option>Insumos</option>
-                    <option>Aseo</option>
-                    <option>Productos</option>
-                    <option>Otros</option>
+                    <option>Servicios Públicos (Energía/Gas/Agua)</option>
+                    <option>Internet / Telefonía</option>
+                    <option>Publicidad / Marketing</option>
+                    <option>Transporte / Domicilios</option>
+                    <option>Aseo y Limpieza</option>
+                    <option>Mantenimiento y Reparaciones</option>
+                    <option>Otros Gastos Operativos</option>
                   </select>
+                </div>
+
+                <div className="ds-alert ds-alert-neutral" style={{ fontSize: '12px', padding: '8px 12px', borderRadius: '6px', background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
+                  ℹ️ <strong>Gastos Operativos:</strong> Las compras de insumos físicos (pan, carne, empaques, etc.) se gestionan en <strong>Inventario ➔ Compras</strong>. Este módulo es exclusivo para costos y servicios operativos.
                 </div>
 
                 <div className="ds-form-group">
@@ -479,18 +475,7 @@ export default function AdminGastos() {
                       </datalist>
                       {formData.items.map((item, index) => (
                         <div key={index} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                          {(formData.category === 'Insumos' || formData.category === 'Empaques' || formData.category === 'Productos') ? (
-                            <select className="ds-input" value={item.inventory_id || ''} onChange={e => {
-                                const sel = inventario.find(i => String(i.id) === e.target.value);
-                                handleItemChange(index, 'inventory_id', e.target.value);
-                                if(sel) handleItemChange(index, 'name', sel.name);
-                              }} required style={{ flex: 2 }}>
-                              <option value="">Seleccione Insumo del Inventario...</option>
-                              {inventario.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
-                            </select>
-                          ) : (
-                            <input type="text" className="ds-input" list={item.name && item.name.trim().length > 0 ? "item-suggestions" : undefined} placeholder="Nombre (Ej: Jabón)" value={item.name} onChange={e => handleItemChange(index, 'name', e.target.value)} required style={{ flex: 2 }} />
-                          )}
+                          <input type="text" className="ds-input" list={item.name && item.name.trim().length > 0 ? "item-suggestions" : undefined} placeholder="Nombre (Ej: Bombillo LED)" value={item.name} onChange={e => handleItemChange(index, 'name', e.target.value)} required style={{ flex: 2 }} />
                           <input type="number" className="ds-input" placeholder="Cant." value={item.quantity || ''} onChange={e => handleItemChange(index, 'quantity', e.target.value)} required style={{ flex: '0 0 70px' }} min="1" />
                           <input type="number" className="ds-input" placeholder="Valor c/u ($)" value={item.price} onChange={e => handleItemChange(index, 'price', e.target.value)} required style={{ flex: 1 }} />
                           <button type="button" onClick={() => handleRemoveItem(index)} className="ds-btn ds-btn-icon ds-btn-danger ds-btn-sm" style={{ padding: '6px' }}>

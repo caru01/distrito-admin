@@ -116,7 +116,7 @@ export default function AdminLayout() {
     { name: 'Tomar Pedido', path: '/admin/tomar-pedido', icon: <Zap size={20} />, module: 'Pedidos' },
     { name: 'Pedidos', path: '/admin/pedidos', icon: <ShoppingBag size={20} />, module: 'Pedidos' },
     { name: 'Mapa de Domicilios', path: '/admin/mapa-domicilios', icon: <MapPin size={20} />, module: 'Domicilios' },
-    { name: 'Empresas de Domicilios', path: '/admin/empresas-domicilios', icon: <Building2 size={20} />, module: 'Domicilios' },
+    { name: 'Empresas de Domicilios', path: '/admin/empresas-domicilios', icon: <Building2 size={20} />, module: 'Empresas Domicilios', fallbackModule: 'Domicilios' },
     { name: 'Categorías', path: '/admin/categorias', icon: <List size={20} />, module: 'Categorias' },
     { name: 'Productos', path: '/admin/productos', icon: <Package size={20} />, module: 'Productos' },
     { name: 'Clientes', path: '/admin/clientes', icon: <Users size={20} />, module: 'Clientes' },
@@ -125,9 +125,9 @@ export default function AdminLayout() {
     { name: 'Gastos', path: '/admin/gastos', icon: <DollarSign size={20} />, module: 'Gastos' },
     { name: 'Cierre Contable', path: '/admin/cierre-contable', icon: <FileSpreadsheet size={20} />, module: 'Cierre Contable' },
     { name: 'Reportes', path: '/admin/reportes', icon: <BarChart3 size={20} />, module: 'Reportes' },
-    { name: 'Anuncios', path: '/admin/anuncios', icon: <Megaphone size={20} />, module: 'Configuracion' },
+    { name: 'Anuncios', path: '/admin/anuncios', icon: <Megaphone size={20} />, module: 'Anuncios', fallbackModule: 'Configuracion' },
     { name: 'Configuración', path: '/admin/configuracion', icon: <Settings size={20} />, module: 'Configuracion' },
-    { name: 'Horarios', path: '/admin/horarios', icon: <Clock size={20} />, module: 'Configuracion' },
+    { name: 'Horarios', path: '/admin/horarios', icon: <Clock size={20} />, module: 'Horarios', fallbackModule: 'Configuracion' },
   ];
 
   const profileItems = [
@@ -188,7 +188,7 @@ export default function AdminLayout() {
           </div>
 
           <nav className="admin-sidebar-nav" style={{ padding: isSidebarCollapsed ? '12px 6px' : undefined }}>
-            {navItems.filter(item => hasPermission(item.module, 'ver')).map(item => {
+            {navItems.filter(item => hasPermission(item.module, 'ver') || (item.fallbackModule && hasPermission(item.fallbackModule, 'ver'))).map(item => {
               const isActive = location.pathname === item.path;
               return (
                 <Link

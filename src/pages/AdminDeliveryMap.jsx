@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Bike, Clock3, MapPin, Navigation, Package, Radio, RefreshCw, Send, Signal, SignalZero, UserCheck } from 'lucide-react';
+import { Bike, Building2, Clock3, MapPin, Navigation, Package, Radio, RefreshCw, Send, Signal, SignalZero, UserCheck } from 'lucide-react';
 import { LiveDeliveryMap } from '@distrito/shared-ui';
 import { API_URL } from '../config/api';
 
@@ -10,6 +10,82 @@ const dateTime = (value) => value
 
 function getToken() {
   return sessionStorage.getItem('distrito_admin_token');
+}
+
+function DriverSignal({ driver }) {
+  if (!driver || driver.live_status === 'Desconectado') {
+    return (
+      <span
+        title="Desconectado (0/4 barras)"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          color: 'var(--ds-text-muted, #71717a)',
+          opacity: 0.6,
+        }}
+      >
+        <SignalZero size={18} />
+      </span>
+    );
+  }
+
+  // Calcular intensidad de señal según frescura de conexión y precisión GPS
+  let level = 4;
+  let label = 'Señal Excelente';
+  const greenColor = '#10b981';
+
+  const lastSeen = driver.last_seen_at ? new Date(driver.last_seen_at).getTime() : 0;
+  const secondsAgo = lastSeen ? Math.max(0, Math.floor((Date.now() - lastSeen) / 1000)) : 999;
+  const accuracy = driver.current_accuracy != null ? Number(driver.current_accuracy) : null;
+
+  if (secondsAgo > 70) {
+    level = 1;
+    label = 'Señal Débil';
+  } else if (secondsAgo > 40 || (accuracy != null && accuracy > 60)) {
+    level = 2;
+    label = 'Señal Regular';
+  } else if (secondsAgo > 20 || (accuracy != null && accuracy > 30)) {
+    level = 3;
+    label = 'Señal Buena';
+  } else {
+    level = 4;
+    label = 'Señal Excelente';
+  }
+
+  const tooltip = `${label} (${level}/4 barras en verde)${accuracy ? ` · GPS ±${Math.round(accuracy)}m` : ''} · Hace ${secondsAgo}s`;
+
+  return (
+    <span
+      className="delivery-driver-signal"
+      title={tooltip}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'flex-end',
+        gap: '2px',
+        height: '18px',
+        padding: '2px 4px',
+        cursor: 'help',
+      }}
+    >
+      {[1, 2, 3, 4].map((bar) => {
+        const isActive = level >= bar;
+        const heights = ['5px', '9px', '13px', '17px'];
+        return (
+          <span
+            key={bar}
+            style={{
+              width: '3.5px',
+              height: heights[bar - 1],
+              borderRadius: '1.5px',
+              backgroundColor: isActive ? greenColor : 'rgba(255, 255, 255, 0.18)',
+              boxShadow: isActive ? '0 0 6px rgba(16, 185, 129, 0.6)' : 'none',
+              transition: 'all 0.3s ease',
+            }}
+          />
+        );
+      })}
+    </span>
+  );
 }
 
 export default function AdminDeliveryMap() {
@@ -102,17 +178,28 @@ export default function AdminDeliveryMap() {
     () => drivers.find((driver) => Number(driver.id) === Number(selectedId)) || null,
     [drivers, selectedId],
   );
-  const mappedDrivers = useMemo(() => drivers.map((driver) => ({
-    id: driver.id,
-    name: driver.name || driver.username,
-    latitude: driver.current_latitude,
-    longitude: driver.current_longitude,
-    orderId: driver.active_order_id,
-    status: driver.live_status,
-    detail: driver.active_order_count
-      ? `${driver.active_order_count}/${driver.max_active_orders || 5} pedidos`
-      : (driver.vehicle_type || driver.plate || 'Domiciliario'),
-  })), [drivers]);
+  const mappedDrivers = useMemo(() => drivers.map((driver) => {
+    let detailText = '';
+    if (driver.external_company_name) {
+      detailText = driver.active_order_count
+        ? `${driver.active_order_count} ped · [🏢 ${driver.external_company_name}]`
+        : `[🏢 ${driver.external_company_name}]`;
+    } else if (driver.active_order_count) {
+      detailText = `${driver.active_order_count}/${driver.max_active_orders || 5} pedidos`;
+    } else {
+      detailText = driver.plate ? `Placa: ${driver.plate}` : 'Domiciliario propio';
+    }
+
+    return {
+      id: driver.id,
+      name: driver.name || driver.username,
+      latitude: driver.current_latitude,
+      longitude: driver.current_longitude,
+      orderId: driver.active_order_id,
+      status: driver.live_status,
+      detail: detailText,
+    };
+  }), [drivers]);
 
   // Destinos del driver seleccionado para mostrarlos en el mapa
   const selectedDestinations = useMemo(() => {
@@ -201,7 +288,42 @@ export default function AdminDeliveryMap() {
         <div className="delivery-panel-heading"><div><h2>Domiciliarios</h2><p>Selecciona uno para resaltarlo</p></div></div>
         <div className="delivery-driver-list">{loading ? <div className="delivery-loading">Cargando…</div> : drivers.length ? drivers.map((driver) => (
           <div key={driver.id}>
-            <button className={`delivery-driver ${Number(selectedId) === Number(driver.id) ? 'active' : ''}`} onClick={() => setSelectedId(driver.id)}><span className="delivery-avatar">{driver.photo_url ? <img src={driver.photo_url} alt=""/> : <Bike/>}<i className={`presence is-${String(driver.live_status).toLowerCase()}`}/></span><span><b>{driver.name || driver.username}</b><small>{driver.vehicle_type || 'Vehículo sin registrar'} {driver.plate ? `· ${driver.plate}` : ''}</small>{driver.active_order_count > 0 && <em>{driver.active_order_count}/{driver.max_active_orders || 5} pedidos activos{driver.active_order_id ? ` · Próximo #${driver.active_order_id}` : ''}</em>}</span><span className="delivery-driver-state">{driver.live_status === 'Desconectado' ? <SignalZero/> : <Signal/>}</span></button>
+            <button className={`delivery-driver ${Number(selectedId) === Number(driver.id) ? 'active' : ''}`} onClick={() => setSelectedId(driver.id)}>
+              <span className="delivery-avatar">
+                {driver.photo_url ? <img src={driver.photo_url} alt=""/> : <Bike/>}
+                <i className={`presence is-${String(driver.live_status).toLowerCase()}`}/>
+              </span>
+              <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
+                <b>{driver.name || driver.username}</b>
+                {driver.external_company_name && (
+                  <span
+                    className="ds-badge"
+                    style={{
+                      fontSize: '11px',
+                      padding: '2px 7px',
+                      backgroundColor: 'rgba(212, 160, 23, 0.15)',
+                      color: 'var(--ds-primary)',
+                      border: '1px solid rgba(212, 160, 23, 0.3)',
+                      borderRadius: '4px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      fontWeight: 600,
+                      marginTop: '1px',
+                      marginBottom: '2px',
+                    }}
+                    title={`Domiciliario externo de ${driver.external_company_name}`}
+                  >
+                    <Building2 size={11} /> {driver.external_company_name}
+                  </span>
+                )}
+                <small>{driver.vehicle_type || 'Vehículo sin registrar'} {driver.plate ? `· ${driver.plate}` : ''}</small>
+                {driver.active_order_count > 0 && <em>{driver.active_order_count}/{driver.max_active_orders || 5} pedidos activos{driver.active_order_id ? ` · Próximo #${driver.active_order_id}` : ''}</em>}
+              </span>
+              <span className="delivery-driver-state">
+                <DriverSignal driver={driver} />
+              </span>
+            </button>
             {Number(selectedId) === Number(driver.id) && driver.active_orders && driver.active_orders.length > 0 && (
               <div style={{ padding: '10px', backgroundColor: 'var(--ds-bg-secondary)', borderRadius: '8px', marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <h4 style={{ margin: 0, fontSize: '13px', color: 'var(--ds-text-secondary)' }}>Pedidos en curso:</h4>
@@ -222,7 +344,7 @@ export default function AdminDeliveryMap() {
     </div>
     <section className="ds-card delivery-queue">
       <div className="delivery-panel-heading"><div><h2>Pedidos listos</h2><p>Asignación manual sin salir del mapa operativo</p></div><span className="ds-badge ds-badge-warning">{orders.length} pendientes</span></div>
-      {orders.length ? <div className="delivery-order-grid">{orders.map((order) => <article key={order.id}><div><span className="ds-badge ds-badge-success">Listo</span><b>Pedido #{order.id}</b><small>{dateTime(order.createdAt)}</small></div><h3>{order.customerName}</h3><p><MapPin size={16}/> {order.address}, {order.barrio}</p><div className="delivery-order-meta"><span>{order.paymentMethod}</span><strong>{money.format(order.deliveryFee)}</strong></div><div className="delivery-assign"><select className="ds-input" value={assignments[order.id] || ''} onChange={(event) => setAssignments({ ...assignments, [order.id]: event.target.value })}><option value="">Selecciona un domiciliario conectado</option>{eligibleDrivers.map((driver) => <option value={driver.id} key={driver.id}>{driver.name || driver.username} · {driver.live_status} · {driver.active_order_count || 0}/{driver.max_active_orders || 5}</option>)}</select><button className="ds-btn ds-btn-primary" disabled={!assignments[order.id]} onClick={() => assign(order.id)}><Send size={17}/> Asignar</button></div>{!eligibleDrivers.length && <small className="ds-text-muted">No hay domiciliarios conectados con cupo disponible.</small>}</article>)}</div> : <div className="delivery-map-empty compact"><Package/><p>No hay pedidos en estado Listo pendientes de reparto.</p></div>}
+      {orders.length ? <div className="delivery-order-grid">{orders.map((order) => <article key={order.id}><div><span className="ds-badge ds-badge-success">Listo</span><b>Pedido #{order.id}</b><small>{dateTime(order.createdAt)}</small></div><h3>{order.customerName}</h3><p><MapPin size={16}/> {order.address}, {order.barrio}</p><div className="delivery-order-meta"><span>{order.paymentMethod}</span><strong>{money.format(order.deliveryFee)}</strong></div><div className="delivery-assign"><select className="ds-input" value={assignments[order.id] || ''} onChange={(event) => setAssignments({ ...assignments, [order.id]: event.target.value })}><option value="">Selecciona un domiciliario conectado</option>{eligibleDrivers.map((driver) => <option value={driver.id} key={driver.id}>{driver.name || driver.username}{driver.external_company_name ? ` · [${driver.external_company_name}]` : ''} · {driver.live_status} · {driver.active_order_count || 0}/{driver.max_active_orders || 5}</option>)}</select><button className="ds-btn ds-btn-primary" disabled={!assignments[order.id]} onClick={() => assign(order.id)}><Send size={17}/> Asignar</button></div>{!eligibleDrivers.length && <small className="ds-text-muted">No hay domiciliarios conectados con cupo disponible.</small>}</article>)}</div> : <div className="delivery-map-empty compact"><Package/><p>No hay pedidos en estado Listo pendientes de reparto.</p></div>}
     </section>
   </div>;
 }
