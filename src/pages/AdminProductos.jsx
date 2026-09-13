@@ -3,6 +3,7 @@ import {
   AlertTriangle, Boxes, CheckCircle, ChevronLeft, ChevronRight, Copy,
   Eye, Image as ImageIcon, Package, Pencil, Plus, RefreshCw, Search,
   Star, Trash2, Upload, X, XCircle,
+  ChevronUp, ChevronDown, GripVertical, ArrowUpDown
 } from 'lucide-react';
 import { API_URL } from '../config/api';
 import { formatCurrency, formatNumber } from '../utils/formatters';
@@ -33,7 +34,7 @@ function ProductImage({ product, size = 'table' }) {
 export default function AdminProductos() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [filters, setFilters] = useState({ search: '', category: '', status: '', featured: '', stock: '', sort: 'updated_desc' });
+  const [filters, setFilters] = useState({ search: '', category: '', status: '', featured: '', stock: '', sort: 'custom' });
   const [page, setPage] = useState(1);
   const [currentProduct, setCurrentProduct] = useState(EMPTY_PRODUCT);
   const [previewProduct, setPreviewProduct] = useState(null);
@@ -42,6 +43,82 @@ export default function AdminProductos() {
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [notice, setNotice] = useState(null);
+  const [draggedProduct, setDraggedProduct] = useState(null);
+  const [reordering, setReordering] = useState(false);
+
+  const saveReorderedProducts = async (newProductsList) => {
+    setReordering(true);
+    const token = sessionStorage.getItem('distrito_admin_token');
+    try {
+      const res = await fetch(`${API_URL}/admin/products/reorder`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ orderedIds: newProductsList.map((p) => p.id) }),
+      });
+      const data = await res.json();
+      if (data.status !== 'ok') {
+        fetchData({ silent: true });
+      }
+    } catch (err) {
+      console.error(err);
+      fetchData({ silent: true });
+    } finally {
+      setReordering(false);
+    }
+  };
+
+  const handleMoveProduct = async (product, direction) => {
+    const currentIndex = filteredProducts.findIndex((p) => p.id === product.id);
+    if (currentIndex === -1) return;
+    const targetIndex = currentIndex + direction;
+    if (targetIndex < 0 || targetIndex >= filteredProducts.length) return;
+
+    const targetProduct = filteredProducts[targetIndex];
+
+    const newProducts = [...products];
+    const fromIdx = newProducts.findIndex((p) => p.id === product.id);
+    const toIdx = newProducts.findIndex((p) => p.id === targetProduct.id);
+    if (fromIdx === -1 || toIdx === -1) return;
+
+    const [moved] = newProducts.splice(fromIdx, 1);
+    newProducts.splice(toIdx, 0, moved);
+
+    const updatedWithOrder = newProducts.map((p, idx) => ({ ...p, sort_order: idx + 1 }));
+    setProducts(updatedWithOrder);
+    await saveReorderedProducts(updatedWithOrder);
+  };
+
+  const handleDragStart = (e, product) => {
+    setDraggedProduct(product);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(product.id));
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = async (e, targetProduct) => {
+    e.preventDefault();
+    const sourceId = e.dataTransfer.getData('text/plain') || draggedProduct?.id;
+    setDraggedProduct(null);
+    if (!sourceId || String(sourceId) === String(targetProduct.id)) return;
+
+    const newProducts = [...products];
+    const fromIdx = newProducts.findIndex((p) => String(p.id) === String(sourceId));
+    const toIdx = newProducts.findIndex((p) => String(p.id) === String(targetProduct.id));
+    if (fromIdx === -1 || toIdx === -1) return;
+
+    const [moved] = newProducts.splice(fromIdx, 1);
+    newProducts.splice(toIdx, 0, moved);
+
+    const updatedWithOrder = newProducts.map((p, idx) => ({ ...p, sort_order: idx + 1 }));
+    setProducts(updatedWithOrder);
+    await saveReorderedProducts(updatedWithOrder);
+  };
 
   const fetchData = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
@@ -82,6 +159,7 @@ export default function AdminProductos() {
       if (filters.stock === 'controlled' && !product.track_stock) return false;
       return true;
     }).sort((a, b) => {
+      if (filters.sort === 'custom') return (a.sort_order ?? 0) - (b.sort_order ?? 0);
       if (filters.sort === 'name_asc') return a.title.localeCompare(b.title, 'es');
       if (filters.sort === 'name_desc') return b.title.localeCompare(a.title, 'es');
       if (filters.sort === 'price_asc') return Number(a.price) - Number(b.price);
@@ -222,27 +300,100 @@ export default function AdminProductos() {
           <select className="ds-select" value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}><option value="">Todos los estados</option><option value="Activo">Activos</option><option value="Inactivo">Inactivos</option></select>
           <select className="ds-select" value={filters.stock} onChange={(event) => setFilters({ ...filters, stock: event.target.value })}><option value="">Cualquier inventario</option><option value="controlled">Con control</option><option value="low">Stock bajo</option><option value="out">Agotados</option></select>
           <select className="ds-select" value={filters.featured} onChange={(event) => setFilters({ ...filters, featured: event.target.value })}><option value="">Todos</option><option value="yes">Destacados</option><option value="no">No destacados</option></select>
-          <select className="ds-select" value={filters.sort} onChange={(event) => setFilters({ ...filters, sort: event.target.value })}><option value="updated_desc">Actualizados recientemente</option><option value="name_asc">Nombre A–Z</option><option value="name_desc">Nombre Z–A</option><option value="price_asc">Menor precio</option><option value="price_desc">Mayor precio</option><option value="stock_asc">Menor existencia</option></select>
-          {hasFilters && <button className="ds-btn ds-btn-ghost" onClick={() => setFilters({ search: '', category: '', status: '', featured: '', stock: '', sort: 'updated_desc' })}><X size={17} /> Limpiar</button>}
+          <select className="ds-select" value={filters.sort} onChange={(event) => setFilters({ ...filters, sort: event.target.value })}><option value="custom">Orden personalizado (Tienda Web)</option><option value="updated_desc">Actualizados recientemente</option><option value="name_asc">Nombre A–Z</option><option value="name_desc">Nombre Z–A</option><option value="price_asc">Menor precio</option><option value="price_desc">Mayor precio</option><option value="stock_asc">Menor existencia</option></select>
+          {hasFilters && <button className="ds-btn ds-btn-ghost" onClick={() => setFilters({ search: '', category: '', status: '', featured: '', stock: '', sort: 'custom' })}><X size={17} /> Limpiar</button>}
         </div>
 
         <div className="ds-table-container product-table-container">
           <table className="ds-table product-table">
-            <thead><tr><th>Producto</th><th>Categoría</th><th>Precio</th><th>Inventario</th><th>Visible</th><th>Destacado</th><th className="product-actions-heading">Acciones</th></tr></thead>
-            <tbody>{visibleProducts.map((product) => { const stockState = productStockState(product); return <tr key={product.id}>
-              <td><div className="product-name-cell"><ProductImage product={product} /><div><strong>{product.title}</strong><span>{product.description || 'Sin descripción'}</span>{product.barcode && <small>Cod. {product.barcode}</small>}</div></div></td>
-              <td><span className="ds-badge ds-badge-neutral">{product.category || 'Sin categoría'}</span></td>
-              <td><strong>{formatCurrency(product.price)}</strong>{Number(product.inventory_unit_cost) > 0 && <small className="product-cost">Costo {formatCurrency(product.inventory_unit_cost)}</small>}</td>
-              <td><span className={`ds-badge ds-badge-${stockState.tone}`}><Boxes size={13} /> {stockState.label}</span></td>
-              <td><button className={`ds-switch ${product.status === 'Activo' ? 'active' : ''}`} disabled={busyId === product.id} onClick={() => quickUpdate(product, { status: product.status === 'Activo' ? 'Inactivo' : 'Activo' })} aria-label={`${product.status === 'Activo' ? 'Ocultar' : 'Publicar'} ${product.title}`} aria-pressed={product.status === 'Activo'}><i /></button></td>
-              <td><button className={`product-feature-button ${product.is_featured ? 'active' : ''}`} disabled={busyId === product.id} onClick={() => quickUpdate(product, { is_featured: !product.is_featured })} aria-label={`${product.is_featured ? 'Quitar de' : 'Agregar a'} destacados`} aria-pressed={product.is_featured}><Star size={21} fill={product.is_featured ? 'currentColor' : 'none'} /></button></td>
-              <td><div className="product-row-actions"><button className="ds-btn-icon ds-btn-secondary" onClick={() => setPreviewProduct(product)} aria-label={`Ver ${product.title}`}><Eye size={16} /></button><button className="ds-btn-icon ds-btn-secondary" onClick={() => openProduct(product)} aria-label={`Editar ${product.title}`}><Pencil size={16} /></button><button className="ds-btn-icon ds-btn-secondary" onClick={() => openProduct(product, true)} aria-label={`Duplicar ${product.title}`}><Copy size={16} /></button><button className="ds-btn-icon ds-btn-danger" disabled={busyId === product.id} onClick={() => handleDelete(product)} aria-label={`Eliminar ${product.title}`}><Trash2 size={16} /></button></div></td>
-            </tr>; })}</tbody>
+            <thead><tr><th style={{ width: '80px', textAlign: 'center' }}>Posición</th><th>Producto</th><th>Categoría</th><th>Precio</th><th>Inventario</th><th>Visible</th><th>Destacado</th><th className="product-actions-heading">Acciones</th></tr></thead>
+            <tbody>{visibleProducts.map((product, visibleIdx) => { 
+              const stockState = productStockState(product); 
+              const overallIdx = (page - 1) * PAGE_SIZE + visibleIdx;
+              const canMoveUp = overallIdx > 0;
+              const canMoveDown = overallIdx < filteredProducts.length - 1;
+              const isReorderDisabled = Boolean(filters.search.trim()) || filters.sort !== 'custom';
+
+              return <tr key={product.id}>
+                <td>
+                  <div 
+                    draggable={!isReorderDisabled}
+                    onDragStart={(e) => handleDragStart(e, product)}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, product)}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', cursor: isReorderDisabled ? 'default' : 'grab' }}
+                  >
+                    <GripVertical size={16} style={{ color: isReorderDisabled ? '#444' : '#888' }} />
+                    <button 
+                      type="button"
+                      className="ds-btn-icon ds-btn-secondary" 
+                      style={{ width: '26px', height: '26px', padding: 0 }}
+                      disabled={!canMoveUp || isReorderDisabled || reordering}
+                      onClick={() => handleMoveProduct(product, -1)}
+                      title="Mover arriba"
+                    >
+                      <ChevronUp size={15} />
+                    </button>
+                    <button 
+                      type="button"
+                      className="ds-btn-icon ds-btn-secondary" 
+                      style={{ width: '26px', height: '26px', padding: 0 }}
+                      disabled={!canMoveDown || isReorderDisabled || reordering}
+                      onClick={() => handleMoveProduct(product, 1)}
+                      title="Mover abajo"
+                    >
+                      <ChevronDown size={15} />
+                    </button>
+                  </div>
+                </td>
+                <td><div className="product-name-cell"><ProductImage product={product} /><div><strong>{product.title}</strong><span>{product.description || 'Sin descripción'}</span>{product.barcode && <small>Cod. {product.barcode}</small>}</div></div></td>
+                <td><span className="ds-badge ds-badge-neutral">{product.category || 'Sin categoría'}</span></td>
+                <td><strong>{formatCurrency(product.price)}</strong>{Number(product.inventory_unit_cost) > 0 && <small className="product-cost">Costo {formatCurrency(product.inventory_unit_cost)}</small>}</td>
+                <td><span className={`ds-badge ds-badge-${stockState.tone}`}><Boxes size={13} /> {stockState.label}</span></td>
+                <td><button className={`ds-switch ${product.status === 'Activo' ? 'active' : ''}`} disabled={busyId === product.id} onClick={() => quickUpdate(product, { status: product.status === 'Activo' ? 'Inactivo' : 'Activo' })} aria-label={`${product.status === 'Activo' ? 'Ocultar' : 'Publicar'} ${product.title}`} aria-pressed={product.status === 'Activo'}><i /></button></td>
+                <td><button className={`product-feature-button ${product.is_featured ? 'active' : ''}`} disabled={busyId === product.id} onClick={() => quickUpdate(product, { is_featured: !product.is_featured })} aria-label={`${product.is_featured ? 'Quitar de' : 'Agregar a'} destacados`} aria-pressed={product.is_featured}><Star size={21} fill={product.is_featured ? 'currentColor' : 'none'} /></button></td>
+                <td><div className="product-row-actions"><button className="ds-btn-icon ds-btn-secondary" onClick={() => setPreviewProduct(product)} aria-label={`Ver ${product.title}`}><Eye size={16} /></button><button className="ds-btn-icon ds-btn-secondary" onClick={() => openProduct(product)} aria-label={`Editar ${product.title}`}><Pencil size={16} /></button><button className="ds-btn-icon ds-btn-secondary" onClick={() => openProduct(product, true)} aria-label={`Duplicar ${product.title}`}><Copy size={16} /></button><button className="ds-btn-icon ds-btn-danger" disabled={busyId === product.id} onClick={() => handleDelete(product)} aria-label={`Eliminar ${product.title}`}><Trash2 size={16} /></button></div></td>
+              </tr>; 
+            })}</tbody>
           </table>
           {!visibleProducts.length && <div className="ds-empty-state"><Package size={38} /><strong>No encontramos productos</strong><span>Ajusta los filtros o crea un producto nuevo.</span></div>}
         </div>
 
-        <div className="product-mobile-list">{visibleProducts.map((product) => { const stockState = productStockState(product); return <article key={product.id} className="product-mobile-card"><div className="product-mobile-heading"><ProductImage product={product} /><div><strong>{product.title}</strong><span>{product.category || 'Sin categoría'}</span></div><strong>{formatCurrency(product.price)}</strong></div><div className="product-mobile-meta"><span className={`ds-badge ds-badge-${product.status === 'Activo' ? 'success' : 'neutral'}`}>{product.status}</span><span className={`ds-badge ds-badge-${stockState.tone}`}>{stockState.label}</span>{product.is_featured && <span className="ds-badge ds-badge-primary"><Star size={12} /> Destacado</span>}</div><div className="product-mobile-actions"><button className="ds-btn ds-btn-secondary" onClick={() => setPreviewProduct(product)}><Eye size={16} /> Ver</button><button className="ds-btn ds-btn-secondary" onClick={() => openProduct(product)}><Pencil size={16} /> Editar</button><button className="ds-btn ds-btn-danger" onClick={() => handleDelete(product)}><Trash2 size={16} /></button></div></article>; })}{!visibleProducts.length && <div className="ds-empty-state"><Package size={38} /><strong>No encontramos productos</strong></div>}</div>
+        <div className="product-mobile-list">{visibleProducts.map((product, visibleIdx) => { 
+          const stockState = productStockState(product); 
+          const overallIdx = (page - 1) * PAGE_SIZE + visibleIdx;
+          const canMoveUp = overallIdx > 0;
+          const canMoveDown = overallIdx < filteredProducts.length - 1;
+          const isReorderDisabled = Boolean(filters.search.trim()) || filters.sort !== 'custom';
+
+          return <article key={product.id} className="product-mobile-card">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '8px' }}>
+              <span style={{ fontSize: '13px', color: '#BDBDBD', fontWeight: '500' }}>Posición #{overallIdx + 1}</span>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button 
+                  type="button" 
+                  className="ds-btn-icon ds-btn-secondary" 
+                  style={{ width: '30px', height: '30px', padding: 0 }}
+                  disabled={!canMoveUp || isReorderDisabled || reordering} 
+                  onClick={() => handleMoveProduct(product, -1)} 
+                  title="Mover arriba"
+                >
+                  <ChevronUp size={16} />
+                </button>
+                <button 
+                  type="button" 
+                  className="ds-btn-icon ds-btn-secondary" 
+                  style={{ width: '30px', height: '30px', padding: 0 }}
+                  disabled={!canMoveDown || isReorderDisabled || reordering} 
+                  onClick={() => handleMoveProduct(product, 1)} 
+                  title="Mover abajo"
+                >
+                  <ChevronDown size={16} />
+                </button>
+              </div>
+            </div>
+            <div className="product-mobile-heading"><ProductImage product={product} /><div><strong>{product.title}</strong><span>{product.category || 'Sin categoría'}</span></div><strong>{formatCurrency(product.price)}</strong></div><div className="product-mobile-meta"><span className={`ds-badge ds-badge-${product.status === 'Activo' ? 'success' : 'neutral'}`}>{product.status}</span><span className={`ds-badge ds-badge-${stockState.tone}`}>{stockState.label}</span>{product.is_featured && <span className="ds-badge ds-badge-primary"><Star size={12} /> Destacado</span>}</div><div className="product-mobile-actions"><button className="ds-btn ds-btn-secondary" onClick={() => setPreviewProduct(product)}><Eye size={16} /> Ver</button><button className="ds-btn ds-btn-secondary" onClick={() => openProduct(product)}><Pencil size={16} /> Editar</button><button className="ds-btn ds-btn-danger" onClick={() => handleDelete(product)}><Trash2 size={16} /></button></div></article>; 
+        })}{!visibleProducts.length && <div className="ds-empty-state"><Package size={38} /><strong>No encontramos productos</strong></div>}</div>
 
         <footer className="product-pagination"><span>Mostrando {start}–{end} de {filteredProducts.length}</span><div><button className="ds-btn-icon ds-btn-secondary" disabled={page === 1} onClick={() => setPage((value) => value - 1)} aria-label="Página anterior"><ChevronLeft size={18} /></button><strong>Página {page} de {pageCount}</strong><button className="ds-btn-icon ds-btn-secondary" disabled={page === pageCount} onClick={() => setPage((value) => value + 1)} aria-label="Página siguiente"><ChevronRight size={18} /></button></div></footer>
       </section>

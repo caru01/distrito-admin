@@ -1,6 +1,6 @@
 import { API_URL } from '../config/api';
 import React, { useState, useEffect } from 'react';
-import { Folder, Plus, Search, Package, BadgeCheck, Pencil, Trash2, ChevronLeft, ChevronRight, X, Utensils } from 'lucide-react';
+import { Folder, Plus, Search, Package, BadgeCheck, Pencil, Trash2, ChevronLeft, ChevronRight, X, Utensils, ChevronUp, ChevronDown, GripVertical, ArrowUpDown } from 'lucide-react';
 
 const EMOJI_OPTIONS = [
   '🍔', '🍕', '🌭', '🥪', '🌮', '🌯', '🥙', '🧆', '🍟', '🥩', '🍗', '🍖', '🥓', 
@@ -104,6 +104,65 @@ export default function AdminCategorias() {
   };
 
   const [search, setSearch] = useState('');
+  const [draggedIndex, setDraggedIndex] = useState(null);
+  const [reordering, setReordering] = useState(false);
+
+  const saveReorderedCategories = async (newCategories) => {
+    setReordering(true);
+    const token = sessionStorage.getItem('distrito_admin_token');
+    try {
+      const res = await fetch(`${API_URL}/admin/categories/reorder`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ orderedIds: newCategories.map(c => c.id) })
+      });
+      const data = await res.json();
+      if (data.status !== 'ok') {
+        fetchCategories();
+      }
+    } catch (err) {
+      console.error(err);
+      fetchCategories();
+    } finally {
+      setReordering(false);
+    }
+  };
+
+  const handleMoveCategory = async (index, direction) => {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= categories.length) return;
+
+    const newCategories = [...categories];
+    const [moved] = newCategories.splice(index, 1);
+    newCategories.splice(targetIndex, 0, moved);
+
+    setCategories(newCategories);
+    await saveReorderedCategories(newCategories);
+  };
+
+  const handleDragStart = (e, index) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === index) return;
+    const newCategories = [...categories];
+    const [moved] = newCategories.splice(draggedIndex, 1);
+    newCategories.splice(index, 0, moved);
+    setDraggedIndex(index);
+    setCategories(newCategories);
+  };
+
+  const handleDragEnd = async () => {
+    if (draggedIndex === null) return;
+    setDraggedIndex(null);
+    await saveReorderedCategories(categories);
+  };
 
   const filteredCategories = categories.filter(c => {
     if (!search.trim()) return true;
@@ -159,7 +218,15 @@ export default function AdminCategorias() {
         </div>
       </div>
 
-      {/* Barra de Búsqueda */}
+      {/* Barra de Búsqueda y Ayuda de Reordenamiento */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', padding: '10px 16px', backgroundColor: 'rgba(212, 160, 23, 0.08)', borderRadius: '12px', border: '1px solid rgba(212, 160, 23, 0.2)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#D4A017', fontSize: '14px', fontWeight: '600' }}>
+          <ArrowUpDown size={18} />
+          <span>Orden en Tienda Web: Arrastra las filas o usa las flechas ⬆️ ⬇️ para definir el orden en que tus clientes verán las categorías.</span>
+        </div>
+        {reordering && <span style={{ fontSize: '13px', color: '#FFFFFF', opacity: 0.8 }}>Guardando orden…</span>}
+      </div>
+
       <div className="ds-form" style={{ marginBottom: '24px' }}>
         <div className="ds-search" style={{ width: '100%' }}>
           <Search size={20} className="ds-search-icon" />
@@ -179,6 +246,7 @@ export default function AdminCategorias() {
         <table className="ds-table">
           <thead>
             <tr>
+              <th style={{ width: '90px', textAlign: 'center' }}>Posición</th>
               <th style={{ width: '80px' }}>Icono</th>
               <th>Categoría</th>
               <th>Descripción</th>
@@ -188,8 +256,40 @@ export default function AdminCategorias() {
             </tr>
           </thead>
           <tbody>
-            {displayCategories.map((cat) => (
-              <tr key={cat.id}>
+            {displayCategories.map((cat, index) => (
+              <tr 
+                key={cat.id}
+                draggable={!search.trim()}
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDragEnd={handleDragEnd}
+                style={{ cursor: !search.trim() ? 'grab' : 'default', opacity: draggedIndex === index ? 0.5 : 1 }}
+              >
+                <td>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}>
+                    <GripVertical size={16} style={{ color: '#666', cursor: 'grab' }} />
+                    <button 
+                      type="button"
+                      className="ds-btn-icon ds-btn-secondary" 
+                      style={{ width: '28px', height: '28px', padding: 0 }}
+                      disabled={index === 0 || Boolean(search.trim())}
+                      onClick={() => handleMoveCategory(index, -1)}
+                      title="Mover arriba"
+                    >
+                      <ChevronUp size={16} />
+                    </button>
+                    <button 
+                      type="button"
+                      className="ds-btn-icon ds-btn-secondary" 
+                      style={{ width: '28px', height: '28px', padding: 0 }}
+                      disabled={index === categories.length - 1 || Boolean(search.trim())}
+                      onClick={() => handleMoveCategory(index, 1)}
+                      title="Mover abajo"
+                    >
+                      <ChevronDown size={16} />
+                    </button>
+                  </div>
+                </td>
                 <td>
                   <div style={{ width: '48px', height: '48px', borderRadius: '12px', backgroundColor: '#1A1A1A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', border: '1px solid #333333' }}>
                     {cat.image || '🍔'}
@@ -213,7 +313,7 @@ export default function AdminCategorias() {
             ))}
             {displayCategories.length === 0 && (
               <tr>
-                <td colSpan="6" style={{ padding: '40px', textAlign: 'center', color: '#BDBDBD' }}>
+                <td colSpan="7" style={{ padding: '40px', textAlign: 'center', color: '#BDBDBD' }}>
                   No hay categorías registradas. ¡Haz clic en "Nueva categoría" para empezar!
                 </td>
               </tr>
@@ -224,8 +324,33 @@ export default function AdminCategorias() {
 
       {/* Cards (Mobile) */}
       <div className="hide-on-desktop ds-table-cards">
-        {displayCategories.map((cat) => (
+        {displayCategories.map((cat, index) => (
           <div key={cat.id} className="ds-table-card">
+            <div className="ds-table-card-row">
+              <span className="ds-table-card-label">Orden</span>
+              <span className="ds-table-card-value">
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button 
+                    type="button"
+                    className="ds-btn-icon ds-btn-secondary" 
+                    disabled={index === 0 || Boolean(search.trim())}
+                    onClick={() => handleMoveCategory(index, -1)}
+                    title="Mover arriba"
+                  >
+                    <ChevronUp size={16} />
+                  </button>
+                  <button 
+                    type="button"
+                    className="ds-btn-icon ds-btn-secondary" 
+                    disabled={index === categories.length - 1 || Boolean(search.trim())}
+                    onClick={() => handleMoveCategory(index, 1)}
+                    title="Mover abajo"
+                  >
+                    <ChevronDown size={16} />
+                  </button>
+                </div>
+              </span>
+            </div>
             <div className="ds-table-card-row">
               <span className="ds-table-card-label">Icono</span>
               <span className="ds-table-card-value">{cat.image || '🍔'}</span>
