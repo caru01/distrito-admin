@@ -72,7 +72,8 @@ export default function AdminPedidos() {
   const getInitialOrders = () => {
     try {
       const cached = sessionStorage.getItem('distrito_admin_orders_cache');
-      return cached ? JSON.parse(cached) : [];
+      const parsed = cached ? JSON.parse(cached) : [];
+      return Array.isArray(parsed) ? parsed.filter(o => o && typeof o === 'object') : [];
     } catch (e) { return []; }
   };
 
@@ -111,32 +112,36 @@ export default function AdminPedidos() {
       const res = await fetch(`${API_URL}/admin/orders`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      const data = await res.json();
-      if (data.status === 'ok' && Array.isArray(data.orders)) {
-        // Detectar si entraron pedidos nuevos después de la carga inicial
-        if (!isFirstLoadRef.current && knownOrderIdsRef.current.size > 0) {
-          const hasNewIncomingOrder = data.orders.some(o => 
-            !knownOrderIdsRef.current.has(Number(o.id)) && 
-            ['Nuevo', 'En preparación', 'Por preparar'].includes(o.status)
-          );
-          if (hasNewIncomingOrder && soundEnabled) {
-            playNewOrderChime();
-          }
-        }
-
-        // Registrar IDs de pedidos
-        data.orders.forEach(o => knownOrderIdsRef.current.add(Number(o.id)));
-        isFirstLoadRef.current = false;
-
-        setOrders(data.orders);
-        setSelectedOrder(current => current
-          ? data.orders.find(order => Number(order.id) === Number(current.id)) || current
-          : null);
-        setLastSyncTime(new Date());
-        try {
-          sessionStorage.setItem('distrito_admin_orders_cache', JSON.stringify(data.orders));
-        } catch (e) { }
+      if (!res.ok) {
+        console.warn(`[pedidos] Error al consultar pedidos: HTTP ${res.status}`);
+        return;
       }
+      const data = await res.json().catch(() => null);
+      if (!data || data.status !== 'ok' || !Array.isArray(data.orders)) return;
+
+      // Detectar si entraron pedidos nuevos después de la carga inicial
+      if (!isFirstLoadRef.current && knownOrderIdsRef.current.size > 0) {
+        const hasNewIncomingOrder = data.orders.some(o => 
+          !knownOrderIdsRef.current.has(Number(o.id)) && 
+          ['Nuevo', 'En preparación', 'Por preparar'].includes(o.status)
+        );
+        if (hasNewIncomingOrder && soundEnabled) {
+          playNewOrderChime();
+        }
+      }
+
+      // Registrar IDs de pedidos
+      data.orders.forEach(o => o?.id && knownOrderIdsRef.current.add(Number(o.id)));
+      isFirstLoadRef.current = false;
+
+      setOrders(data.orders);
+      setSelectedOrder(current => current
+        ? data.orders.find(order => Number(order?.id) === Number(current?.id)) || current
+        : null);
+      setLastSyncTime(new Date());
+      try {
+        sessionStorage.setItem('distrito_admin_orders_cache', JSON.stringify(data.orders));
+      } catch (e) { }
     } catch (err) {
       console.error('Error fetching orders:', err);
     } finally {
@@ -689,7 +694,7 @@ export default function AdminPedidos() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', backgroundColor: 'var(--ds-bg-elevated)', border: '1px solid var(--ds-border)', borderRadius: '12px', padding: '0 16px', height: '52px' }}>
           <label style={{ color: 'var(--ds-text-secondary)', fontSize: '14px', fontWeight: '500', marginRight: '12px' }}>Fecha:</label>
-          <input type="date" onClick={(e) => e.target.showPicker && e.target.showPicker()} value={filterDate} onChange={e => setFilterDate(e.target.value)}
+          <input type="date" onClick={(e) => { try { e.target.showPicker?.(); } catch {} }} value={filterDate} onChange={e => setFilterDate(e.target.value)}
             style={{ backgroundColor: 'transparent', color: 'var(--ds-text-primary)', border: 'none', outline: 'none', fontSize: '15px', cursor: 'pointer', colorScheme: 'dark' }} />
           {filterDate && <button onClick={() => setFilterDate('')} style={{ background: 'none', border: 'none', color: 'var(--ds-text-muted)', cursor: 'pointer', marginLeft: '8px', padding: '4px' }}><X size={16} /></button>}
         </div>

@@ -1073,8 +1073,7 @@ export default function TomarPedido() {
                   type="datetime-local"
                   value={customer.created_at || ''} 
                   onChange={e => setCustomer(c => ({ ...c, created_at: e.target.value }))}
-                  onClick={e => e.target.showPicker && e.target.showPicker()}
-                  onFocus={e => e.target.showPicker && e.target.showPicker()}
+                  onClick={e => { try { e.target.showPicker?.(); } catch {} }}
                   className="ds-input" 
                   style={{ height: '42px', fontSize: '13px', colorScheme: 'dark', cursor: 'pointer', width: '100%' }} 
                 />
