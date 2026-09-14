@@ -3,7 +3,8 @@ import {
   Archive, Boxes, Edit3, Plus, Search, X, ShoppingCart, Layers, DollarSign,
   Trash2, CheckCircle2, ShieldAlert, Utensils, TrendingUp, AlertTriangle, AlertCircle,
   ArrowRightLeft, ArrowDownRight, ArrowUpRight, FileText, Check, HelpCircle,
-  Filter, Calendar, User, Eye, Sparkles, ChevronRight, ChevronDown, RefreshCw
+  Filter, Calendar, User, Eye, Sparkles, ChevronRight, ChevronDown, RefreshCw,
+  Copy, ClipboardCheck
 } from 'lucide-react';
 import { API_URL } from '../config/api';
 import { formatCurrency, formatDateTime } from '../utils/formatters';
@@ -126,6 +127,11 @@ export default function AdminInventario() {
   const [selectedRecipeProduct, setSelectedRecipeProduct] = useState('');
   const [newRecipeInsumo, setNewRecipeInsumo] = useState('');
   const [newRecipeQty, setNewRecipeQty] = useState(1);
+  const [copiedRecipe, setCopiedRecipe] = useState(null);
+  const [copyModalOpen, setCopyModalOpen] = useState(false);
+  const [copyTargetProductId, setCopyTargetProductId] = useState('');
+  const [copyMode, setCopyMode] = useState('replace');
+
 
   // Filtros avanzados de Kardex
   const [kardexFilterInsumo, setKardexFilterInsumo] = useState('');
@@ -722,6 +728,76 @@ export default function AdminInventario() {
       setBusy(false);
     }
   };
+
+  const handleCopyRecipe = (productToCopy = activeSelectedProduct, itemsToCopy = activeRecipeItems, costToCopy = activeRecipeCost) => {
+    if (!productToCopy || !itemsToCopy.length) {
+      return showToast('Este producto no tiene insumos en su receta para copiar', 'error');
+    }
+    setCopiedRecipe({
+      productId: productToCopy.id,
+      productTitle: productToCopy.title,
+      itemsCount: itemsToCopy.length,
+      cost: costToCopy
+    });
+    showToast(`✓ Receta de "${productToCopy.title}" copiada (${itemsToCopy.length} insumos). Selecciona otro producto y haz clic en "Pegar Receta"`);
+  };
+
+  const handlePasteRecipe = async (targetId = selectedRecipeProduct, mode = 'replace') => {
+    if (!copiedRecipe) return showToast('No hay ninguna receta copiada', 'error');
+    if (!targetId) return showToast('Selecciona un producto de venta destino', 'error');
+    if (String(copiedRecipe.productId) === String(targetId)) {
+      return showToast('El producto destino no puede ser el mismo producto origen', 'error');
+    }
+
+    const targetProduct = products.find((p) => String(p.id) === String(targetId));
+    const targetTitle = targetProduct?.title || 'el producto destino';
+
+    const confirmMsg = mode === 'replace'
+      ? `¿Reemplazar la receta de "${targetTitle}" con los ${copiedRecipe.itemsCount} insumos de "${copiedRecipe.productTitle}"?`
+      : `¿Agregar los insumos de "${copiedRecipe.productTitle}" a la receta de "${targetTitle}"?`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    setBusy(true);
+    try {
+      const res = await fetchAuth(`${API_URL}/admin/recipes/copy`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          source_product_id: copiedRecipe.productId,
+          target_product_id: targetId,
+          mode: mode
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al copiar receta');
+
+      showToast(`✓ Receta copiada con éxito a "${targetTitle}" (${data.copied_count || copiedRecipe.itemsCount} insumos)`);
+      if (copyModalOpen) setCopyModalOpen(false);
+      setSelectedRecipeProduct(targetId);
+      await Promise.all([loadRecipes(), loadProfitability()]);
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleOpenDuplicateModal = (sourceProduct = activeSelectedProduct) => {
+    if (!sourceProduct || !activeRecipeItems.length) {
+      return showToast('Este producto no tiene insumos en su receta para duplicar', 'error');
+    }
+    setCopiedRecipe({
+      productId: sourceProduct.id,
+      productTitle: sourceProduct.title,
+      itemsCount: activeRecipeItems.length,
+      cost: activeRecipeCost
+    });
+    setCopyTargetProductId('');
+    setCopyMode('replace');
+    setCopyModalOpen(true);
+  };
+
 
   // ==========================================
   // FILTRADOS DE VISTA
@@ -1575,180 +1651,293 @@ export default function AdminInventario() {
       {/* PESTAÑA 5: RECETAS */}
       {/* ========================================================================= */}
       {activeTab === 'recetas' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 380px) 1fr', gap: '20px', alignItems: 'start' }}>
-          {/* Columna Izquierda: Selección y Adición */}
-          <section className="ds-card">
-            <div className="ds-card-header">
-              <h2 className="ds-card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-                <Utensils size={18} color="var(--ds-primary)" /> Configurar Receta
-              </h2>
-            </div>
-
-            <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div className="ds-form-group">
-                <label className="ds-form-label">Producto de Venta (Carta) *</label>
-                <select
-                  className="ds-select"
-                  value={selectedRecipeProduct}
-                  onChange={(e) => setSelectedRecipeProduct(e.target.value)}
-                >
-                  <option value="">Selecciona un producto…</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.title} ({formatCurrency(p.price)})
-                    </option>
-                  ))}
-                </select>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Banner de Receta en Portapapeles */}
+          {copiedRecipe && (
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '12px',
+              background: 'rgba(59, 130, 246, 0.1)',
+              border: '1px solid rgba(59, 130, 246, 0.35)',
+              borderRadius: '12px',
+              padding: '12px 18px',
+              fontSize: '13px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <ClipboardCheck size={20} color="#3b82f6" />
+                <div>
+                  <span style={{ color: 'var(--ds-text-secondary)' }}>Receta en Portapapeles: </span>
+                  <strong style={{ color: 'var(--ds-text-primary)' }}>{copiedRecipe.productTitle}</strong>
+                  <span style={{ color: 'var(--ds-text-muted)', marginLeft: '6px' }}>
+                    ({copiedRecipe.itemsCount} {copiedRecipe.itemsCount === 1 ? 'insumo' : 'insumos'} · {formatCurrency(copiedRecipe.cost)})
+                  </span>
+                </div>
               </div>
-
-              {activeSelectedProduct && (
-                <form onSubmit={handleAddRecipeItem} style={{ background: 'var(--ds-bg-elevated)', border: '1px solid var(--ds-border)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <h3 style={{ fontSize: '13px', fontWeight: '700', color: 'var(--ds-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    + Agregar Insumo a la Receta
-                  </h3>
-                  <div className="ds-form-group">
-                    <label className="ds-form-label">Insumo Físico *</label>
-                    <select
-                      className="ds-select"
-                      value={newRecipeInsumo}
-                      onChange={(e) => setNewRecipeInsumo(e.target.value)}
-                      required
-                    >
-                      <option value="">Seleccionar insumo…</option>
-                      {insumos.map((i) => (
-                        <option key={i.id} value={i.id}>
-                          {i.name} (en {i.unit})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="ds-form-group">
-                    <label className="ds-form-label">
-                      Cantidad por Venta (en unidad base) *
-                    </label>
-                    <input
-                      type="number"
-                      step="0.001"
-                      min="0.001"
-                      className="ds-input"
-                      placeholder="Ej: 120 (g) o 1 (und)"
-                      value={newRecipeQty}
-                      onChange={(e) => setNewRecipeQty(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <button type="submit" disabled={busy} className="ds-btn ds-btn-primary ds-w-full" style={{ justifyContent: 'center' }}>
-                    <Plus size={16} />
-                    <span>Vincular Ingrediente</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                {selectedRecipeProduct && String(selectedRecipeProduct) !== String(copiedRecipe.productId) && (
+                  <button
+                    type="button"
+                    onClick={() => handlePasteRecipe(selectedRecipeProduct, 'replace')}
+                    disabled={busy}
+                    className="ds-btn ds-btn-primary ds-btn-sm"
+                    style={{ background: '#2563eb', borderColor: '#2563eb' }}
+                  >
+                    <ClipboardCheck size={14} />
+                    <span>Pegar en "{activeSelectedProduct?.title || 'Producto Actual'}"</span>
                   </button>
-                </form>
-              )}
-            </div>
-          </section>
-
-          {/* Columna Derecha: Ficha Técnica */}
-          <section className="ds-card">
-            <div className="ds-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <h2 className="ds-card-title" style={{ margin: 0 }}>
-                  {activeSelectedProduct ? `Ficha Técnica: ${activeSelectedProduct.title}` : 'Ficha Técnica de Insumos'}
-                </h2>
-                <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--ds-text-secondary)' }}>
-                  Insumos físicos que se descuentan automáticamente con cada venta
-                </p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => handleOpenDuplicateModal()}
+                  className="ds-btn ds-btn-secondary ds-btn-sm"
+                >
+                  <Layers size={14} />
+                  <span>Elegir otro producto destino...</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCopiedRecipe(null)}
+                  className="ds-btn ds-btn-ghost ds-btn-sm"
+                  style={{ color: 'var(--ds-text-muted)', padding: '4px 8px' }}
+                  title="Descartar copia"
+                >
+                  <X size={16} />
+                </button>
               </div>
-              {activeSelectedProduct && (
-                <div style={{ textAlign: 'right' }}>
-                  <span style={{ fontSize: '11px', color: 'var(--ds-text-muted)', textTransform: 'uppercase', fontWeight: '700' }}>Costo Receta</span>
-                  <div style={{ fontSize: '20px', fontWeight: '800', color: 'var(--ds-warning)' }}>{formatCurrency(activeRecipeCost)}</div>
-                </div>
-              )}
             </div>
+          )}
 
-            {selectedRecipeProduct ? (
-              <div>
-                <div className="ds-table-container">
-                  <table className="ds-table">
-                    <thead>
-                      <tr>
-                        <th>Insumo</th>
-                        <th style={{ textAlign: 'right' }}>Dosificación</th>
-                        <th style={{ textAlign: 'right' }}>Costo Promedio</th>
-                        <th style={{ textAlign: 'right' }}>Costo en Porción</th>
-                        <th style={{ textAlign: 'center' }}>Acción</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {activeRecipeItems.map((item) => {
-                        const unitCost = Number(item.inventory_average_cost) || 0;
-                        const qty = Number(item.quantity) || 0;
-                        const portionCost = unitCost * qty;
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 380px) 1fr', gap: '20px', alignItems: 'start' }}>
+            {/* Columna Izquierda: Selección y Adición */}
+            <section className="ds-card">
+              <div className="ds-card-header">
+                <h2 className="ds-card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                  <Utensils size={18} color="var(--ds-primary)" /> Configurar Receta
+                </h2>
+              </div>
 
-                        return (
-                          <tr key={item.id}>
-                            <td><strong>{item.inventory_title}</strong></td>
-                            <td style={{ textAlign: 'right', fontWeight: '700' }}>
-                              {qty} {item.inventory_unit}
-                            </td>
-                            <td style={{ textAlign: 'right', color: 'var(--ds-text-muted)' }}>
-                              {formatCurrency(unitCost)} / {item.inventory_unit}
-                            </td>
-                            <td style={{ textAlign: 'right', fontWeight: '700', color: 'var(--ds-warning)' }}>
-                              {formatCurrency(portionCost)}
-                            </td>
-                            <td style={{ textAlign: 'center' }}>
-                              <button
-                                onClick={() => handleDeleteRecipeItem(item.id)}
-                                className="ds-btn ds-btn-danger ds-btn-sm"
-                                title="Eliminar insumo de receta"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                      {!activeRecipeItems.length && (
-                        <tr>
-                          <td colSpan={5} className="ds-empty-state" style={{ textAlign: 'center', padding: '32px' }}>
-                            Este producto aún no tiene insumos vinculados en su receta.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+              <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div className="ds-form-group">
+                  <label className="ds-form-label">Producto de Venta (Carta) *</label>
+                  <select
+                    className="ds-select"
+                    value={selectedRecipeProduct}
+                    onChange={(e) => setSelectedRecipeProduct(e.target.value)}
+                  >
+                    <option value="">Selecciona un producto…</option>
+                    {products.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.title} ({formatCurrency(p.price)})
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
-                {activeSelectedProduct && activeRecipeItems.length > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', padding: '16px', background: 'var(--ds-bg-elevated)', borderTop: '1px solid var(--ds-border)', fontSize: '13px' }}>
-                    <div>
-                      <span style={{ color: 'var(--ds-text-secondary)' }}>Precio Venta: </span>
-                      <strong style={{ color: 'var(--ds-text-primary)' }}>{formatCurrency(activeSelectedProduct.price)}</strong>
+                {activeSelectedProduct && (
+                  <form onSubmit={handleAddRecipeItem} style={{ background: 'var(--ds-bg-elevated)', border: '1px solid var(--ds-border)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <h3 style={{ fontSize: '13px', fontWeight: '700', color: 'var(--ds-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      + Agregar Insumo a la Receta
+                    </h3>
+                    <div className="ds-form-group">
+                      <label className="ds-form-label">Insumo Físico *</label>
+                      <select
+                        className="ds-select"
+                        value={newRecipeInsumo}
+                        onChange={(e) => setNewRecipeInsumo(e.target.value)}
+                        required
+                      >
+                        <option value="">Seleccionar insumo…</option>
+                        {insumos.map((i) => (
+                          <option key={i.id} value={i.id}>
+                            {i.name} (en {i.unit})
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                    <div>
-                      <span style={{ color: 'var(--ds-text-secondary)' }}>Ganancia Bruta: </span>
-                      <strong style={{ color: 'var(--ds-success)' }}>
-                        {formatCurrency(activeSelectedProduct.price - activeRecipeCost)}
-                      </strong>
+                    <div className="ds-form-group">
+                      <label className="ds-form-label">
+                        Cantidad por Venta (en unidad base) *
+                      </label>
+                      <input
+                        type="number"
+                        step="0.001"
+                        min="0.001"
+                        className="ds-input"
+                        placeholder="Ej: 120 (g) o 1 (und)"
+                        value={newRecipeQty}
+                        onChange={(e) => setNewRecipeQty(e.target.value)}
+                        required
+                      />
                     </div>
-                    <div>
-                      <span style={{ color: 'var(--ds-text-secondary)' }}>Margen Teórico: </span>
-                      <span className="ds-badge ds-badge-success" style={{ fontSize: '12px' }}>
-                        {(
-                          ((activeSelectedProduct.price - activeRecipeCost) / (activeSelectedProduct.price || 1)) *
-                          100
-                        ).toFixed(1)}%
-                      </span>
+                    <button type="submit" disabled={busy} className="ds-btn ds-btn-primary ds-w-full" style={{ justifyContent: 'center' }}>
+                      <Plus size={16} />
+                      <span>Vincular Ingrediente</span>
+                    </button>
+                  </form>
+                )}
+              </div>
+            </section>
+
+            {/* Columna Derecha: Ficha Técnica */}
+            <section className="ds-card">
+              <div className="ds-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                <div>
+                  <h2 className="ds-card-title" style={{ margin: 0 }}>
+                    {activeSelectedProduct ? `Ficha Técnica: ${activeSelectedProduct.title}` : 'Ficha Técnica de Insumos'}
+                  </h2>
+                  <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--ds-text-secondary)' }}>
+                    Insumos físicos que se descuentan automáticamente con cada venta
+                  </p>
+                </div>
+                {activeSelectedProduct && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {activeRecipeItems.length > 0 && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyRecipe()}
+                            className="ds-btn ds-btn-secondary ds-btn-sm"
+                            title="Copiar los insumos y dosis de esta receta al portapapeles"
+                          >
+                            <Copy size={14} />
+                            <span>Copiar Receta</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenDuplicateModal()}
+                            className="ds-btn ds-btn-secondary ds-btn-sm"
+                            title="Duplicar esta receta directamente a otro producto"
+                          >
+                            <Layers size={14} />
+                            <span>Duplicar a...</span>
+                          </button>
+                        </>
+                      )}
+                      {copiedRecipe && String(copiedRecipe.productId) !== String(activeSelectedProduct.id) && (
+                        <button
+                          type="button"
+                          onClick={() => handlePasteRecipe()}
+                          disabled={busy}
+                          className="ds-btn ds-btn-primary ds-btn-sm"
+                          style={{ background: '#16a34a', borderColor: '#16a34a' }}
+                          title={`Pegar receta de "${copiedRecipe.productTitle}" (${copiedRecipe.itemsCount} insumos)`}
+                        >
+                          <ClipboardCheck size={14} />
+                          <span>Pegar Receta ({copiedRecipe.itemsCount})</span>
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--ds-text-muted)', textTransform: 'uppercase', fontWeight: '700' }}>Costo Receta</span>
+                      <div style={{ fontSize: '20px', fontWeight: '800', color: 'var(--ds-warning)' }}>{formatCurrency(activeRecipeCost)}</div>
                     </div>
                   </div>
                 )}
               </div>
-            ) : (
-              <div className="ds-empty-state" style={{ textAlign: 'center', padding: '48px', color: 'var(--ds-text-muted)' }}>
-                Selecciona un producto en la columna izquierda para gestionar o crear su receta técnica.
-              </div>
-            )}
-          </section>
+
+              {selectedRecipeProduct ? (
+                <div>
+                  <div className="ds-table-container">
+                    <table className="ds-table">
+                      <thead>
+                        <tr>
+                          <th>Insumo</th>
+                          <th style={{ textAlign: 'right' }}>Dosificación</th>
+                          <th style={{ textAlign: 'right' }}>Costo Promedio</th>
+                          <th style={{ textAlign: 'right' }}>Costo en Porción</th>
+                          <th style={{ textAlign: 'center' }}>Acción</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {activeRecipeItems.map((item) => {
+                          const unitCost = Number(item.inventory_average_cost) || 0;
+                          const qty = Number(item.quantity) || 0;
+                          const portionCost = unitCost * qty;
+
+                          return (
+                            <tr key={item.id}>
+                              <td><strong>{item.inventory_title}</strong></td>
+                              <td style={{ textAlign: 'right', fontWeight: '700' }}>
+                                {qty} {item.inventory_unit}
+                              </td>
+                              <td style={{ textAlign: 'right', color: 'var(--ds-text-muted)' }}>
+                                {formatCurrency(unitCost)} / {item.inventory_unit}
+                              </td>
+                              <td style={{ textAlign: 'right', fontWeight: '700', color: 'var(--ds-warning)' }}>
+                                {formatCurrency(portionCost)}
+                              </td>
+                              <td style={{ textAlign: 'center' }}>
+                                <button
+                                  onClick={() => handleDeleteRecipeItem(item.id)}
+                                  className="ds-btn ds-btn-danger ds-btn-sm"
+                                  title="Eliminar insumo de receta"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {!activeRecipeItems.length && (
+                          <tr>
+                            <td colSpan={5} className="ds-empty-state" style={{ textAlign: 'center', padding: '36px 16px' }}>
+                              <p style={{ margin: '0 0 14px 0', color: 'var(--ds-text-muted)', fontSize: '14px' }}>
+                                Este producto aún no tiene insumos vinculados en su receta.
+                              </p>
+                              {copiedRecipe && String(copiedRecipe.productId) !== String(activeSelectedProduct?.id) && (
+                                <button
+                                  type="button"
+                                  onClick={() => handlePasteRecipe(selectedRecipeProduct, 'replace')}
+                                  disabled={busy}
+                                  className="ds-btn ds-btn-primary ds-btn-sm"
+                                  style={{ margin: '0 auto', display: 'inline-flex', alignItems: 'center', gap: '8px', background: '#16a34a', borderColor: '#16a34a', padding: '8px 16px' }}
+                                >
+                                  <ClipboardCheck size={16} />
+                                  <span>Pegar Receta Copiada de "{copiedRecipe.productTitle}" ({copiedRecipe.itemsCount} insumos)</span>
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {activeSelectedProduct && activeRecipeItems.length > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', padding: '16px', background: 'var(--ds-bg-elevated)', borderTop: '1px solid var(--ds-border)', fontSize: '13px' }}>
+                      <div>
+                        <span style={{ color: 'var(--ds-text-secondary)' }}>Precio Venta: </span>
+                        <strong style={{ color: 'var(--ds-text-primary)' }}>{formatCurrency(activeSelectedProduct.price)}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--ds-text-secondary)' }}>Ganancia Bruta: </span>
+                        <strong style={{ color: 'var(--ds-success)' }}>
+                          {formatCurrency(activeSelectedProduct.price - activeRecipeCost)}
+                        </strong>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--ds-text-secondary)' }}>Margen Teórico: </span>
+                        <span className="ds-badge ds-badge-success" style={{ fontSize: '12px' }}>
+                          {(
+                            ((activeSelectedProduct.price - activeRecipeCost) / (activeSelectedProduct.price || 1)) *
+                            100
+                          ).toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="ds-empty-state" style={{ textAlign: 'center', padding: '48px', color: 'var(--ds-text-muted)' }}>
+                  Selecciona un producto en la columna izquierda para gestionar o crear su receta técnica.
+                </div>
+              )}
+            </section>
+          </div>
         </div>
       )}
 
@@ -2440,145 +2629,319 @@ export default function AdminInventario() {
       {/* ========================================================================= */}
       {/* MODAL: EDICIÓN SEGURA DE COMPRA */}
       {/* ========================================================================= */}
+      {/* MODAL: EDICIÓN SEGURA DE COMPRA */}
+      {/* ========================================================================= */}
       {editPurchaseModal && (
-        <div className="ds-modal-overlay">
-          <div className="ds-modal max-w-lg w-full p-6 space-y-4">
-            <div className="flex items-center justify-between border-b  pb-3">
-              <div>
-                <span className="text-xs font-black uppercase tracking-wider ds-text-warning">
-                  Corrección Segura de Compra #{editPurchaseForm.id}
-                </span>
-                <h3 className="text-lg font-black ">{editPurchaseForm.inventory_title}</h3>
+        <div className="ds-modal-overlay" onMouseDown={(e) => e.target === e.currentTarget && setEditPurchaseModal(false)}>
+          <div className="ds-modal" style={{ maxWidth: '640px', width: '100%', borderRadius: '16px' }}>
+            {/* Header Moderno */}
+            <div className="ds-modal-header" style={{ padding: '20px 24px', borderBottom: '1px solid var(--ds-border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '10px',
+                  background: 'rgba(245, 158, 11, 0.12)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--ds-warning)'
+                }}>
+                  <Edit3 size={22} />
+                </div>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+                    <span className="ds-badge ds-badge-warning" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Auditoría de Compra #{editPurchaseForm.id}
+                    </span>
+                  </div>
+                  <h3 className="ds-modal-title" style={{ fontSize: '17px', margin: 0, fontWeight: '700' }}>
+                    {editPurchaseForm.inventory_title}
+                  </h3>
+                </div>
               </div>
-              <button onClick={() => setEditPurchaseModal(false)} className="ds-text-muted hover:ds-text-secondary">
+              <button
+                type="button"
+                className="ds-modal-close"
+                onClick={() => setEditPurchaseModal(false)}
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--ds-text-muted)' }}
+              >
                 <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleSaveEditPurchase} className="space-y-4">
-              <div className="/70 border  p-3 rounded-xl text-xs text-amber-900 space-y-1">
-                <div className="font-bold">Datos originales de la compra:</div>
-                <div className="flex justify-between ds-text-secondary">
-                  <span>Cantidad original:</span>
-                  <strong>{editPurchaseForm.original_quantity} {editPurchaseForm.base_unit}</strong>
+            <form onSubmit={handleSaveEditPurchase} style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+              {/* Comparativa Visual: Original vs Ajuste */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '12px',
+                background: 'var(--ds-bg-elevated)',
+                border: '1px solid var(--ds-border)',
+                borderRadius: '12px',
+                padding: '14px 16px',
+                fontSize: '12px'
+              }}>
+                <div>
+                  <div style={{ color: 'var(--ds-text-muted)', textTransform: 'uppercase', fontWeight: '700', fontSize: '10px', letterSpacing: '0.05em', marginBottom: '6px' }}>
+                    Valores Registrados
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                    <div>
+                      <span style={{ color: 'var(--ds-text-secondary)' }}>Cantidad: </span>
+                      <strong>{Number(editPurchaseForm.original_quantity).toLocaleString('es-CO')} {editPurchaseForm.base_unit}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--ds-text-secondary)' }}>Costo Total: </span>
+                      <strong style={{ color: 'var(--ds-text-primary)' }}>{formatCurrency(editPurchaseForm.original_total_cost)}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--ds-text-secondary)' }}>Costo Unitario: </span>
+                      <span>
+                        {formatCurrency(
+                          editPurchaseForm.original_quantity > 0
+                            ? editPurchaseForm.original_total_cost / editPurchaseForm.original_quantity
+                            : 0
+                        )} / {editPurchaseForm.base_unit}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex justify-between ds-text-secondary">
-                  <span>Costo original:</span>
-                  <strong>{formatCurrency(editPurchaseForm.original_total_cost)}</strong>
+
+                <div style={{ borderLeft: '1px solid var(--ds-border)', paddingLeft: '12px' }}>
+                  <div style={{ color: 'var(--ds-primary)', textTransform: 'uppercase', fontWeight: '700', fontSize: '10px', letterSpacing: '0.05em', marginBottom: '6px' }}>
+                    Valores Corregidos (En vivo)
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                    <div>
+                      <span style={{ color: 'var(--ds-text-secondary)' }}>Nueva Cantidad: </span>
+                      <strong>
+                        {editPurchaseConversionInfo ? Number(editPurchaseConversionInfo.newConvertedQty).toLocaleString('es-CO') : Number(editPurchaseForm.quantity).toLocaleString('es-CO')} {editPurchaseForm.base_unit}
+                      </strong>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--ds-text-secondary)' }}>Nuevo Total: </span>
+                      <strong style={{ color: 'var(--ds-warning)' }}>
+                        {formatCurrency(Number(editPurchaseForm.total_cost) || 0)}
+                      </strong>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--ds-text-secondary)' }}>Nuevo Unitario: </span>
+                      <strong style={{ color: 'var(--ds-success)' }}>
+                        {formatCurrency(editPurchaseConversionInfo?.costPerBaseUnit || 0)} / {editPurchaseForm.base_unit}
+                      </strong>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="ds-form-label" style={{ fontSize: "13px", color: "var(--ds-text-secondary)", marginBottom: "6px" }}>Nueva Cantidad *</label>
+              {/* Fila 1: Cantidad y Unidad */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '14px' }}>
+                <div className="ds-form-group">
+                  <label className="ds-form-label" style={{ fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>Nueva Cantidad *</span>
+                  </label>
                   <input
                     type="number"
                     step="0.001"
                     min="0.001"
-                    className="ds-input w-full"
+                    className="ds-input"
                     value={editPurchaseForm.quantity}
                     onChange={(e) => setEditPurchaseForm({ ...editPurchaseForm, quantity: e.target.value })}
+                    placeholder="Ej: 10"
                     required
                   />
                 </div>
-                <div>
-                  <label className="ds-form-label" style={{ fontSize: "13px", color: "var(--ds-text-secondary)", marginBottom: "6px" }}>Unidad</label>
+
+                <div className="ds-form-group">
+                  <label className="ds-form-label" style={{ fontWeight: '600' }}>Unidad de Medida</label>
                   <input
                     type="text"
-                    className="ds-input w-full  capitalize"
-                    value={editPurchaseForm.purchase_unit}
+                    className="ds-input capitalize"
+                    style={{ background: 'var(--ds-bg-elevated)', cursor: 'not-allowed', color: 'var(--ds-text-muted)' }}
+                    value={editPurchaseForm.purchase_unit || editPurchaseForm.base_unit}
                     readOnly
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="ds-form-label" style={{ fontSize: "13px", color: "var(--ds-text-secondary)", marginBottom: "6px" }}>Nuevo Costo Total Pagado ($) *</label>
-                <input
-                  type="number"
-                  step="1"
-                  min="0"
-                  className="ds-input w-full"
-                  value={editPurchaseForm.total_cost}
-                  onChange={(e) => setEditPurchaseForm({ ...editPurchaseForm, total_cost: e.target.value })}
-                  required
-                />
-              </div>
+              {/* Fila 2: Costo Total Pagado y Costo Unitario Proyectado */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '14px' }}>
+                <div className="ds-form-group">
+                  <label className="ds-form-label" style={{ fontWeight: '600' }}>
+                    Nuevo Costo Total Pagado ($) *
+                  </label>
+                  <input
+                    type="number"
+                    step="1"
+                    min="0"
+                    className="ds-input"
+                    value={editPurchaseForm.total_cost}
+                    onChange={(e) => setEditPurchaseForm({ ...editPurchaseForm, total_cost: e.target.value })}
+                    placeholder="Ej: 420000"
+                    required
+                  />
+                </div>
 
-              {/* Proveedor en Edición */}
-              <div className="relative">
-                <label className="ds-form-label" style={{ fontSize: "13px", color: "var(--ds-text-secondary)", marginBottom: "6px" }}>Proveedor</label>
-                <input
-                  type="text"
-                  className="ds-input w-full"
-                  value={editPurchaseForm.supplier}
-                  onFocus={() => setEditSupplierInputFocused(true)}
-                  onBlur={() => setTimeout(() => setEditSupplierInputFocused(false), 250)}
-                  onChange={(e) => setEditPurchaseForm({ ...editPurchaseForm, supplier: e.target.value })}
-                />
-                {editSupplierInputFocused && editFilteredSuppliers.length > 0 && (
-                  <div className="absolute z-20 left-0 right-0 mt-1 ds-card" style={{ maxHeight: "150px", overflowY: "auto" }}>
-                    {editFilteredSuppliers.map((sup, idx) => (
-                      <div
-                        key={idx}
-                        onMouseDown={() => {
-                          setEditPurchaseForm((prev) => ({ ...prev, supplier: sup }));
-                          setEditSupplierInputFocused(false);
-                        }}
-                        className="px-3 py-1.5 text-xs  hover: cursor-pointer"
-                      >
-                        {sup}
-                      </div>
-                    ))}
+                <div className="ds-form-group">
+                  <label className="ds-form-label" style={{ fontWeight: '600' }}>Costo Unit. Calculado</label>
+                  <div style={{
+                    height: '38px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '0 12px',
+                    background: 'var(--ds-bg-elevated)',
+                    border: '1px solid var(--ds-border)',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: '700',
+                    color: 'var(--ds-text-primary)'
+                  }}>
+                    {formatCurrency(editPurchaseConversionInfo?.costPerBaseUnit || 0)}
                   </div>
-                )}
+                </div>
               </div>
 
-              <div>
-                <label className="ds-form-label" style={{ fontSize: "13px", color: "var(--ds-text-secondary)", marginBottom: "6px" }}>
-                  Motivo de la Modificación *
+              {/* Fila 3: Proveedor y Fecha */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '14px' }}>
+                <div className="ds-form-group" style={{ position: 'relative' }}>
+                  <label className="ds-form-label" style={{ fontWeight: '600' }}>Proveedor</label>
+                  <input
+                    type="text"
+                    className="ds-input"
+                    placeholder="Nombre o empresa del proveedor…"
+                    value={editPurchaseForm.supplier}
+                    onFocus={() => setEditSupplierInputFocused(true)}
+                    onBlur={() => setTimeout(() => setEditSupplierInputFocused(false), 250)}
+                    onChange={(e) => setEditPurchaseForm({ ...editPurchaseForm, supplier: e.target.value })}
+                  />
+                  {editSupplierInputFocused && editFilteredSuppliers.length > 0 && (
+                    <div className="ds-card" style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      zIndex: 30,
+                      maxHeight: '160px',
+                      overflowY: 'auto',
+                      marginTop: '4px',
+                      boxShadow: 'var(--ds-shadow-lg)'
+                    }}>
+                      <div style={{ padding: '6px 12px', fontSize: '11px', color: 'var(--ds-text-muted)', fontWeight: '700', textTransform: 'uppercase', borderBottom: '1px solid var(--ds-border)' }}>
+                        Sugerencias de Proveedor
+                      </div>
+                      {editFilteredSuppliers.map((sup, idx) => (
+                        <div
+                          key={idx}
+                          onMouseDown={() => {
+                            setEditPurchaseForm((prev) => ({ ...prev, supplier: sup }));
+                            setEditSupplierInputFocused(false);
+                          }}
+                          style={{
+                            padding: '8px 12px',
+                            fontSize: '12px',
+                            cursor: 'pointer',
+                            borderBottom: '1px solid var(--ds-border)',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                          }}
+                        >
+                          <span>{sup}</span>
+                          <Check size={14} color="var(--ds-primary)" />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="ds-form-group">
+                  <label className="ds-form-label" style={{ fontWeight: '600' }}>Fecha de Factura</label>
+                  <input
+                    type="date"
+                    className="ds-input"
+                    value={editPurchaseForm.purchase_date}
+                    onChange={(e) => setEditPurchaseForm({ ...editPurchaseForm, purchase_date: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              {/* Fila 4: Motivo de la Modificación (Auditoría obligatoria) */}
+              <div className="ds-form-group">
+                <label className="ds-form-label" style={{ fontWeight: '600', display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Motivo de la Modificación (Requerido para Auditoría) *</span>
+                  <span style={{ fontSize: '11px', color: 'var(--ds-text-muted)', fontWeight: 'normal' }}>Quedará registrado en el historial</span>
                 </label>
                 <input
                   type="text"
-                  className="ds-input w-full"
-                  placeholder="Ej: Error en factura, conteo real, ajuste de precio"
+                  className="ds-input"
+                  placeholder="Ej: Corrección en factura física, ajuste de precio pactado o conteo recibido"
                   value={editPurchaseForm.edit_reason}
                   onChange={(e) => setEditPurchaseForm({ ...editPurchaseForm, edit_reason: e.target.value })}
                   required
                 />
               </div>
 
-              {/* Previsualización del Impacto */}
+              {/* Previsualización del Impacto en Kardex / Inventario */}
               {editPurchaseConversionInfo && (
-                <div
-                  className={`p-3 rounded-xl border text-xs space-y-1 ${
-                    editPurchaseConversionInfo.isNegative
-                      ? '  text-red-900'
-                      : '  '
-                  }`}
-                >
-                  <div className="font-bold flex justify-between">
-                    <span>Diferencia de Stock:</span>
-                    <span className="font-black">
+                <div style={{
+                  padding: '14px 16px',
+                  borderRadius: '12px',
+                  border: editPurchaseConversionInfo.isNegative ? '1px solid #ef4444' : '1px solid var(--ds-border)',
+                  background: editPurchaseConversionInfo.isNegative ? 'rgba(239, 68, 68, 0.1)' : 'var(--ds-bg-elevated)',
+                  fontSize: '13px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: 'var(--ds-text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <ArrowRightLeft size={15} color="var(--ds-text-muted)" />
+                      Diferencia Neta en Stock:
+                    </span>
+                    <strong style={{
+                      color: editPurchaseConversionInfo.deltaQty > 0 ? 'var(--ds-success)' : editPurchaseConversionInfo.deltaQty < 0 ? 'var(--ds-warning)' : 'var(--ds-text-primary)'
+                    }}>
                       {editPurchaseConversionInfo.deltaQty >= 0 ? '+' : ''}
                       {editPurchaseConversionInfo.deltaQty} {editPurchaseForm.base_unit}
-                    </span>
+                    </strong>
                   </div>
-                  <div className="flex justify-between">
-                    <span>Stock Resultante en Almacén:</span>
-                    <span className="font-black text-sm">
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: 'var(--ds-text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Boxes size={15} color="var(--ds-text-muted)" />
+                      Stock Resultante en Almacén:
+                    </span>
+                    <strong style={{
+                      fontSize: '15px',
+                      color: editPurchaseConversionInfo.isNegative ? 'var(--ds-danger)' : 'var(--ds-text-primary)'
+                    }}>
                       {editPurchaseConversionInfo.resultingStock} {editPurchaseForm.base_unit}
-                    </span>
+                    </strong>
                   </div>
+
                   {editPurchaseConversionInfo.isNegative && (
-                    <div className="ds-text-danger font-bold pt-1">
-                      ⚠️ No se puede aplicar este cambio porque el insumo ya fue consumido y el stock quedaría en negativo.
+                    <div style={{
+                      marginTop: '6px',
+                      padding: '8px 10px',
+                      borderRadius: '8px',
+                      background: 'rgba(239, 68, 68, 0.15)',
+                      color: 'var(--ds-danger)',
+                      fontSize: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontWeight: '600'
+                    }}>
+                      <ShieldAlert size={18} />
+                      <span>Bloqueo de seguridad: El insumo ya fue consumido en ventas previas y el stock no puede quedar en negativo.</span>
                     </div>
                   )}
                 </div>
               )}
 
-              <div className="flex justify-end gap-2 pt-2">
+              {/* Footer */}
+              <div className="ds-modal-footer" style={{ padding: '16px 0 0 0', margin: 0, borderTop: '1px solid var(--ds-border)' }}>
                 <button
                   type="button"
                   onClick={() => setEditPurchaseModal(false)}
@@ -2590,8 +2953,15 @@ export default function AdminInventario() {
                   type="submit"
                   disabled={busy || editPurchaseConversionInfo?.isNegative}
                   className="ds-btn ds-btn-primary"
+                  style={{
+                    background: editPurchaseConversionInfo?.isNegative ? 'var(--ds-bg-elevated)' : 'var(--ds-primary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}
                 >
-                  Confirmar Corrección y Recalcular
+                  <CheckCircle2 size={16} />
+                  <span>{busy ? 'Guardando...' : 'Confirmar Corrección y Recalcular'}</span>
                 </button>
               </div>
             </form>
@@ -2848,6 +3218,107 @@ export default function AdminInventario() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Duplicar Receta a Otro Producto */}
+      {copyModalOpen && (
+        <div className="ds-modal-overlay" onMouseDown={(e) => e.target === e.currentTarget && setCopyModalOpen(false)}>
+          <div className="ds-modal" style={{ maxWidth: '520px', width: '100%' }}>
+            <div className="ds-modal-header">
+              <h3 className="ds-modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Layers size={20} color="var(--ds-primary)" /> Duplicar Receta a Otro Producto
+              </h3>
+              <button type="button" className="ds-modal-close" onClick={() => setCopyModalOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ background: 'var(--ds-bg-elevated)', padding: '12px 16px', borderRadius: '10px', border: '1px solid var(--ds-border)', fontSize: '13px' }}>
+                <div style={{ color: 'var(--ds-text-muted)', marginBottom: '4px', textTransform: 'uppercase', fontSize: '11px', fontWeight: '700' }}>
+                  Receta Origen
+                </div>
+                <strong style={{ fontSize: '15px', color: 'var(--ds-text-primary)' }}>{copiedRecipe?.productTitle}</strong>
+                <div style={{ color: 'var(--ds-text-secondary)', marginTop: '2px', fontSize: '12px' }}>
+                  {copiedRecipe?.itemsCount} {copiedRecipe?.itemsCount === 1 ? 'insumo configurado' : 'insumos configurados'} · Costo de receta: {formatCurrency(copiedRecipe?.cost || 0)}
+                </div>
+              </div>
+
+              <div className="ds-form-group">
+                <label className="ds-form-label">Producto Destino que Recibirá la Receta *</label>
+                <select
+                  className="ds-select"
+                  value={copyTargetProductId}
+                  onChange={(e) => setCopyTargetProductId(e.target.value)}
+                  required
+                >
+                  <option value="">Selecciona el producto destino…</option>
+                  {products
+                    .filter((p) => String(p.id) !== String(copiedRecipe?.productId))
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.title} ({formatCurrency(p.price)})
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div className="ds-form-group">
+                <label className="ds-form-label">Modo de Copia</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'var(--ds-bg-elevated)', padding: '12px', borderRadius: '8px', border: '1px solid var(--ds-border)' }}>
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="copyMode"
+                      value="replace"
+                      checked={copyMode === 'replace'}
+                      onChange={() => setCopyMode('replace')}
+                      style={{ marginTop: '2px' }}
+                    />
+                    <div>
+                      <strong>Reemplazar receta completa (Recomendado)</strong>
+                      <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: 'var(--ds-text-muted)' }}>
+                        El producto destino tendrá exactamente los mismos insumos y cantidades que la receta origen.
+                      </p>
+                    </div>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="copyMode"
+                      value="merge"
+                      checked={copyMode === 'merge'}
+                      onChange={() => setCopyMode('merge')}
+                      style={{ marginTop: '2px' }}
+                    />
+                    <div>
+                      <strong>Combinar con insumos existentes</strong>
+                      <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: 'var(--ds-text-muted)' }}>
+                        Mantiene los insumos que ya tenía el destino y añade/actualiza los insumos de la receta origen.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <div className="ds-modal-footer" style={{ padding: '12px 0 0 0', margin: 0, borderTop: '1px solid var(--ds-border)' }}>
+                <button type="button" onClick={() => setCopyModalOpen(false)} className="ds-btn ds-btn-secondary">
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={!copyTargetProductId || busy}
+                  onClick={() => handlePasteRecipe(copyTargetProductId, copyMode)}
+                  className="ds-btn ds-btn-primary"
+                  style={{ background: '#16a34a', borderColor: '#16a34a' }}
+                >
+                  <ClipboardCheck size={16} />
+                  <span>Aplicar y Duplicar Receta</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
