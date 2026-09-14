@@ -226,6 +226,7 @@ export default function AdminDeliveryMap() {
   const busy = drivers.filter((driver) => driver.live_status === 'Ocupado').length;
   const eligibleDrivers = useMemo(() => drivers.filter((driver) => (
     driver.live_status !== 'Desconectado'
+    && !driver.external_company_id
     && Number(driver.active_order_count || 0) < Number(driver.max_active_orders || 5)
   )), [drivers]);
 

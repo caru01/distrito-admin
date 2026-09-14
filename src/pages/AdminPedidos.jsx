@@ -420,7 +420,7 @@ export default function AdminPedidos() {
         (activeTab === 'Cancelados' && order.status === 'Cancelado');
 
       const matchesSearch = !searchQuery ||
-        order.id.toString().includes(searchLower) ||
+        String(order?.id || '').includes(searchLower) ||
         (order.customer_name && order.customer_name.toLowerCase().includes(searchLower)) ||
         (order.customer_phone && order.customer_phone.includes(searchLower));
 
@@ -734,7 +734,7 @@ export default function AdminPedidos() {
                 {filteredOrders.map((order) => (
                   <tr key={order.id}>
                     <td>
-                      <div style={{ color: 'var(--ds-text-primary)', fontWeight: '700', fontSize: '16px' }}>#{order.id.toString().padStart(4, '0')}</div>
+                      <div style={{ color: 'var(--ds-text-primary)', fontWeight: '700', fontSize: '16px' }}>#{String(order?.id || '').padStart(4, '0')}</div>
                       <div style={{ color: 'var(--ds-text-muted)', fontSize: '13px', marginTop: '4px' }}>{formatColombiaDateTime(order.created_at)}</div>
                     </td>
                     <td>
@@ -792,7 +792,7 @@ export default function AdminPedidos() {
               <div key={order.id} className="ds-table-card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
                   <div>
-                    <div style={{ color: 'var(--ds-text-primary)', fontWeight: '700', fontSize: '16px' }}>#{order.id.toString().padStart(4, '0')}</div>
+                    <div style={{ color: 'var(--ds-text-primary)', fontWeight: '700', fontSize: '16px' }}>#{String(order?.id || '').padStart(4, '0')}</div>
                     <div style={{ color: 'var(--ds-text-muted)', fontSize: '13px', marginTop: '4px' }}>{formatColombiaDateTime(order.created_at)}</div>
                   </div>
                   <div style={{ display: 'grid', justifyItems: 'end', gap: '5px' }}>{getStatusBadge(order.status || 'Nuevo', order)}{order.status === 'Entregado' && getDeliveryDurationText(order) && <small style={{ color: '#10B981', fontWeight: 700 }}>{getDeliveryDurationText(order)}</small>}</div>
@@ -882,8 +882,8 @@ export default function AdminPedidos() {
           <div className="ds-modal ds-modal-lg" style={{ height: '100%', maxHeight: '100%', borderRadius: 0, borderLeft: '1px solid var(--ds-border)' }}>
             <div className="ds-modal-header">
               <div>
-                <h2 className="ds-modal-title">Pedido #{selectedOrder.id.toString().padStart(4, '0')}</h2>
-                <div style={{ color: 'var(--ds-text-secondary)', fontSize: '14px', marginTop: '4px' }}>{formatColombiaDateTime(selectedOrder.created_at)}</div>
+                <h2 className="ds-modal-title">Pedido #{String(selectedOrder?.id || '').padStart(4, '0')}</h2>
+                <div style={{ color: 'var(--ds-text-secondary)', fontSize: '14px', marginTop: '4px' }}>{formatColombiaDateTime(selectedOrder?.created_at)}</div>
               </div>
               <button className="ds-modal-close" onClick={() => setSelectedOrder(null)}><X size={24} /></button>
             </div>
@@ -926,15 +926,22 @@ export default function AdminPedidos() {
               </div>}
               <div className="ds-card" style={{ padding: '20px', marginBottom: '24px' }}>
                 <h3 style={{ color: 'var(--ds-text-secondary)', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 12px 0' }}>Productos</h3>
-                {selectedOrder.cart_json && selectedOrder.cart_json.map((item, idx) => (
-                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: idx < selectedOrder.cart_json.length - 1 ? '1px solid var(--ds-border)' : 'none', paddingBottom: '12px', marginBottom: '12px' }}>
-                    <div>
-                      <div style={{ color: 'var(--ds-text-primary)', fontWeight: '500' }}>{item.quantity || item.qty || 1}x {item.title}</div>
-                      {item.notes && <div style={{ color: 'var(--ds-primary)', fontSize: '13px', marginTop: '4px' }}>Nota: {item.notes}</div>}
+                {(() => {
+                  let items = [];
+                  if (Array.isArray(selectedOrder.cart_json)) items = selectedOrder.cart_json;
+                  else if (typeof selectedOrder.cart_json === 'string') {
+                    try { items = JSON.parse(selectedOrder.cart_json || '[]'); } catch { items = []; }
+                  }
+                  return items.map((item, idx) => (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: idx < items.length - 1 ? '1px solid var(--ds-border)' : 'none', paddingBottom: '12px', marginBottom: '12px' }}>
+                      <div>
+                        <div style={{ color: 'var(--ds-text-primary)', fontWeight: '500' }}>{item.quantity || item.qty || 1}x {item.title || item.name}</div>
+                        {item.notes && <div style={{ color: 'var(--ds-primary)', fontSize: '13px', marginTop: '4px' }}>Nota: {item.notes}</div>}
+                      </div>
+                      <div style={{ color: 'var(--ds-text-primary)', fontWeight: '600' }}>${((item.price || 0) * (item.quantity || item.qty || 1)).toLocaleString()}</div>
                     </div>
-                    <div style={{ color: 'var(--ds-text-primary)', fontWeight: '600' }}>${((item.price || 0) * (item.quantity || item.qty || 1)).toLocaleString()}</div>
-                  </div>
-                ))}
+                  ));
+                })()}
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid var(--ds-border)', paddingTop: '12px', marginTop: '4px' }}>
                   <div style={{ color: 'var(--ds-text-primary)', fontWeight: '700', fontSize: '18px' }}>Total</div>
                   <div style={{ color: 'var(--ds-primary)', fontWeight: '800', fontSize: '18px' }}>${(selectedOrder.total || 0).toLocaleString()}</div>
