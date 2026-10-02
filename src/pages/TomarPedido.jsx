@@ -7,7 +7,7 @@ import {
   Zap, Search, ShoppingCart, Trash2, Plus, Minus, ChefHat, Printer,
   MessageCircle, Phone, Globe, Store, Banknote, Wallet, CreditCard,
   MapPin, User, X, CheckCircle, AlertCircle, Clock, TrendingUp,
-  Package, LayoutGrid, PieChart
+  Package, LayoutGrid, PieChart, MessageSquare
 } from 'lucide-react';
 
 const formatter = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
@@ -112,6 +112,11 @@ export default function TomarPedido() {
   const [isMobile, setIsMobile]             = useState(window.innerWidth < 768);
   const [isCompactLayout, setIsCompactLayout] = useState(window.innerWidth < 1600);
   const [showMobileCart, setShowMobileCart] = useState(false);
+
+  const isSendingRef = useRef(false);
+  const cartRef = useRef(cart);
+  cartRef.current = cart;
+  const handleSubmitRef = useRef();
 
   // 🚀 CERRAR SUGERENCIAS AL HACER CLIC AFUERA
   useEffect(() => {
@@ -270,8 +275,18 @@ export default function TomarPedido() {
     const handleKey = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); searchRef.current?.focus(); }
       if (e.key === 'F1') { e.preventDefault(); searchRef.current?.focus(); }
-      if (e.key === 'F2') { e.preventDefault(); handleSubmit(true); }
-      if (e.key === 'F4') { e.preventDefault(); setCart([]); }
+      if (e.key === 'F2') { 
+        e.preventDefault(); 
+        if (!isSendingRef.current && handleSubmitRef.current) {
+          handleSubmitRef.current(true); 
+        }
+      }
+      if (e.key === 'F4') { 
+        e.preventDefault(); 
+        if (cartRef.current.length > 0 && window.confirm('¿Seguro que deseas vaciar el carrito?')) {
+          setCart([]);
+        }
+      }
       if (e.key === 'Escape') setSearch('');
     };
     window.addEventListener('keydown', handleKey);
@@ -287,6 +302,28 @@ export default function TomarPedido() {
       window.removeEventListener('keydown', handleKey);
       window.removeEventListener('resize', handleResize);
     }
+  }, []);
+
+  // 🚀 POLLING LIGERO DE ESTADÍSTICAS (cada 60s)
+  useEffect(() => {
+    const fetchStats = async () => {
+      const token = sessionStorage.getItem('distrito_admin_token');
+      if (!token) return;
+      try {
+        const res = await fetch(`${API_URL}/admin/stats/live`, { headers: { Authorization: `Bearer ${token}` } });
+        const data = await res.json();
+        if (data.status === 'ok' && data.stats) {
+          setStats(data.stats);
+        }
+      } catch (err) {
+        // Fallo silencioso, no bloquea UI
+      }
+    };
+    
+    // Ejecutar de inmediato y luego cada 60s
+    fetchStats();
+    const interval = setInterval(fetchStats, 60000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchData = useCallback(async () => {
@@ -419,6 +456,8 @@ export default function TomarPedido() {
   };
 
   const handleSubmit = async (sendToKitchen = false) => {
+    if (isSendingRef.current) return;
+    
     if (cart.length === 0) { showToast('Agrega al menos un producto', 'error'); return; }
     if (!customer.name.trim()) { showToast('Escribe el nombre del cliente', 'error'); return; }
     if (!customer.phone.trim() && !customer.crm_contact_id) {
@@ -431,6 +470,14 @@ export default function TomarPedido() {
     if (customer.deliveryType === 'domicilio' && mapsAvailable !== false
         && (!customer.locationConfirmed || customer.latitude == null || customer.longitude == null)) {
       showToast('Selecciona una sugerencia y confirma la ubicación exacta', 'error'); return;
+    }
+
+    if (customer.paymentMethod === 'efectivo' && customer.cashAmount !== undefined && customer.cashAmount !== '') {
+      const cashNum = Number(customer.cashAmount);
+      if (cashNum > 0 && cashNum < total) {
+        showToast('El monto en efectivo ingresado no puede ser menor al total del pedido', 'error');
+        return;
+      }
     }
 
     if (customer.paymentMethod === 'compartido') {
@@ -466,6 +513,7 @@ export default function TomarPedido() {
       }
     }
 
+    isSendingRef.current = true;
     setSending(true);
     try {
       const token = sessionStorage.getItem('distrito_admin_token');
@@ -493,10 +541,11 @@ export default function TomarPedido() {
         payment_method:    customer.paymentMethod,
         cash_split:        customer.paymentMethod === 'compartido' ? customer.cash_split : undefined,
         transfer_split:    customer.paymentMethod === 'compartido' ? customer.transfer_split : undefined,
+        cashAmount:        customer.paymentMethod === 'efectivo' && customer.cashAmount !== undefined && customer.cashAmount !== '' ? Number(customer.cashAmount) : undefined,
         voucher_reference: customer.voucher_reference || '',
         source:            customer.source,
         notes:             finalNotes,
-        cart:              cart.map(i => ({ id: i.id, title: i.title, price: i.price, quantity: i.qty })),
+        cart:              cart.map(i => ({ id: i.id, title: i.title, price: i.price, quantity: i.qty, notes: i.notes || undefined })),
         total,
         status:            sendToKitchen ? 'En preparación' : 'Nuevo',
         created_at:        customer.created_at || undefined,
@@ -512,6 +561,7 @@ export default function TomarPedido() {
           paymentMethod: customer.paymentMethod,
           cash_split: customer.paymentMethod === 'compartido' ? customer.cash_split : undefined,
           transfer_split: customer.paymentMethod === 'compartido' ? customer.transfer_split : undefined,
+          cashAmount: customer.paymentMethod === 'efectivo' && customer.cashAmount !== undefined && customer.cashAmount !== '' ? Number(customer.cashAmount) : undefined,
           voucher_reference: customer.voucher_reference || '',
           source: customer.source,
           notes: finalNotes,
@@ -547,6 +597,8 @@ export default function TomarPedido() {
           barrio: customer.barrio,
           delivery_type: customer.deliveryType,
           payment_method: customer.paymentMethod,
+          cashAmount: customer.paymentMethod === 'efectivo' && customer.cashAmount !== undefined && customer.cashAmount !== '' ? Number(customer.cashAmount) : undefined,
+          change_required: customer.paymentMethod === 'efectivo' && customer.cashAmount !== undefined && customer.cashAmount !== '' && Number(customer.cashAmount) >= authoritativeTotal ? Number(customer.cashAmount) - authoritativeTotal : undefined,
           voucher_reference: customer.voucher_reference || '',
           source: customer.source,
           notes: finalNotes,
@@ -576,11 +628,13 @@ export default function TomarPedido() {
       console.error(err);
       showToast('Error de conexión', 'error');
     } finally {
+      isSendingRef.current = false;
       setSending(false);
     }
   };
 
   // 🚀 OPTIMIZACIÓN 3: Búsqueda y filtrado instantáneo a 60 FPS con useMemo
+
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
       if (activeCategory !== 'all' && p.category !== activeCategory) return false;
@@ -635,6 +689,13 @@ export default function TomarPedido() {
               <h1 className="ds-page-title" style={{ margin: 0, fontSize: '20px' }}>Tomar Pedido</h1>
               <Zap size={20} color="var(--ds-primary)" fill="var(--ds-primary)" />
             </div>
+            {!isMobile && stats && (
+              <div style={{ display: 'flex', gap: '8px', marginLeft: '12px' }}>
+                <span className="ds-badge" style={{ backgroundColor: 'var(--ds-bg-elevated)', color: 'var(--ds-text-primary)', fontSize: '11px' }}>En Cocina: {stats.inKitchen}</span>
+                <span className="ds-badge" style={{ backgroundColor: 'var(--ds-primary)', color: '#000', fontSize: '11px', fontWeight: 'bold' }}>Preparando: {stats.preparing}</span>
+                <span className="ds-badge ds-badge-success" style={{ fontSize: '11px' }}>Listos: {stats.ready}</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -765,7 +826,10 @@ export default function TomarPedido() {
                       </div>
                     )}
                     {p.is_featured && (
-                      <div className="ds-badge ds-badge-success" style={{ position: 'absolute', top: 6, left: 6, zIndex: 3, fontSize: '11px', padding: '2px 6px' }}>⭐ Popular</div>
+                      <div className="ds-badge ds-badge-success" style={{ position: 'absolute', top: 6, left: 6, zIndex: 3, fontSize: '11px', padding: '2px 6px' }}>⭐️ Popular</div>
+                    )}
+                    {p.track_stock && Number(p.stock) <= 0 && (
+                      <div className="ds-badge ds-badge-danger" style={{ position: 'absolute', top: 6, left: p.is_featured ? 80 : 6, zIndex: 3, fontSize: '11px', padding: '2px 6px' }}>❌ Agotado</div>
                     )}
                     <div style={{ position: 'relative', width: '100%', height: '110px', backgroundColor: 'var(--ds-bg-base)' }}>
                       {p.image ? (
@@ -848,21 +912,44 @@ export default function TomarPedido() {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {cart.map(item => (
-                    <div key={item.id} className="ds-card" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px' }}>
-                      {item.image
-                        ? <img src={item.image} alt="" loading="lazy" style={{ width: 40, height: 40, borderRadius: 8, objectFit: 'cover' }} />
-                        : <div style={{ width: 40, height: 40, borderRadius: 8, backgroundColor: 'var(--ds-bg-base)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Package size={18} color="var(--ds-text-muted)" /></div>
-                      }
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ margin: 0, fontWeight: 700, fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--ds-text-primary)' }}>{item.title}</p>
-                        <p style={{ margin: 0, color: 'var(--ds-primary)', fontSize: '13px', fontWeight: 800 }}>{formatter.format(item.price * item.qty)}</p>
+                    <div key={item.id} className="ds-card" style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '10px 12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        {item.image
+                          ? <img src={item.image} alt="" loading="lazy" style={{ width: 40, height: 40, borderRadius: 8, objectFit: 'cover' }} />
+                          : <div style={{ width: 40, height: 40, borderRadius: 8, backgroundColor: 'var(--ds-bg-base)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Package size={18} color="var(--ds-text-muted)" /></div>
+                        }
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ margin: 0, fontWeight: 700, fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--ds-text-primary)' }}>{item.title}</p>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '2px' }}>
+                            <p style={{ margin: 0, color: 'var(--ds-primary)', fontSize: '13px', fontWeight: 800 }}>{formatter.format(item.price * item.qty)}</p>
+                            <button 
+                              onClick={() => {
+                                const newNotes = window.prompt('Notas para este producto (ej. sin cebolla):', item.notes || '');
+                                if (newNotes !== null) {
+                                  setCart(c => c.map(i => i.id === item.id ? { ...i, notes: newNotes } : i));
+                                }
+                              }}
+                              className="ds-btn ds-btn-icon ds-btn-ghost ds-btn-sm" 
+                              title="Agregar nota al producto"
+                              aria-label="Agregar nota al producto"
+                              style={{ width: 24, height: 24, color: item.notes ? 'var(--ds-primary)' : 'var(--ds-text-muted)' }}
+                            >
+                              <MessageSquare size={12} />
+                            </button>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <button aria-label="Disminuir cantidad" title="Disminuir cantidad" onClick={() => updateQty(item.id, -1)} className="ds-btn ds-btn-icon ds-btn-secondary ds-btn-sm" style={{ width: 28, height: 28 }}><Minus size={13} /></button>
+                          <span style={{ fontWeight: 800, minWidth: 20, textAlign: 'center', fontSize: '14px' }}>{item.qty}</span>
+                          <button aria-label="Aumentar cantidad" title="Aumentar cantidad" onClick={() => updateQty(item.id, 1)} className="ds-btn ds-btn-icon ds-btn-primary ds-btn-sm" style={{ width: 28, height: 28 }}><Plus size={13} /></button>
+                          <button aria-label="Eliminar producto" title="Eliminar producto" onClick={() => setCart(c => c.filter(i => i.id !== item.id))} className="ds-btn ds-btn-icon ds-btn-ghost ds-btn-sm" style={{ width: 28, height: 28, color: 'var(--ds-text-muted)' }}><X size={15} /></button>
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <button onClick={() => updateQty(item.id, -1)} className="ds-btn ds-btn-icon ds-btn-secondary ds-btn-sm" style={{ width: 28, height: 28 }}><Minus size={13} /></button>
-                        <span style={{ fontWeight: 800, minWidth: 20, textAlign: 'center', fontSize: '14px' }}>{item.qty}</span>
-                        <button onClick={() => updateQty(item.id, 1)} className="ds-btn ds-btn-icon ds-btn-primary ds-btn-sm" style={{ width: 28, height: 28 }}><Plus size={13} /></button>
-                        <button onClick={() => setCart(c => c.filter(i => i.id !== item.id))} className="ds-btn ds-btn-icon ds-btn-ghost ds-btn-sm" style={{ width: 28, height: 28, color: 'var(--ds-text-muted)' }}><X size={15} /></button>
-                      </div>
+                      {item.notes && (
+                        <p style={{ margin: '0', fontSize: '11px', color: 'var(--ds-text-secondary)', fontStyle: 'italic', paddingLeft: '50px' }}>
+                          Nota: {item.notes}
+                        </p>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1143,6 +1230,36 @@ export default function TomarPedido() {
                     </button>
                   ))}
                 </div>
+                {customer.paymentMethod === 'efectivo' && (
+                  <div style={{ marginTop: '10px' }}>
+                    <span style={{ fontWeight: 700, fontSize: '12px', color: '#10B981', display: 'block', marginBottom: '4px' }}>
+                      💵 Efectivo entregado (para calcular cambio)
+                    </span>
+                    <input 
+                      type="number" 
+                      min="0"
+                      step="1"
+                      placeholder="Opcional (Enter asume pago exacto)" 
+                      value={customer.cashAmount || ''} 
+                      onChange={e => {
+                        const val = e.target.value;
+                        setCustomer(c => ({ ...c, cashAmount: val ? Number(val) : undefined }));
+                      }} 
+                      className="ds-input" 
+                      style={{ height: '42px', fontSize: '13px', border: '1.5px solid #10B981', backgroundColor: 'rgba(16, 185, 129, 0.1)', color: '#fff' }} 
+                    />
+                    {customer.cashAmount !== undefined && Number(customer.cashAmount) > 0 && Number(customer.cashAmount) < total && (
+                      <span style={{ fontSize: '11px', color: '#EF4444', display: 'block', marginTop: '4px' }}>
+                        ⚠️ El monto ingresado es menor al total del pedido.
+                      </span>
+                    )}
+                    {customer.cashAmount !== undefined && Number(customer.cashAmount) >= total && (
+                      <span style={{ fontSize: '11px', color: '#10B981', display: 'block', marginTop: '4px' }}>
+                        Cambio a entregar: {formatter.format(Number(customer.cashAmount) - total)}
+                      </span>
+                    )}
+                  </div>
+                )}
                 {(customer.paymentMethod === 'transferencia' || customer.paymentMethod === 'compartido') && (
                   <div style={{ marginTop: '10px' }}>
                     <span style={{ fontWeight: 700, fontSize: '12px', color: '#A78BFA', display: 'block', marginBottom: '4px' }}>

@@ -1,5 +1,6 @@
 import { API_URL } from '../config/api';
 import React, { useState, useEffect } from 'react';
+import RappiConfigTab from '../components/RappiConfigTab';
 import { DeliveryAddressPicker, NOTIFICATION_LANGUAGES, NOTIFICATION_VOICES, speakNotification, unlockNotificationAudio } from '@distrito/shared-ui';
 import { 
   Settings, Building2, CreditCard, Bike,
@@ -41,6 +42,153 @@ export default function AdminConfiguracion() {
     notification_voice: 'female-clear', notification_language: 'es-CO'
   });
   const [kitchenLocationConfirmed, setKitchenLocationConfirmed] = useState(false);
+
+  // Integración Rappi Orders API
+  const [rappiConfig, setRappiConfig] = useState({
+    client_id: '',
+    client_secret: '',
+    client_secret_masked: '',
+    has_secret: false,
+    store_id: '',
+    webhook_secret: '',
+    webhook_secret_masked: '',
+    has_webhook_secret: false,
+    environment: 'sandbox',
+    is_active: false,
+    auto_accept: true,
+    api_base_url: 'https://api-stage.rappi.com',
+    webhook_url: '',
+    last_sync_at: null,
+    last_webhook_at: null,
+    last_error: null
+  });
+  const [rappiStats, setRappiStats] = useState({ total_rappi_orders: 0, today_rappi_orders: 0, total_rappi_sales: 0 });
+  const [rappiLogs, setRappiLogs] = useState([]);
+  const [rappiLoading, setRappiLoading] = useState(false);
+  const [rappiSaving, setRappiSaving] = useState(false);
+  const [rappiTesting, setRappiTesting] = useState(false);
+  const [rappiSimulating, setRappiSimulating] = useState(false);
+  const [rappiMessage, setRappiMessage] = useState('');
+
+  const fetchRappiData = async () => {
+    try {
+      setRappiLoading(true);
+      const token = sessionStorage.getItem('distrito_admin_token');
+      const [confRes, logsRes] = await Promise.all([
+        fetch(`${API_URL}/admin/rappi/config`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_URL}/admin/rappi/logs`, { headers: { Authorization: `Bearer ${token}` } })
+      ]);
+      const confData = await confRes.json().catch(() => null);
+      const logsData = await logsRes.json().catch(() => null);
+
+      if (confData && confData.status === 'ok') {
+        setRappiConfig(prev => ({
+          ...prev,
+          ...confData.config,
+          client_secret: '',
+          webhook_secret: ''
+        }));
+        if (confData.stats) setRappiStats(confData.stats);
+      }
+      if (logsData && logsData.status === 'ok') {
+        setRappiLogs(logsData.logs || []);
+      }
+    } catch (err) {
+      console.error('Error fetching Rappi info:', err);
+    } finally {
+      setRappiLoading(false);
+    }
+  };
+
+  const handleSaveRappiConfig = async () => {
+    setRappiSaving(true);
+    setRappiMessage('');
+    try {
+      const token = sessionStorage.getItem('distrito_admin_token');
+      const payload = {
+        client_id: rappiConfig.client_id,
+        client_secret: rappiConfig.client_secret || undefined,
+        store_id: rappiConfig.store_id,
+        webhook_secret: rappiConfig.webhook_secret || undefined,
+        environment: rappiConfig.environment,
+        is_active: rappiConfig.is_active,
+        auto_accept: rappiConfig.auto_accept,
+        api_base_url: rappiConfig.api_base_url
+      };
+      const res = await fetch(`${API_URL}/admin/rappi/config`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (res.ok && data.status === 'ok') {
+        setRappiMessage('✅ Credenciales de Rappi guardadas correctamente');
+        fetchRappiData();
+        setTimeout(() => setRappiMessage(''), 4000);
+      } else {
+        setRappiMessage(`❌ ${data.error || 'Error al guardar credenciales'}`);
+      }
+    } catch (err) {
+      setRappiMessage(`❌ Error de conexión: ${err.message}`);
+    } finally {
+      setRappiSaving(false);
+    }
+  };
+
+  const handleTestRappiConnection = async () => {
+    setRappiTesting(true);
+    setRappiMessage('');
+    try {
+      const token = sessionStorage.getItem('distrito_admin_token');
+      const res = await fetch(`${API_URL}/admin/rappi/test-connection`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok && data.status === 'ok') {
+        setRappiMessage(`✅ ${data.message} (Tienda: ${data.store_id})`);
+        setTimeout(() => setRappiMessage(''), 5000);
+      } else {
+        setRappiMessage(`❌ ${data.error || 'Fallo en la prueba de conexión'}`);
+      }
+    } catch (err) {
+      setRappiMessage(`❌ Error: ${err.message}`);
+    } finally {
+      setRappiTesting(false);
+    }
+  };
+
+  const handleSimulateRappiOrder = async () => {
+    setRappiSimulating(true);
+    setRappiMessage('');
+    try {
+      const token = sessionStorage.getItem('distrito_admin_token');
+      const res = await fetch(`${API_URL}/admin/rappi/simulate-order`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok && data.status === 'ok') {
+        setRappiMessage(`🎉 ${data.message}`);
+        fetchRappiData();
+      } else {
+        setRappiMessage(`❌ ${data.error || 'Error al generar pedido de prueba'}`);
+      }
+    } catch (err) {
+      setRappiMessage(`❌ Error al simular: ${err.message}`);
+    } finally {
+      setRappiSimulating(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'Rappi') {
+      fetchRappiData();
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     fetchSettings();
@@ -195,7 +343,8 @@ export default function AdminConfiguracion() {
     { id: 'Empresa', icon: <Building2 size={18} /> },
     { id: 'Apariencia', icon: <Palette size={18} /> },
     { id: 'Pagos', icon: <CreditCard size={18} /> },
-    { id: 'Domicilios', icon: <Bike size={18} /> }
+    { id: 'Domicilios', icon: <Bike size={18} /> },
+    { id: 'Rappi', icon: <Zap size={18} color="#FF441F" /> }
   ];
 
   if (loading) return (
@@ -863,6 +1012,30 @@ export default function AdminConfiguracion() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* TAB RAPPI */}
+        {activeTab === 'Rappi' && (
+          <RappiConfigTab
+            config={rappiConfig}
+            setConfig={setRappiConfig}
+            stats={rappiStats}
+            logs={rappiLogs}
+            loading={rappiLoading}
+            saving={rappiSaving}
+            testing={rappiTesting}
+            simulating={rappiSimulating}
+            message={rappiMessage}
+            onSave={handleSaveRappiConfig}
+            onTestConnection={handleTestRappiConnection}
+            onSimulateOrder={handleSimulateRappiOrder}
+            onRefreshLogs={() => {
+              const token = sessionStorage.getItem('distrito_admin_token');
+              fetch(`${API_URL}/admin/rappi/logs`, { headers: { Authorization: `Bearer ${token}` } })
+                .then(r => r.json())
+                .then(d => d.status === 'ok' && setRappiLogs(d.logs || []));
+            }}
+          />
         )}
 
       </div>

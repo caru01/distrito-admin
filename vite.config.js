@@ -13,4 +13,7 @@ export default defineConfig({
     },
     dedupe: ['react', 'react-dom', 'lucide-react', '@googlemaps/js-api-loader'],
   },
+  server: {
+    port: 5174,
+  },
 });

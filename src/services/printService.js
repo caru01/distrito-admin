@@ -323,6 +323,14 @@ export const generateSingleComandaHTML = (order, paperWidth = 80) => {
         <div class="total-row"><span>Subtotal:</span><span>${formatter.format(subtotal)}</span></div>
         ${deliveryFee > 0 ? `<div class="total-row"><span>Domicilio:</span><span>${formatter.format(deliveryFee)}</span></div>` : ''}
         <div class="total-row grand-total"><span>TOTAL:</span><span>${formatter.format(grandTotal)}</span></div>
+        ${paymentMethod.toLowerCase() === 'efectivo' && order.cashAmount !== undefined ? `
+          <div class="total-row" style="margin-top: 4px; font-size: ${is58 ? '13px' : '14px'};">
+            <span>Efectivo Recibido:</span><span>${formatter.format(order.cashAmount)}</span>
+          </div>
+          <div class="total-row" style="font-weight: 700; font-size: ${is58 ? '13px' : '14px'};">
+            <span>Cambio:</span><span>${formatter.format(order.change_required || 0)}</span>
+          </div>
+        ` : ''}
       </div>
 
       <!-- SECCIÓN OBSERVACIONES -->

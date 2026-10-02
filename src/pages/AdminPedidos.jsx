@@ -427,7 +427,9 @@ export default function AdminPedidos() {
       const matchesSearch = !searchQuery ||
         String(order?.id || '').includes(searchLower) ||
         (order.customer_name && order.customer_name.toLowerCase().includes(searchLower)) ||
-        (order.customer_phone && order.customer_phone.includes(searchLower));
+        (order.customer_phone && order.customer_phone.includes(searchLower)) ||
+        (order.source && order.source.toLowerCase().includes(searchLower)) ||
+        (order.external_provider_reference && order.external_provider_reference.toLowerCase().includes(searchLower));
 
       let matchesDate = true;
       if (filterDate && order.created_at) {
@@ -457,6 +459,24 @@ export default function AdminPedidos() {
   };
 
   const getSourceIcon = (source) => {
+    if (source === 'Rappi' || (source && source.toLowerCase().includes('rappi'))) {
+      return (
+        <span style={{ 
+          display: 'inline-flex', 
+          alignItems: 'center', 
+          gap: '5px', 
+          backgroundColor: 'rgba(255, 68, 31, 0.15)', 
+          color: '#FF441F', 
+          fontWeight: '700', 
+          fontSize: '12px', 
+          padding: '3px 8px', 
+          borderRadius: '6px',
+          border: '1px solid rgba(255, 68, 31, 0.35)'
+        }}>
+          🛵 Rappi
+        </span>
+      );
+    }
     if (source === 'WhatsApp') return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><MessageCircle size={16} color="#22C55E" /> WhatsApp</div>;
     if (source === 'Presencial' || source === 'Mostrador') return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Store size={16} color="#D4A017" /> {source}</div>;
     if (source === 'Teléfono') return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={16} color="#60A5FA" /> Teléfono</div>;
@@ -466,6 +486,7 @@ export default function AdminPedidos() {
   const getPaymentIcon = (method) => {
     if (!method) return '-';
     const m = method.toLowerCase();
+    if (m.includes('rappi')) return <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#FF441F', fontWeight: '600' }}>🛵 RappiPay</div>;
     if (m.includes('efectivo')) return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Banknote size={16} color="#4ADE80" /> Efectivo</div>;
     return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Wallet size={16} color="#8B5CF6" /> Transferencia</div>;
   };
@@ -897,6 +918,38 @@ export default function AdminPedidos() {
                 <div className="order-status-detail"><div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>{getStatusBadge(selectedOrder.status || 'Nuevo', selectedOrder)}{selectedOrder.status === 'Entregado' && getDeliveryDurationText(selectedOrder) && <strong style={{ color: '#10B981', fontSize: '13px' }}>Entregado en {getDeliveryDurationText(selectedOrder)}</strong>}</div><small>{orderStatusMeta(selectedOrder.status, { deliveryType: selectedOrder.delivery_type, hasDriver: Boolean(selectedOrder.delivery_user_id), deliveryStatus: selectedOrder.delivery_status }).description}</small></div>
                 <div style={{ color: 'var(--ds-text-primary)', fontSize: '14px', fontWeight: '500' }}>{getSourceIcon(selectedOrder.source || 'Web')}</div>
               </div>
+              {selectedOrder.source === 'Rappi' && (
+                <div style={{
+                  marginBottom: '20px',
+                  padding: '14px 18px',
+                  borderRadius: '10px',
+                  backgroundColor: 'rgba(255, 68, 31, 0.12)',
+                  border: '1px solid rgba(255, 68, 31, 0.35)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontSize: '20px' }}>🛵</span>
+                    <div>
+                      <strong style={{ color: '#FF441F', fontSize: '14px' }}>Pedido de Rappi Orders API</strong>
+                      <div style={{ color: 'var(--ds-text-secondary)', fontSize: '12px', marginTop: '2px' }}>
+                        Referencia Rappi: <strong style={{ color: '#FFFFFF' }}>#{selectedOrder.external_provider_reference || selectedOrder.id}</strong>
+                      </div>
+                    </div>
+                  </div>
+                  <span style={{
+                    padding: '4px 10px',
+                    borderRadius: '6px',
+                    backgroundColor: '#FF441F',
+                    color: '#FFFFFF',
+                    fontSize: '11px',
+                    fontWeight: '800'
+                  }}>
+                    RAPPI
+                  </span>
+                </div>
+              )}
               <div className="ds-card" style={{ padding: '20px', marginBottom: '24px' }}>
                 <h3 style={{ color: 'var(--ds-text-secondary)', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 12px 0' }}>Cliente</h3>
                 <div style={{ color: 'var(--ds-text-primary)', fontWeight: '600', fontSize: '16px', marginBottom: '4px' }}>{selectedOrder.customer_name}</div>

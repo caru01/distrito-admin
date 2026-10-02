@@ -41,6 +41,7 @@ export default function AdminDeliveryCompanies() {
 
   // Pedidos de la empresa
   const [companyOrders, setCompanyOrders] = useState([]);
+  const [hasMoreOrders, setHasMoreOrders] = useState(false);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [orderDriverFilter, setOrderDriverFilter] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState('');
@@ -110,18 +111,38 @@ export default function AdminDeliveryCompanies() {
   }, []);
 
   // Cargar pedidos de la empresa seleccionada
-  const loadCompanyOrders = useCallback(async (companyId, driverId = '', status = '') => {
+  const loadCompanyOrders = useCallback(async (companyId, driverId = '', status = '', loadMore = false, currentOrders = []) => {
     setLoadingOrders(true);
     try {
       const queryParams = new URLSearchParams();
       if (driverId) queryParams.set('driverId', driverId);
       if (status) queryParams.set('status', status);
-      queryParams.set('limit', '80');
+      const limit = 80;
+      queryParams.set('limit', limit.toString());
+
+      if (loadMore && currentOrders.length > 0) {
+        const lastOrder = currentOrders[currentOrders.length - 1];
+        queryParams.set('lastDate', lastOrder.created_at);
+        queryParams.set('lastId', lastOrder.id);
+      }
 
       const response = await fetch(`${API_URL}/admin/delivery-companies/${companyId}/orders?${queryParams.toString()}`, { headers: authHeaders() });
       const data = await readApiJson(response);
       if (!response.ok) throw new Error(data.error || 'No fue posible cargar los pedidos.');
-      setCompanyOrders(data.orders || []);
+      
+      const fetchedOrders = data.orders || [];
+      setHasMoreOrders(fetchedOrders.length === limit);
+
+      if (loadMore) {
+        setCompanyOrders(prev => {
+          // Avoid duplicates if any overlap occurred despite cursor
+          const existingIds = new Set(prev.map(o => o.id));
+          const uniqueNew = fetchedOrders.filter(o => !existingIds.has(o.id));
+          return [...prev, ...uniqueNew];
+        });
+      } else {
+        setCompanyOrders(fetchedOrders);
+      }
     } catch (error) {
       setNotice({ type: 'error', text: error.message });
     } finally { setLoadingOrders(false); }
@@ -949,7 +970,7 @@ export default function AdminDeliveryCompanies() {
                     </div>
                   </div>
 
-                  {loadingOrders ? (
+                  {loadingOrders && companyOrders.length === 0 ? (
                     <div className="ds-loader-container"><div className="ds-loader" /><p>Cargando pedidos de la empresa…</p></div>
                   ) : companyOrders.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '36px 20px', backgroundColor: 'rgba(255, 255, 255, 0.02)', borderRadius: '10px', border: '1px dashed var(--ds-border-subtle)' }}>
@@ -1020,6 +1041,26 @@ export default function AdminDeliveryCompanies() {
                           ))}
                         </tbody>
                       </table>
+                      {hasMoreOrders && (
+                        <div style={{ textAlign: 'center', padding: '16px', borderTop: '1px solid var(--ds-border-subtle)' }}>
+                          <button
+                            type="button"
+                            className="ds-btn ds-btn-secondary ds-btn-sm"
+                            onClick={() => loadCompanyOrders(activeModalCompany.id, orderDriverFilter, orderStatusFilter, true, companyOrders)}
+                            disabled={loadingOrders}
+                            style={{ minWidth: '140px' }}
+                          >
+                            {loadingOrders ? (
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                                <span className="ds-loader ds-loader-sm" style={{ width: '14px', height: '14px' }} />
+                                Cargando pedidos...
+                              </span>
+                            ) : (
+                              'Cargar más'
+                            )}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </>

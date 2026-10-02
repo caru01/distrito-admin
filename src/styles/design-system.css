@@ -1010,6 +1010,44 @@ html[data-admin-density="compact"] { --ds-space-md: .75rem; --ds-space-lg: 1rem;
   .dashboard-error { align-items: flex-start; flex-wrap: wrap; }
 }
 
+/* ─── DASHBOARD RENTABILIDAD ─────────────────────────── */
+.dashboard-profitability-card { margin-block: 0; }
+.dashboard-profitability-card .ds-card-header { flex-wrap: wrap; gap: 0.75rem; }
+.dashboard-profitability-period-selector { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.dashboard-period-btn { padding: 0.3rem 0.85rem; border-radius: var(--ds-radius-full); border: 1px solid var(--ds-border); background: transparent; color: var(--ds-text-secondary); font-size: 0.78rem; font-weight: 600; cursor: pointer; transition: var(--ds-transition); white-space: nowrap; }
+.dashboard-period-btn:hover:not(:disabled) { border-color: var(--ds-primary); color: var(--ds-primary); }
+.dashboard-period-btn.active { background: var(--ds-primary); border-color: var(--ds-primary); color: #000; }
+.dashboard-period-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.dashboard-profitability-loading { display: flex; align-items: center; gap: 0.75rem; padding: 1.5rem 0; color: var(--ds-text-muted); font-size: 0.85rem; }
+.dashboard-profitability-error { margin: 0; }
+.dashboard-profitability-range { margin: 0 0 1rem; font-size: 0.78rem; color: var(--ds-text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.dashboard-profitability-banner { display: flex; align-items: flex-start; gap: 0.6rem; padding: 0.75rem 1rem; border-radius: var(--ds-radius-md); font-size: 0.8rem; line-height: 1.45; margin-bottom: 1rem; }
+.dashboard-profitability-banner-warning { background: var(--ds-warning-bg); border: 1px solid rgba(245, 158, 11, 0.3); color: var(--ds-warning); }
+.dashboard-profitability-banner-info { background: var(--ds-info-bg); border: 1px solid rgba(59, 130, 246, 0.3); color: var(--ds-info); }
+.dashboard-profitability-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--ds-space-md); }
+.dashboard-profitability-item { display: flex; flex-direction: column; gap: 0.25rem; padding: 1rem 1.1rem; border-radius: var(--ds-radius-md); border: 1px solid var(--ds-border); background: var(--ds-bg-raised); }
+.dashboard-profitability-label { font-size: 0.73rem; font-weight: 700; color: var(--ds-text-muted); text-transform: uppercase; letter-spacing: 0.04em; display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.dashboard-profitability-value { font-size: 1.35rem; font-weight: 800; color: var(--ds-text-primary); line-height: 1.1; margin-top: 0.2rem; overflow-wrap: anywhere; }
+.dashboard-profitability-item small { font-size: 0.7rem; color: var(--ds-text-muted); line-height: 1.4; margin-top: 0.2rem; }
+.dashboard-profitability-warning { color: var(--ds-warning) !important; }
+.dashboard-profitability-badge { display: inline-flex; align-items: center; padding: 0.1rem 0.45rem; border-radius: var(--ds-radius-full); background: var(--ds-warning-bg); color: var(--ds-warning); font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+.dashboard-profitability-highlight { border-width: 2px; }
+.dashboard-profitability-success { border-color: var(--ds-success); }
+.dashboard-profitability-success .dashboard-profitability-value { color: var(--ds-success); }
+.dashboard-profitability-warning { border-color: var(--ds-warning); }
+.dashboard-profitability-warning .dashboard-profitability-value { color: var(--ds-warning); }
+.dashboard-profitability-danger { border-color: var(--ds-danger); }
+.dashboard-profitability-danger .dashboard-profitability-value { color: var(--ds-danger); }
+.dashboard-profitability-neutral { border-color: var(--ds-border-light); }
+@media (max-width: 767px) {
+  .dashboard-profitability-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 480px) {
+  .dashboard-profitability-grid { grid-template-columns: minmax(0, 1fr); }
+  .dashboard-profitability-value { font-size: 1.1rem; }
+}
+/* ────────────────────────────────────────────────────── */
+
 /* RESPONSIVE WORKFLOWS */
 canvas,
 .recharts-responsive-container,

@@ -4,7 +4,9 @@ import {
   Trash2, CheckCircle2, ShieldAlert, Utensils, TrendingUp, AlertTriangle, AlertCircle,
   ArrowRightLeft, ArrowDownRight, ArrowUpRight, FileText, Check, HelpCircle,
   Filter, Calendar, User, Eye, Sparkles, ChevronRight, ChevronDown, RefreshCw,
-  Copy, ClipboardCheck
+  Copy, ClipboardCheck, Building2, Phone, Mail, ChefHat, Scale, Download,
+  MessageSquare, PieChart, CheckSquare, BarChart3, Truck,
+  LayoutGrid, List, ArrowUpDown, SlidersHorizontal, PackageX
 } from 'lucide-react';
 import { API_URL } from '../config/api';
 import { formatCurrency, formatDateTime } from '../utils/formatters';
@@ -50,6 +52,9 @@ export default function AdminInventario() {
   // Filter tabs for stock status & alerts
   const [stockStatusFilter, setStockStatusFilter] = useState('ALL');
   const [alertTabFilter, setAlertTabFilter] = useState('ALL');
+  const [alertViewMode, setAlertViewMode] = useState('cards'); // 'cards' | 'table'
+  const [alertSortBy, setAlertSortBy] = useState('urgency'); // 'urgency' | 'deficit' | 'cost' | 'name'
+  const [alertSearch, setAlertSearch] = useState('');
 
   // Insumo modal & form (CREACIÓN / EDICIÓN METADATOS)
   const [insumoModal, setInsumoModal] = useState(false);
@@ -61,7 +66,10 @@ export default function AdminInventario() {
     min_stock: 0,
     track_stock: true,
     category: 'General',
-    status: 'Activo'
+    status: 'Activo',
+    is_prepared: false,
+    purchase_unit: '',
+    conversion_factor: 1
   });
 
   // Modal para ajuste rápido de stock mínimo
@@ -74,6 +82,7 @@ export default function AdminInventario() {
   const [adjustForm, setAdjustForm] = useState({
     inventory_id: '',
     adjustment_type: 'MERMA',
+    waste_reason_category: 'MERMA_OPERATIVA',
     quantity: '',
     reason: ''
   });
@@ -84,7 +93,10 @@ export default function AdminInventario() {
     name: '',
     unit: 'unidad',
     min_stock: 0,
-    sku: ''
+    sku: '',
+    is_prepared: false,
+    purchase_unit: '',
+    conversion_factor: 1
   });
 
   // Formulario de Compra de Inventario
@@ -132,6 +144,69 @@ export default function AdminInventario() {
   const [copyTargetProductId, setCopyTargetProductId] = useState('');
   const [copyMode, setCopyMode] = useState('replace');
 
+  // Sub-recetas & Producción de Cocina
+  const [subrecipes, setSubrecipes] = useState([]);
+  const [subrecipesGrouped, setSubrecipesGrouped] = useState([]);
+  const [productionBatches, setProductionBatches] = useState([]);
+  const [subrecipeModal, setSubrecipeModal] = useState(false);
+  const [subrecipeForm, setSubrecipeForm] = useState({
+    target_inventory_id: '',
+    ingredient_inventory_id: '',
+    quantity: 1,
+    notes: ''
+  });
+  const [produceModal, setProduceModal] = useState(false);
+  const [produceForm, setProduceForm] = useState({
+    target_inventory_id: '',
+    quantity_produced: 1,
+    notes: '',
+    produced_by: 'Cocina'
+  });
+
+  // Recetas de Modificadores / Adiciones
+  const [modifierRecipes, setModifierRecipes] = useState([]);
+  const [modifierModal, setModifierModal] = useState(false);
+  const [modifierForm, setModifierForm] = useState({
+    id: null,
+    modifier_name: '',
+    inventory_id: '',
+    quantity: 1,
+    is_controlled: true
+  });
+
+  // Conteo Físico & Auditoría
+  const [auditsList, setAuditsList] = useState([]);
+  const [auditCounts, setAuditCounts] = useState({});
+  const [auditNotes, setAuditNotes] = useState('');
+  const [auditAuditedBy, setAuditAuditedBy] = useState('Administrador');
+  const [auditDetailModal, setAuditDetailModal] = useState(false);
+  const [selectedAuditDetail, setSelectedAuditDetail] = useState(null);
+
+  // Directorio de Proveedores
+  const [supplierModal, setSupplierModal] = useState(false);
+  const [supplierForm, setSupplierForm] = useState({
+    id: null,
+    name: '',
+    contact_name: '',
+    phone: '',
+    email: '',
+    nit: '',
+    address: '',
+    category: 'General',
+    payment_terms: 'Contado',
+    notes: '',
+    is_active: true
+  });
+
+  // Valoración & Reportes Macroeconómicos
+  const [valuationData, setValuationData] = useState(null);
+  const [valuationSearch, setValuationSearch] = useState('');
+
+  // Sugerencias de Compras & WhatsApp Generator
+  const [purchaseSuggestions, setPurchaseSuggestions] = useState([]);
+  const [whatsappModal, setWhatsappModal] = useState(false);
+  const [whatsappSupplierFilter, setWhatsappSupplierFilter] = useState('ALL');
+  const [customWhatsAppNote, setCustomWhatsAppNote] = useState('');
 
   // Filtros avanzados de Kardex
   const [kardexFilterInsumo, setKardexFilterInsumo] = useState('');
@@ -148,6 +223,33 @@ export default function AdminInventario() {
   const [profitSearch, setProfitSearch] = useState('');
   const [profitFilter, setProfitFilter] = useState('ALL');
   const [expandedProfitId, setExpandedProfitId] = useState(null);
+
+  // Función utilitaria para exportar a CSV
+  const exportToCSV = useCallback((filename, rows) => {
+    if (!rows || !rows.length) return;
+    const separator = ',';
+    const keys = Object.keys(rows[0]);
+    const csvContent =
+      keys.join(separator) +
+      '\n' +
+      rows.map(row => {
+        return keys.map(k => {
+          let cell = row[k] === null || row[k] === undefined ? '' : String(row[k]);
+          cell = cell.replace(/"/g, '""');
+          if (cell.search(/("|,|\n)/g) >= 0) cell = `"${cell}"`;
+          return cell;
+        }).join(separator);
+      }).join('\n');
+
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${filename}_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }, []);
 
   // ==========================================
   // DATA LOADERS
@@ -167,9 +269,15 @@ export default function AdminInventario() {
 
   const loadSuppliers = useCallback(async () => {
     try {
-      const res = await fetchAuth(`${API_URL}/admin/inventory-suppliers`);
+      const res = await fetchAuth(`${API_URL}/admin/suppliers`);
       const data = await res.json();
-      if (res.ok) setSuppliersList(data.suppliers || []);
+      if (res.ok && data.suppliers) {
+        setSuppliersList(data.suppliers);
+      } else {
+        const fallbackRes = await fetchAuth(`${API_URL}/admin/inventory-suppliers`);
+        const fallbackData = await fallbackRes.json();
+        if (fallbackRes.ok) setSuppliersList(fallbackData.suppliers || []);
+      }
     } catch (err) {
       console.error('Error cargando proveedores:', err);
     }
@@ -202,6 +310,69 @@ export default function AdminInventario() {
       if (res.ok) setRecipes(data.data || data.recipes || []);
     } catch (err) {
       console.error(err);
+    }
+  }, [fetchAuth]);
+
+  const loadSubrecipes = useCallback(async () => {
+    try {
+      const res = await fetchAuth(`${API_URL}/admin/subrecipes`);
+      const data = await res.json();
+      if (res.ok) {
+        setSubrecipes(data.subrecipes || []);
+        setSubrecipesGrouped(data.grouped || []);
+      }
+    } catch (err) {
+      console.error('Error cargando subrecetas:', err);
+    }
+  }, [fetchAuth]);
+
+  const loadBatches = useCallback(async () => {
+    try {
+      const res = await fetchAuth(`${API_URL}/admin/production/batches`);
+      const data = await res.json();
+      if (res.ok) setProductionBatches(data.batches || []);
+    } catch (err) {
+      console.error('Error cargando lotes:', err);
+    }
+  }, [fetchAuth]);
+
+  const loadModifierRecipes = useCallback(async () => {
+    try {
+      const res = await fetchAuth(`${API_URL}/admin/modifier-recipes`);
+      const data = await res.json();
+      if (res.ok) setModifierRecipes(data.modifiers || []);
+    } catch (err) {
+      console.error('Error cargando modificadores:', err);
+    }
+  }, [fetchAuth]);
+
+  const loadAudits = useCallback(async () => {
+    try {
+      const res = await fetchAuth(`${API_URL}/admin/inventory/audits`);
+      const data = await res.json();
+      if (res.ok) setAuditsList(data.audits || []);
+    } catch (err) {
+      console.error('Error cargando auditorías:', err);
+    }
+  }, [fetchAuth]);
+
+  const loadValuation = useCallback(async () => {
+    try {
+      const res = await fetchAuth(`${API_URL}/admin/inventory/valuation`);
+      const data = await res.json();
+      if (res.ok) setValuationData(data);
+    } catch (err) {
+      console.error('Error cargando valoración:', err);
+    }
+  }, [fetchAuth]);
+
+  const loadPurchaseSuggestions = useCallback(async () => {
+    try {
+      const res = await fetchAuth(`${API_URL}/admin/inventory/purchase-suggestions`);
+      const data = await res.json();
+      if (res.ok) setPurchaseSuggestions(data.suggestions || []);
+    } catch (err) {
+      console.error('Error cargando sugerencias de compras:', err);
     }
   }, [fetchAuth]);
 
@@ -241,11 +412,21 @@ export default function AdminInventario() {
       loadPurchases(),
       loadProducts(),
       loadRecipes(),
+      loadSubrecipes(),
+      loadBatches(),
+      loadModifierRecipes(),
+      loadAudits(),
+      loadValuation(),
+      loadPurchaseSuggestions(),
       loadMovements(),
       loadProfitability()
     ]);
     setBusy(false);
-  }, [loadInsumos, loadSuppliers, loadPurchases, loadProducts, loadRecipes, loadMovements, loadProfitability]);
+  }, [
+    loadInsumos, loadSuppliers, loadPurchases, loadProducts,
+    loadRecipes, loadSubrecipes, loadBatches, loadModifierRecipes,
+    loadAudits, loadValuation, loadPurchaseSuggestions, loadMovements, loadProfitability
+  ]);
 
   useEffect(() => {
     reloadAll();
@@ -441,7 +622,10 @@ export default function AdminInventario() {
         min_stock: Number(insumo.min_stock) || 0,
         track_stock: insumo.track_stock !== false,
         category: insumo.category || 'General',
-        status: insumo.status || 'Activo'
+        status: insumo.status || 'Activo',
+        is_prepared: Boolean(insumo.is_prepared),
+        purchase_unit: insumo.purchase_unit || '',
+        conversion_factor: Number(insumo.conversion_factor) || 1
       });
     } else {
       setInsumoForm({
@@ -452,10 +636,357 @@ export default function AdminInventario() {
         min_stock: 0,
         track_stock: true,
         category: 'General',
-        status: 'Activo'
+        status: 'Activo',
+        is_prepared: false,
+        purchase_unit: '',
+        conversion_factor: 1
       });
     }
     setInsumoModal(true);
+  };
+
+  // ==========================================
+  // HANDLERS: PROVEEDORES
+  // ==========================================
+  const handleOpenSupplierModal = (sup = null) => {
+    if (sup) {
+      setSupplierForm({
+        id: sup.id,
+        name: sup.name,
+        contact_name: sup.contact_name || '',
+        phone: sup.phone || '',
+        email: sup.email || '',
+        nit: sup.nit || '',
+        address: sup.address || '',
+        category: sup.category || 'General',
+        payment_terms: sup.payment_terms || 'Contado',
+        notes: sup.notes || '',
+        is_active: sup.is_active !== false
+      });
+    } else {
+      setSupplierForm({
+        id: null,
+        name: '',
+        contact_name: '',
+        phone: '',
+        email: '',
+        nit: '',
+        address: '',
+        category: 'General',
+        payment_terms: 'Contado',
+        notes: '',
+        is_active: true
+      });
+    }
+    setSupplierModal(true);
+  };
+
+  const handleSaveSupplier = async (e) => {
+    e.preventDefault();
+    if (!supplierForm.name.trim()) return showToast('El nombre del proveedor es obligatorio', 'error');
+
+    setBusy(true);
+    try {
+      const url = supplierForm.id
+        ? `${API_URL}/admin/suppliers/${supplierForm.id}`
+        : `${API_URL}/admin/suppliers`;
+      const method = supplierForm.id ? 'PUT' : 'POST';
+
+      const res = await fetchAuth(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(supplierForm)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al guardar proveedor');
+
+      showToast(supplierForm.id ? '✓ Proveedor actualizado' : '✓ Proveedor registrado');
+      setSupplierModal(false);
+      await loadSuppliers();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDeleteSupplier = async (id, name) => {
+    if (!window.confirm(`¿Deseas eliminar o desactivar al proveedor "${name}"?`)) return;
+    setBusy(true);
+    try {
+      const res = await fetchAuth(`${API_URL}/admin/suppliers/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al eliminar proveedor');
+      showToast(data.message || '✓ Proveedor actualizado');
+      await loadSuppliers();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // ==========================================
+  // HANDLERS: SUB-RECETAS Y PRODUCCIÓN DE COCINA
+  // ==========================================
+  const handleOpenSubrecipeModal = (targetInsumo) => {
+    setSubrecipeForm({
+      target_inventory_id: targetInsumo.id || targetInsumo.target_inventory_id,
+      ingredient_inventory_id: insumos.find(i => i.id !== (targetInsumo.id || targetInsumo.target_inventory_id))?.id || '',
+      quantity: 1,
+      notes: ''
+    });
+    setSubrecipeModal(true);
+  };
+
+  const handleSaveSubrecipe = async (e) => {
+    e.preventDefault();
+    if (!subrecipeForm.target_inventory_id || !subrecipeForm.ingredient_inventory_id) {
+      return showToast('Selecciona el insumo elaborado y el ingrediente', 'error');
+    }
+    if (Number(subrecipeForm.quantity) <= 0) return showToast('La cantidad debe ser mayor a 0', 'error');
+
+    setBusy(true);
+    try {
+      const res = await fetchAuth(`${API_URL}/admin/subrecipes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(subrecipeForm)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al guardar ingrediente en sub-receta');
+
+      showToast('✓ Ingrediente agregado a la sub-receta');
+      setSubrecipeModal(false);
+      await Promise.all([loadSubrecipes(), loadInsumos()]);
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDeleteSubrecipe = async (id) => {
+    if (!window.confirm('¿Deseas retirar este ingrediente de la sub-receta?')) return;
+    setBusy(true);
+    try {
+      const res = await fetchAuth(`${API_URL}/admin/subrecipes/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Error al retirar ingrediente');
+      showToast('✓ Ingrediente retirado');
+      await loadSubrecipes();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleOpenProduceModal = (targetInsumo) => {
+    setProduceForm({
+      target_inventory_id: targetInsumo.id || targetInsumo.target_inventory_id,
+      quantity_produced: 1,
+      notes: '',
+      produced_by: 'Cocina'
+    });
+    setProduceModal(true);
+  };
+
+  const handleProduceBatch = async (e) => {
+    e.preventDefault();
+    const qty = Number(produceForm.quantity_produced);
+    if (!produceForm.target_inventory_id) return showToast('Selecciona el producto a elaborar', 'error');
+    if (!qty || qty <= 0) return showToast('Indica una cantidad producida válida', 'error');
+
+    setBusy(true);
+    try {
+      const res = await fetchAuth(`${API_URL}/admin/production/produce`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(produceForm)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al registrar producción');
+
+      showToast(`✓ Lote de ${data.quantity_produced} ${data.unit} producido y stock transferido`);
+      setProduceModal(false);
+      await Promise.all([loadInsumos(), loadBatches(), loadMovements(), loadSubrecipes()]);
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // ==========================================
+  // HANDLERS: RECETAS DE MODIFICADORES
+  // ==========================================
+  const handleOpenModifierModal = (mod = null) => {
+    if (mod) {
+      setModifierForm({
+        id: mod.id,
+        modifier_name: mod.modifier_name,
+        inventory_id: mod.inventory_id,
+        quantity: Number(mod.quantity) || 1,
+        is_controlled: mod.is_controlled !== false
+      });
+    } else {
+      setModifierForm({
+        id: null,
+        modifier_name: '',
+        inventory_id: insumos[0]?.id || '',
+        quantity: 1,
+        is_controlled: true
+      });
+    }
+    setModifierModal(true);
+  };
+
+  const handleSaveModifierRecipe = async (e) => {
+    e.preventDefault();
+    if (!modifierForm.modifier_name.trim() || !modifierForm.inventory_id) {
+      return showToast('Nombre de la adición e insumo requeridos', 'error');
+    }
+    if (Number(modifierForm.quantity) <= 0) return showToast('Cantidad debe ser mayor a 0', 'error');
+
+    setBusy(true);
+    try {
+      const res = await fetchAuth(`${API_URL}/admin/modifier-recipes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(modifierForm)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al guardar receta de modificador');
+
+      showToast('✓ Modificador/adición configurado correctamente');
+      setModifierModal(false);
+      await loadModifierRecipes();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDeleteModifierRecipe = async (id) => {
+    if (!window.confirm('¿Deseas eliminar este modificador?')) return;
+    setBusy(true);
+    try {
+      const res = await fetchAuth(`${API_URL}/admin/modifier-recipes/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Error al eliminar modificador');
+      showToast('✓ Modificador eliminado');
+      await loadModifierRecipes();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // ==========================================
+  // HANDLERS: CONTEO FÍSICO Y AUDITORÍA
+  // ==========================================
+  const handleAuditCountChange = (inventoryId, value) => {
+    setAuditCounts(prev => ({
+      ...prev,
+      [inventoryId]: value
+    }));
+  };
+
+  const handleAuditReconcile = async () => {
+    const items = Object.entries(auditCounts)
+      .filter(([_, val]) => val !== '' && !isNaN(Number(val)))
+      .map(([id, val]) => ({
+        inventory_id: id,
+        counted_stock: Number(val)
+      }));
+
+    if (!items.length) {
+      return showToast('Ingresa al menos un conteo físico para auditar', 'error');
+    }
+
+    if (!window.confirm(`¿Confirmas la conciliación de ${items.length} insumos? El stock del sistema se actualizará para igualar los conteos físicos reales.`)) {
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const res = await fetchAuth(`${API_URL}/admin/inventory/audit-reconcile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          audited_by: auditAuditedBy,
+          notes: auditNotes,
+          items
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al conciliar inventario');
+
+      showToast(`✓ Auditoría #${data.audit_id} completada: ${data.items_audited} insumos conciliados`);
+      setAuditCounts({});
+      setAuditNotes('');
+      await Promise.all([loadInsumos(), loadAudits(), loadMovements(), loadValuation()]);
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleOpenAuditDetail = async (auditId) => {
+    setBusy(true);
+    try {
+      const res = await fetchAuth(`${API_URL}/admin/inventory/audits/${auditId}`);
+      const data = await res.json();
+      if (res.ok) {
+        setSelectedAuditDetail(data);
+        setAuditDetailModal(true);
+      }
+    } catch (err) {
+      showToast('Error al cargar detalle de auditoría', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // ==========================================
+  // HANDLERS: PEDIDO INTELIGENTE POR WHATSAPP
+  // ==========================================
+  const handleOpenWhatsAppModal = (supplier = null) => {
+    setWhatsappSupplierFilter(supplier ? supplier.name : 'ALL');
+    setCustomWhatsAppNote('');
+    setWhatsappModal(true);
+  };
+
+  const handleSendWhatsAppOrder = (supplierObj, itemsToOrder) => {
+    const phone = (supplierObj?.phone || '').replace(/\D/g, '');
+    const supplierName = supplierObj?.name || 'Proveedor';
+    const dateStr = new Date().toLocaleDateString('es-CO');
+
+    let text = `*PEDIDO DISTRITO BURGER GRILL* 🍔\n`;
+    text += `📅 Fecha: ${dateStr}\n`;
+    text += `🏢 Proveedor: *${supplierName}*\n\n`;
+    text += `Hola! Deseamos solicitar el siguiente pedido:\n`;
+
+    itemsToOrder.forEach((it, idx) => {
+      text += ` ${idx + 1}. *${it.suggested_purchase_units} ${it.purchase_unit_display}* de *${it.name}*\n`;
+    });
+
+    if (customWhatsAppNote.trim()) {
+      text += `\n📝 *Nota:* ${customWhatsAppNote.trim()}\n`;
+    }
+
+    text += `\nFavor confirmarnos disponibilidad y hora estimada de despacho. Muchas gracias! 🙌`;
+
+    const encoded = encodeURIComponent(text);
+    if (phone) {
+      const targetPhone = phone.startsWith('57') ? phone : `57${phone}`;
+      window.open(`https://wa.me/${targetPhone}?text=${encoded}`, '_blank');
+    } else {
+      navigator.clipboard.writeText(text);
+      showToast('✓ Texto del pedido copiado al portapapeles (este proveedor no tiene teléfono)');
+    }
   };
 
   const handleSaveInsumo = async (e) => {
@@ -648,6 +1179,7 @@ export default function AdminInventario() {
     setAdjustForm({
       inventory_id: insumo ? insumo.id : insumos[0]?.id || '',
       adjustment_type: 'MERMA',
+      waste_reason_category: 'MERMA_OPERATIVA',
       quantity: '',
       reason: ''
     });
@@ -661,17 +1193,25 @@ export default function AdminInventario() {
 
     setBusy(true);
     try {
+      const fullReason = [
+        adjustForm.waste_reason_category ? `[${adjustForm.waste_reason_category}]` : null,
+        adjustForm.reason?.trim()
+      ].filter(Boolean).join(' ');
+
       const res = await fetchAuth(`${API_URL}/admin/inventory-adjustments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(adjustForm)
+        body: JSON.stringify({
+          ...adjustForm,
+          reason: fullReason
+        })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al registrar ajuste');
 
       showToast(`✓ Ajuste (${adjustForm.adjustment_type}) aplicado y registrado en Kardex`);
       setAdjustModal(false);
-      await Promise.all([loadInsumos(), loadMovements()]);
+      await Promise.all([loadInsumos(), loadMovements(), loadValuation()]);
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
@@ -816,18 +1356,91 @@ export default function AdminInventario() {
     });
   }, [insumosWithStatus, stockStatusFilter, query]);
 
+  // Totales ejecutivos y KPIs para la pestaña de Alertas
+  const alertTotals = useMemo(() => {
+    let criticoCount = 0;
+    let bajoCount = 0;
+    let agotadoCount = 0;
+    let totalDeficitUnits = 0;
+    let totalReplenishCost = 0;
+
+    insumosWithStatus.forEach((item) => {
+      const key = item.statusMeta.key;
+      if (!['critico', 'bajo', 'agotado'].includes(key)) return;
+      if (key === 'agotado') agotadoCount++;
+      else if (key === 'critico') criticoCount++;
+      else if (key === 'bajo') bajoCount++;
+
+      const stockNum = Number(item.stock) || 0;
+      const minStockNum = Number(item.min_stock) || 0;
+      const deficit = Math.max(0, minStockNum - stockNum);
+      const unitCost = Number(item.average_cost) || Number(item.cost) || Number(item.unit_cost) || 0;
+      totalDeficitUnits += deficit;
+      totalReplenishCost += deficit * unitCost;
+    });
+
+    const totalAlerts = criticoCount + bajoCount + agotadoCount;
+    return {
+      totalAlerts,
+      criticoCount,
+      bajoCount,
+      agotadoCount,
+      totalDeficitUnits,
+      totalReplenishCost
+    };
+  }, [insumosWithStatus]);
+
   const alertInsumos = useMemo(() => {
-    return insumosWithStatus.filter((item) => {
+    const list = insumosWithStatus.filter((item) => {
       const key = item.statusMeta.key;
       if (!['critico', 'bajo', 'agotado'].includes(key)) return false;
       if (alertTabFilter !== 'ALL' && key !== alertTabFilter) return false;
-      if (query.trim()) {
-        const q = query.toLowerCase();
-        return item.name.toLowerCase().includes(q) || (item.category || '').toLowerCase().includes(q);
+      const q = (alertSearch.trim() || query.trim()).toLowerCase();
+      if (q) {
+        const matchName = item.name.toLowerCase().includes(q);
+        const matchSku = (item.sku || '').toLowerCase().includes(q);
+        const matchCat = (item.category || '').toLowerCase().includes(q);
+        return matchName || matchSku || matchCat;
       }
       return true;
+    }).map((item) => {
+      const stockNum = Number(item.stock) || 0;
+      const minStockNum = Number(item.min_stock) || 0;
+      const deficit = Math.max(0, minStockNum - stockNum);
+      const unitCost = Number(item.average_cost) || Number(item.cost) || Number(item.unit_cost) || 0;
+      const replenishCost = deficit * unitCost;
+      const healthPct = minStockNum > 0 ? Math.min(100, Math.round((stockNum / minStockNum) * 100)) : (stockNum > 0 ? 100 : 0);
+
+      return {
+        ...item,
+        stockNum,
+        minStockNum,
+        deficit,
+        unitCost,
+        replenishCost,
+        healthPct
+      };
     });
-  }, [insumosWithStatus, alertTabFilter, query]);
+
+    return list.sort((a, b) => {
+      if (alertSortBy === 'urgency') {
+        const order = { agotado: 0, critico: 1, bajo: 2 };
+        const diff = (order[a.statusMeta.key] ?? 99) - (order[b.statusMeta.key] ?? 99);
+        if (diff !== 0) return diff;
+        return a.healthPct - b.healthPct;
+      }
+      if (alertSortBy === 'deficit') {
+        return b.deficit - a.deficit;
+      }
+      if (alertSortBy === 'cost') {
+        return b.replenishCost - a.replenishCost;
+      }
+      if (alertSortBy === 'name') {
+        return a.name.localeCompare(b.name, 'es', { sensitivity: 'base' });
+      }
+      return 0;
+    });
+  }, [insumosWithStatus, alertTabFilter, alertSearch, query, alertSortBy]);
 
   const activeRecipeItems = useMemo(() => {
     if (!selectedRecipeProduct) return [];
@@ -875,6 +1488,20 @@ export default function AdminInventario() {
     const avgCost = withRecipe > 0 ? Math.round(totalCost / withRecipe) : 0;
     return { total, withRecipe, avgMargin, avgCost };
   }, [profitability]);
+ 
+  const filteredTopValued = useMemo(() => {
+    const list = valuationData?.top_valued || [];
+    if (!valuationSearch.trim()) return list;
+    const q = valuationSearch.trim().toLowerCase();
+    return list.filter((t) => (t.name || '').toLowerCase().includes(q));
+  }, [valuationData, valuationSearch]);
+
+  const filteredCategoriesValued = useMemo(() => {
+    const list = valuationData?.by_category || [];
+    if (!valuationSearch.trim()) return list;
+    const q = valuationSearch.trim().toLowerCase();
+    return list.filter((c) => (c.category || '').toLowerCase().includes(q));
+  }, [valuationData, valuationSearch]);
 
   // ==========================================
   // RENDER PRINCIPAL
@@ -967,8 +1594,23 @@ export default function AdminInventario() {
         <button className={`ds-btn ds-btn-sm ${activeTab === 'recetas' ? 'ds-btn-primary' : 'ds-btn-secondary'}`} onClick={() => setActiveTab('recetas')}>
           <Utensils size={15} /> Recetas ({products.length})
         </button>
+        <button className={`ds-btn ds-btn-sm ${activeTab === 'produccion' ? 'ds-btn-primary' : 'ds-btn-secondary'}`} onClick={() => setActiveTab('produccion')}>
+          <ChefHat size={15} /> Producción ({subrecipesGrouped.length})
+        </button>
+        <button className={`ds-btn ds-btn-sm ${activeTab === 'modificadores' ? 'ds-btn-primary' : 'ds-btn-secondary'}`} onClick={() => setActiveTab('modificadores')}>
+          <Layers size={15} /> Adiciones ({modifierRecipes.length})
+        </button>
+        <button className={`ds-btn ds-btn-sm ${activeTab === 'conteo_fisico' ? 'ds-btn-primary' : 'ds-btn-secondary'}`} onClick={() => setActiveTab('conteo_fisico')}>
+          <CheckSquare size={15} /> Conteo Físico
+        </button>
+        <button className={`ds-btn ds-btn-sm ${activeTab === 'proveedores' ? 'ds-btn-primary' : 'ds-btn-secondary'}`} onClick={() => setActiveTab('proveedores')}>
+          <Building2 size={15} /> Proveedores ({suppliersList.length})
+        </button>
         <button className={`ds-btn ds-btn-sm ${activeTab === 'kardex' ? 'ds-btn-primary' : 'ds-btn-secondary'}`} onClick={() => setActiveTab('kardex')}>
-          <Archive size={15} /> Kardex / Movimientos ({movements.length})
+          <Archive size={15} /> Kardex ({movements.length})
+        </button>
+        <button className={`ds-btn ds-btn-sm ${activeTab === 'valoracion' ? 'ds-btn-primary' : 'ds-btn-secondary'}`} onClick={() => setActiveTab('valoracion')}>
+          <BarChart3 size={15} /> Valoración & KPIs
         </button>
         <button className={`ds-btn ds-btn-sm ${activeTab === 'rentabilidad' ? 'ds-btn-primary' : 'ds-btn-secondary'}`} onClick={() => setActiveTab('rentabilidad')}>
           <TrendingUp size={15} /> Rentabilidad
@@ -1127,127 +1769,168 @@ export default function AdminInventario() {
       )}
 
       {/* ========================================================================= */}
-      {/* PESTAÑA 2: ALERTAS DE INVENTARIO 🚨 */}
+      {/* PESTAÑA 2: ALERTAS DE INVENTARIO 🚨 (DISEÑO UNIFICADO CON TODAS LAS PESTAÑAS) */}
       {/* ========================================================================= */}
       {activeTab === 'alertas' && (
         <div className="space-y-4">
           <div className="inventory-toolbar">
-            <div className="text-sm font-semibold ds-text-secondary">
-              Insumos con atención requerida: Críticos, Bajos y Agotados
+            <div className="flex items-center gap-2 flex-1 max-w-md">
+              <Search size={18} className="ds-text-muted" />
+              <input
+                type="text"
+                value={alertSearch}
+                onChange={(e) => setAlertSearch(e.target.value)}
+                placeholder="Buscar alerta por insumo, categoría o SKU…"
+                className="ds-input ds-search"
+              />
+              {alertSearch && (
+                <button onClick={() => setAlertSearch('')} className="ds-text-muted hover:ds-text-secondary">
+                  <X size={16} />
+                </button>
+              )}
             </div>
+
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '13px', color: 'var(--ds-text-secondary)', marginRight: '4px' }}>Filtros:</span>
               <button
                 onClick={() => setAlertTabFilter('ALL')}
                 className={`ds-btn ds-btn-sm ${alertTabFilter === 'ALL' ? 'ds-btn-primary' : 'ds-btn-secondary'}`}
               >
-                Todas las alertas ({inventorySummary.critico + inventorySummary.bajo + inventorySummary.agotado})
+                Todas ({alertTotals.totalAlerts})
               </button>
               <button
                 onClick={() => setAlertTabFilter('critico')}
                 className={`ds-btn ds-btn-sm ${alertTabFilter === 'critico' ? 'ds-btn-primary' : 'ds-btn-secondary'}`}
                 style={alertTabFilter !== 'critico' ? { color: 'var(--ds-danger)' } : {}}
               >
-                🔴 Críticos ({inventorySummary.critico})
+                🔴 Críticos ({alertTotals.criticoCount})
               </button>
               <button
                 onClick={() => setAlertTabFilter('bajo')}
                 className={`ds-btn ds-btn-sm ${alertTabFilter === 'bajo' ? 'ds-btn-primary' : 'ds-btn-secondary'}`}
                 style={alertTabFilter !== 'bajo' ? { color: 'var(--ds-warning)' } : {}}
               >
-                🟡 Stock Bajo ({inventorySummary.bajo})
+                🟡 Stock Bajo ({alertTotals.bajoCount})
               </button>
               <button
                 onClick={() => setAlertTabFilter('agotado')}
                 className={`ds-btn ds-btn-sm ${alertTabFilter === 'agotado' ? 'ds-btn-primary' : 'ds-btn-secondary'}`}
               >
-                ⚫ Agotados ({inventorySummary.agotado})
+                ⚫ Agotados ({alertTotals.agotadoCount})
+              </button>
+              <button
+                onClick={() => handleOpenWhatsAppModal()}
+                className="ds-btn ds-btn-sm"
+                style={{ background: '#16a34a', color: '#fff', borderColor: '#16a34a', display: 'flex', alignItems: 'center', gap: '6px' }}
+                title="Generar pedido a proveedores agrupado por WhatsApp"
+              >
+                <MessageSquare size={15} />
+                <span>📲 Pedido WhatsApp</span>
               </button>
             </div>
           </div>
 
-          {alertInsumos.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {alertInsumos.map((item) => {
-                const status = item.statusMeta;
-                const stockNum = Number(item.stock) || 0;
-                const minStockNum = Number(item.min_stock) || 0;
+          <div className="ds-card">
+            <div className="overflow-x-auto">
+              <table className="ds-table">
+                <thead className="ds-text-secondary font-bold uppercase text-xs tracking-wider border-b">
+                  <tr>
+                    <th className="py-3.5 px-4">Estado</th>
+                    <th className="py-3.5 px-4">Insumo</th>
+                    <th className="py-3.5 px-4 text-right">Stock Actual</th>
+                    <th className="py-3.5 px-4">Unidad</th>
+                    <th className="py-3.5 px-4 text-right">Stock Mínimo</th>
+                    <th className="py-3.5 px-4 text-right">Déficit</th>
+                    <th className="py-3.5 px-4 text-right">Inversión Estimada</th>
+                    <th className="py-3.5 px-4 text-center">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100 font-medium">
+                  {alertInsumos.map((item) => {
+                    const status = item.statusMeta;
+                    const stockNum = Number(item.stock) || 0;
+                    const minStockNum = Number(item.min_stock) || 0;
+                    const deficit = Math.max(0, minStockNum - stockNum);
+                    const unitCost = Number(item.average_cost) || Number(item.cost) || Number(item.unit_cost) || 0;
+                    const replenishCost = deficit * unitCost;
 
-                return (
-                  <div
-                    key={item.id}
-                    className="ds-card"
-                    style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
-                  >
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                        <span className={`ds-badge ${status.badgeClass}`} style={{ fontSize: '12px', padding: '4px 10px', gap: '6px' }}>
-                          <span>{status.symbol}</span>
-                          <span>{status.actionBadge}</span>
-                        </span>
-                        <span className="ds-badge ds-badge-neutral">{item.category || 'General'}</span>
-                      </div>
-
-                      <h3 style={{ fontSize: '1.15rem', fontWeight: '800', color: 'var(--ds-text-primary)', marginBottom: '12px' }}>
-                        {item.name}
-                      </h3>
-
-                      <div style={{ background: 'var(--ds-bg-elevated)', borderRadius: '10px', padding: '12px', border: '1px solid var(--ds-border)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '13px' }}>
-                          <span style={{ color: 'var(--ds-text-secondary)' }}>Stock Actual:</span>
-                          <strong style={{ color: status.key === 'agotado' ? 'var(--ds-text-muted)' : status.key === 'critico' ? 'var(--ds-danger)' : 'var(--ds-warning)' }}>
-                            {stockNum.toLocaleString('es-CO')} {item.unit}
-                          </strong>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '13px' }}>
-                          <span style={{ color: 'var(--ds-text-secondary)' }}>Stock Mínimo:</span>
-                          <span style={{ color: 'var(--ds-text-primary)', fontWeight: '600' }}>
-                            {minStockNum > 0 ? `${minStockNum.toLocaleString('es-CO')} ${item.unit}` : 'No definido'}
+                    return (
+                      <tr key={item.id} className="hover: transition-colors">
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <span className={`ds-badge ${status.badgeClass}`} style={{ fontSize: '12px', padding: '4px 10px', gap: '6px' }}>
+                            <span>{status.symbol}</span>
+                            <span>{status.actionBadge || status.label}</span>
                           </span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', paddingTop: '6px', borderTop: '1px solid var(--ds-border)', color: 'var(--ds-text-muted)' }}>
-                          <span>Diagnóstico:</span>
-                          <span>{status.description}</span>
-                        </div>
-                      </div>
-                    </div>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div className="font-bold">{item.name}</div>
+                          <div className="text-xs ds-text-muted">
+                            {item.category || 'General'} {item.sku ? `· SKU: ${item.sku}` : ''}
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-black" style={{ color: status.key === 'agotado' ? 'var(--ds-text-muted)' : status.key === 'critico' ? 'var(--ds-danger)' : 'var(--ds-warning)' }}>
+                          {stockNum.toLocaleString('es-CO')}
+                        </td>
+                        <td className="py-3.5 px-4 ds-text-secondary capitalize">
+                          {item.unit || 'unidad'}
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-semibold text-neutral-300">
+                          {minStockNum > 0 ? `${minStockNum.toLocaleString('es-CO')} ${item.unit}` : '—'}
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          {deficit > 0 ? (
+                            <span className="ds-badge ds-badge-danger" style={{ fontSize: '11px', fontWeight: 800 }}>
+                              -{deficit.toLocaleString('es-CO')} {item.unit}
+                            </span>
+                          ) : (
+                            <span className="text-xs ds-text-muted">0</span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-bold ds-text-warning">
+                          {replenishCost > 0 ? formatCurrency(replenishCost) : '—'}
+                        </td>
+                        <td className="py-3.5 px-4 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              onClick={() => handleOpenMinStockModal(item)}
+                              className="ds-btn ds-btn-secondary ds-btn-sm"
+                              title="Configurar stock mínimo"
+                            >
+                              Ajustar Mínimo
+                            </button>
+                            <button
+                              onClick={() => {
+                                setPurchaseForm((prev) => ({
+                                  ...prev,
+                                  inventory_id: item.id,
+                                  purchase_unit: item.unit,
+                                  quantity: deficit > 0 ? deficit : 1
+                                }));
+                                setActiveTab('compras');
+                              }}
+                              className="ds-btn ds-btn-primary ds-btn-sm"
+                              title="Comprar este insumo"
+                            >
+                              <ShoppingCart size={14} />
+                              <span>Comprar</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', paddingTop: '12px', borderTop: '1px solid var(--ds-border)', gap: '8px' }}>
-                      <button
-                        onClick={() => handleOpenMinStockModal(item)}
-                        className="ds-btn ds-btn-secondary ds-btn-sm"
-                      >
-                        Ajustar Mínimo
-                      </button>
-                      <button
-                        onClick={() => {
-                          setPurchaseForm((prev) => ({
-                            ...prev,
-                            inventory_id: item.id,
-                            purchase_unit: item.unit
-                          }));
-                          setActiveTab('compras');
-                        }}
-                        className="ds-btn ds-btn-primary ds-btn-sm"
-                      >
-                        <ShoppingCart size={14} />
-                        <span>Comprar Ahora</span>
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+                  {!alertInsumos.length && (
+                    <tr>
+                      <td colSpan={8} className="py-12 text-center ds-text-muted">
+                        No se encontraron insumos con alertas según el filtro seleccionado.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
-          ) : (
-            <div className="ds-card ds-empty-state">
-              <div className="w-16 h-16  rounded-full flex items-center justify-center mx-auto mb-3">
-                <CheckCircle2 size={36} className="ds-text-success" />
-              </div>
-              <h3 className="text-xl font-black text-emerald-900 mb-1">✓ Todo el inventario está en buen estado</h3>
-              <p className="text-sm ds-text-success max-w-md mx-auto">
-                No hay insumos críticos, bajos ni agotados en este momento. Todos los insumos con stock mínimo cuentan con suficiente existencia.
-              </p>
-            </div>
-          )}
+          </div>
         </div>
       )}
 
@@ -2456,6 +3139,865 @@ export default function AdminInventario() {
       )}
 
       {/* ========================================================================= */}
+      {/* PESTAÑA 8: PRODUCCIÓN INTERNA & SUB-RECETAS 🍳 */}
+      {/* ========================================================================= */}
+      {activeTab === 'produccion' && (
+        <div className="space-y-6">
+          <div className="inventory-toolbar">
+            <div>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '700', color: 'var(--ds-text-primary)' }}>
+                🍳 Sub-recetas & Producción de Cocina
+              </h3>
+              <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--ds-text-secondary)' }}>
+                Fórmulas de preparaciones internas (salsas, carnes de hamburguesa, aderezos). Al producir un lote, se descuentan las materias primas y se recalcula el costo promedio.
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const prep = insumos.find(i => i.is_prepared) || insumos[0];
+                  if (prep) handleOpenSubrecipeModal(prep);
+                  else showToast('Crea primero un insumo marcado como elaboración interna', 'error');
+                }}
+                className="ds-btn ds-btn-secondary"
+              >
+                <Plus size={16} /> Configurar Sub-receta
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const prep = insumos.find(i => i.is_prepared) || insumos[0];
+                  if (prep) handleOpenProduceModal(prep);
+                  else showToast('Crea primero un insumo marcado como elaboración interna', 'error');
+                }}
+                className="ds-btn ds-btn-primary"
+                style={{ background: '#D4A017', borderColor: '#D4A017', color: '#000', fontWeight: '700' }}
+              >
+                <ChefHat size={16} /> Producir Lote de Cocina
+              </button>
+            </div>
+          </div>
+
+          {/* Tarjetas de Insumos Elaborados */}
+          <div>
+            <h4 style={{ fontSize: '14px', fontWeight: '700', color: 'var(--ds-text-primary)', marginBottom: '12px' }}>
+              Fichas Técnicas de Preparados ({subrecipesGrouped.length})
+            </h4>
+
+            {subrecipesGrouped.length === 0 ? (
+              <div className="ds-card" style={{ padding: '32px', textAlign: 'center', color: 'var(--ds-text-secondary)' }}>
+                <ChefHat size={36} style={{ margin: '0 auto 12px auto', opacity: 0.4 }} />
+                <p style={{ fontWeight: '600', fontSize: '15px' }}>No hay sub-recetas configuradas aún</p>
+                <p style={{ fontSize: '13px', color: 'var(--ds-text-muted)', maxWidth: '480px', margin: '0 auto 16px auto' }}>
+                  Crea un insumo (ej: "Salsa de la Casa" o "Carne Molida Burguer 150g"), márcalo como elaboración interna y añade sus ingredientes base.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleOpenInsumo()}
+                  className="ds-btn ds-btn-primary ds-btn-sm"
+                >
+                  <Plus size={14} /> Crear Insumo Preparado
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {subrecipesGrouped.map((group) => (
+                  <div key={group.target_inventory_id} className="ds-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '16px' }}>
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                        <div>
+                          <span className="ds-badge ds-badge-info" style={{ fontSize: '10px', textTransform: 'uppercase', marginBottom: '4px', display: 'inline-block' }}>
+                            🍳 Elaboración Propia
+                          </span>
+                          <h4 style={{ fontSize: '16px', fontWeight: '800', margin: 0, color: 'var(--ds-text-primary)' }}>
+                            {group.target_name}
+                          </h4>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <span style={{ fontSize: '11px', color: 'var(--ds-text-muted)', display: 'block' }}>Stock Actual</span>
+                          <strong style={{ fontSize: '15px', color: 'var(--ds-text-primary)' }}>
+                            {Number(group.target_stock).toLocaleString('es-CO')} {group.target_unit}
+                          </strong>
+                        </div>
+                      </div>
+
+                      <div style={{ background: 'var(--ds-bg-elevated)', borderRadius: '8px', padding: '8px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                        <span style={{ fontSize: '12px', color: 'var(--ds-text-secondary)' }}>Costo Unitario Teórico:</span>
+                        <strong style={{ fontSize: '14px', color: 'var(--ds-primary)' }}>
+                          {formatCurrency(group.theoretical_unit_cost)} / {group.target_unit}
+                        </strong>
+                      </div>
+
+                      <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--ds-text-muted)', textTransform: 'uppercase', marginBottom: '6px' }}>
+                        Ingredientes requeridos por 1 {group.target_unit}:
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
+                        {group.ingredients.map((ing) => (
+                          <div key={ing.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', background: 'rgba(255,255,255,0.02)', borderRadius: '6px', fontSize: '12px' }}>
+                            <div>
+                              <strong style={{ color: 'var(--ds-text-primary)' }}>{ing.ingredient_name}</strong>
+                              <span style={{ color: 'var(--ds-text-muted)', marginLeft: '6px' }}>
+                                ({ing.quantity} {ing.ingredient_unit})
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ color: 'var(--ds-text-secondary)' }}>{formatCurrency(ing.ingredient_subtotal)}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteSubrecipe(ing.id)}
+                                className="ds-text-muted hover:ds-text-danger"
+                                style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px' }}
+                                title="Retirar ingrediente"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px', borderTop: '1px solid var(--ds-border)', paddingTop: '12px' }}>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenSubrecipeModal({ id: group.target_inventory_id, name: group.target_name })}
+                        className="ds-btn ds-btn-secondary ds-btn-sm"
+                        style={{ flex: 1 }}
+                      >
+                        <Plus size={14} /> + Ingrediente
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenProduceModal({ id: group.target_inventory_id, name: group.target_name, unit: group.target_unit })}
+                        className="ds-btn ds-btn-primary ds-btn-sm"
+                        style={{ flex: 1.2, background: '#16a34a', borderColor: '#16a34a' }}
+                      >
+                        <ChefHat size={14} /> Producir Lote
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Historial de Lotes Producidos */}
+          <div className="ds-card" style={{ padding: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <h4 style={{ fontSize: '15px', fontWeight: '700', margin: 0, color: 'var(--ds-text-primary)' }}>
+                📜 Historial de Lotes Elaborados en Cocina ({productionBatches.length})
+              </h4>
+              <button
+                type="button"
+                onClick={() => exportToCSV('Lotes_Produccion_DistritoBG', productionBatches)}
+                className="ds-btn ds-btn-secondary ds-btn-sm"
+              >
+                <Download size={14} /> Exportar CSV
+              </button>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="ds-table w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-neutral-700/50 text-xs uppercase ds-text-muted">
+                    <th className="py-2.5 px-3">Lote #</th>
+                    <th className="py-2.5 px-3">Fecha y Hora</th>
+                    <th className="py-2.5 px-3">Preparación</th>
+                    <th className="py-2.5 px-3 text-right">Cantidad Producida</th>
+                    <th className="py-2.5 px-3 text-right">Costo Unitario</th>
+                    <th className="py-2.5 px-3 text-right">Costo Total Lote</th>
+                    <th className="py-2.5 px-3">Responsable</th>
+                    <th className="py-2.5 px-3">Notas</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-800 text-sm">
+                  {productionBatches.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-8 text-center ds-text-muted">
+                        No hay registros de lotes producidos aún.
+                      </td>
+                    </tr>
+                  ) : (
+                    productionBatches.map((b) => (
+                      <tr key={b.id} className="hover:bg-neutral-800/40">
+                        <td className="py-2.5 px-3 font-mono font-bold text-neutral-400">#{b.id}</td>
+                        <td className="py-2.5 px-3 text-xs ds-text-muted">{formatDateTime(b.created_at)}</td>
+                        <td className="py-2.5 px-3 font-bold text-neutral-200">{b.target_name}</td>
+                        <td className="py-2.5 px-3 text-right font-black" style={{ color: 'var(--ds-success)' }}>
+                          +{Number(b.quantity_produced).toLocaleString('es-CO')} {b.target_unit}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono text-neutral-300">
+                          {formatCurrency(b.unit_cost)}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-bold" style={{ color: 'var(--ds-warning)' }}>
+                          {formatCurrency(b.total_cost)}
+                        </td>
+                        <td className="py-2.5 px-3 text-xs ds-text-secondary">{b.produced_by || 'Cocina'}</td>
+                        <td className="py-2.5 px-3 text-xs ds-text-muted">{b.notes || '—'}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* PESTAÑA 9: RECETAS DE MODIFICADORES & ADICIONES 🥓 */}
+      {/* ========================================================================= */}
+      {activeTab === 'modificadores' && (
+        <div className="space-y-6">
+          <div className="inventory-toolbar">
+            <div>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '700', color: 'var(--ds-text-primary)' }}>
+                🥓 Recetas de Adiciones y Toppings
+              </h3>
+              <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--ds-text-secondary)' }}>
+                Vincula adiciones (ej: Tocineta Extra, Doble Queso, Salsa Tártara Extra) a los insumos del inventario para descontar automáticamente el consumo en cada orden.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleOpenModifierModal()}
+              className="ds-btn ds-btn-primary"
+            >
+              <Plus size={16} /> Nueva Adición / Modificador
+            </button>
+          </div>
+
+          <div className="ds-card" style={{ padding: '20px' }}>
+            <div className="overflow-x-auto">
+              <table className="ds-table w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-neutral-700/50 text-xs uppercase ds-text-muted">
+                    <th className="py-3 px-4">Nombre de la Adición</th>
+                    <th className="py-3 px-4">Insumo que Descuenta</th>
+                    <th className="py-3 px-4 text-right">Cantidad Descontada</th>
+                    <th className="py-3 px-4 text-right">Costo Unit. Insumo</th>
+                    <th className="py-3 px-4 text-right">Costo de la Adición</th>
+                    <th className="py-3 px-4 text-center">Control de Stock</th>
+                    <th className="py-3 px-4 text-center">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-800 text-sm">
+                  {modifierRecipes.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-12 text-center ds-text-muted">
+                        No hay adiciones configuradas. Haz clic en "+ Nueva Adición" para mapear tus toppings de hamburguesa.
+                      </td>
+                    </tr>
+                  ) : (
+                    modifierRecipes.map((mod) => (
+                      <tr key={mod.id} className="hover:bg-neutral-800/40">
+                        <td className="py-3 px-4 font-bold text-neutral-100">
+                          {mod.modifier_name}
+                        </td>
+                        <td className="py-3 px-4 text-neutral-300">
+                          {mod.inventory_name}
+                        </td>
+                        <td className="py-3 px-4 text-right font-black" style={{ color: 'var(--ds-danger)' }}>
+                          -{Number(mod.quantity).toLocaleString('es-CO')} {mod.inventory_unit}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono text-neutral-400">
+                          {formatCurrency(mod.unit_cost)}
+                        </td>
+                        <td className="py-3 px-4 text-right font-bold" style={{ color: 'var(--ds-warning)' }}>
+                          {formatCurrency(mod.modifier_cost)}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className={`ds-badge ${mod.is_controlled ? 'ds-badge-success' : 'ds-badge-neutral'}`}>
+                            {mod.is_controlled ? 'Activo' : 'Pausado'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenModifierModal(mod)}
+                              className="ds-btn ds-btn-xs ds-btn-secondary"
+                              title="Editar adición"
+                            >
+                              <Edit3 size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteModifierRecipe(mod.id)}
+                              className="ds-btn ds-btn-xs ds-btn-secondary hover:ds-btn-danger"
+                              title="Eliminar adición"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* PESTAÑA 10: CONTEO FÍSICO RÁPIDO & AUDITORÍA 📋 */}
+      {/* ========================================================================= */}
+      {activeTab === 'conteo_fisico' && (
+        <div className="space-y-6">
+          <div className="inventory-toolbar">
+            <div>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '700', color: 'var(--ds-text-primary)' }}>
+                📋 Toma de Inventario Físico & Conciliación
+              </h3>
+              <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--ds-text-secondary)' }}>
+                Ingresa el conteo físico real de cada insumo. El sistema calculará automáticamente las diferencias y el impacto económico para ajustar el Kardex en un solo clic.
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => setAuditCounts({})}
+                className="ds-btn ds-btn-secondary"
+                disabled={Object.keys(auditCounts).length === 0}
+              >
+                Limpiar Conteo
+              </button>
+              <button
+                type="button"
+                onClick={handleAuditReconcile}
+                disabled={busy || Object.keys(auditCounts).length === 0}
+                className="ds-btn ds-btn-primary"
+                style={{ background: '#16a34a', borderColor: '#16a34a', color: '#fff', fontWeight: '700' }}
+              >
+                <CheckCircle2 size={16} /> Conciliar y Ajustar Inventario ({Object.keys(auditCounts).length})
+              </button>
+            </div>
+          </div>
+
+          {/* Planilla de Conteo Rápido */}
+          <div className="ds-card" style={{ padding: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '16px', background: 'var(--ds-bg-elevated)', padding: '12px 16px', borderRadius: '10px' }}>
+              <div>
+                <span style={{ fontSize: '11px', color: 'var(--ds-text-muted)', textTransform: 'uppercase', fontWeight: '700' }}>Insumos Totales</span>
+                <div style={{ fontSize: '18px', fontWeight: '800', color: 'var(--ds-text-primary)' }}>{insumos.length}</div>
+              </div>
+              <div>
+                <span style={{ fontSize: '11px', color: 'var(--ds-text-muted)', textTransform: 'uppercase', fontWeight: '700' }}>Insumos Contados</span>
+                <div style={{ fontSize: '18px', fontWeight: '800', color: 'var(--ds-primary)' }}>{Object.keys(auditCounts).length}</div>
+              </div>
+              <div>
+                <span style={{ fontSize: '11px', color: 'var(--ds-text-muted)', textTransform: 'uppercase', fontWeight: '700' }}>Auditor Responsable</span>
+                <input
+                  type="text"
+                  className="ds-input ds-input-sm"
+                  style={{ marginTop: '4px' }}
+                  value={auditAuditedBy}
+                  onChange={(e) => setAuditAuditedBy(e.target.value)}
+                  placeholder="Nombre del auditor"
+                />
+              </div>
+              <div>
+                <span style={{ fontSize: '11px', color: 'var(--ds-text-muted)', textTransform: 'uppercase', fontWeight: '700' }}>Notas de la Auditoría</span>
+                <input
+                  type="text"
+                  className="ds-input ds-input-sm"
+                  style={{ marginTop: '4px' }}
+                  value={auditNotes}
+                  onChange={(e) => setAuditNotes(e.target.value)}
+                  placeholder="Ej: Cierre fin de semana domingo"
+                />
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="ds-table w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-neutral-700/50 text-xs uppercase ds-text-muted">
+                    <th className="py-3 px-4">Insumo</th>
+                    <th className="py-3 px-4">Categoría</th>
+                    <th className="py-3 px-4 text-right">Stock Sistema</th>
+                    <th className="py-3 px-4 text-right" style={{ width: '160px' }}>Conteo Físico Real</th>
+                    <th className="py-3 px-4 text-right">Diferencia</th>
+                    <th className="py-3 px-4 text-right">Costo Unit.</th>
+                    <th className="py-3 px-4 text-right">Impacto en $</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-800 text-sm">
+                  {insumos.map((item) => {
+                    const systemStock = Number(item.stock) || 0;
+                    const countVal = auditCounts[item.id];
+                    const hasCount = countVal !== undefined && countVal !== '';
+                    const countedNum = hasCount ? Number(countVal) : null;
+                    const diff = hasCount ? (countedNum - systemStock) : 0;
+                    const unitCost = Number(item.average_cost) || Number(item.unit_cost) || 0;
+                    const costDiff = diff * unitCost;
+
+                    return (
+                      <tr key={item.id} className="hover:bg-neutral-800/40">
+                        <td className="py-3 px-4">
+                          <strong className="text-neutral-100">{item.name}</strong>
+                          {item.is_prepared && (
+                            <span className="ds-badge ds-badge-info ml-2" style={{ fontSize: '10px' }}>Cocina</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 ds-text-secondary text-xs">{item.category || 'General'}</td>
+                        <td className="py-3 px-4 text-right font-mono font-bold text-neutral-300">
+                          {systemStock.toLocaleString('es-CO')} {item.unit}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder={String(systemStock)}
+                            className="ds-input ds-input-sm text-right font-black"
+                            style={{ width: '120px', display: 'inline-block', background: hasCount ? 'var(--ds-bg-base)' : 'transparent' }}
+                            value={countVal ?? ''}
+                            onChange={(e) => handleAuditCountChange(item.id, e.target.value)}
+                          />
+                        </td>
+                        <td className="py-3 px-4 text-right font-bold">
+                          {!hasCount ? (
+                            <span className="text-neutral-500">—</span>
+                          ) : diff === 0 ? (
+                            <span style={{ color: 'var(--ds-success)' }}>0 (Exacto)</span>
+                          ) : (
+                            <span style={{ color: diff > 0 ? 'var(--ds-success)' : 'var(--ds-danger)' }}>
+                              {diff > 0 ? `+${diff.toLocaleString('es-CO')}` : diff.toLocaleString('es-CO')} {item.unit}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono text-neutral-400 text-xs">
+                          {formatCurrency(unitCost)}
+                        </td>
+                        <td className="py-3 px-4 text-right font-bold">
+                          {!hasCount || diff === 0 ? (
+                            <span className="text-neutral-500">—</span>
+                          ) : (
+                            <span style={{ color: costDiff > 0 ? 'var(--ds-success)' : 'var(--ds-danger)' }}>
+                              {costDiff > 0 ? `+${formatCurrency(costDiff)}` : `-${formatCurrency(Math.abs(costDiff))}`}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Historial de Auditorías Anteriores */}
+          <div className="ds-card" style={{ padding: '20px' }}>
+            <h4 style={{ fontSize: '15px', fontWeight: '700', margin: '0 0 14px 0', color: 'var(--ds-text-primary)' }}>
+              📜 Historial de Auditorías y Conciliaciones Anteriores ({auditsList.length})
+            </h4>
+
+            <div className="overflow-x-auto">
+              <table className="ds-table w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-neutral-700/50 text-xs uppercase ds-text-muted">
+                    <th className="py-2.5 px-3">Auditoría #</th>
+                    <th className="py-2.5 px-3">Fecha</th>
+                    <th className="py-2.5 px-3">Auditor</th>
+                    <th className="py-2.5 px-3 text-right">Insumos Auditados</th>
+                    <th className="py-2.5 px-3 text-right">Discrepancia Total ($)</th>
+                    <th className="py-2.5 px-3">Notas</th>
+                    <th className="py-2.5 px-3 text-center">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-800 text-sm">
+                  {auditsList.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center ds-text-muted">
+                        No hay auditorías registradas en el historial.
+                      </td>
+                    </tr>
+                  ) : (
+                    auditsList.map((a) => (
+                      <tr key={a.id} className="hover:bg-neutral-800/40">
+                        <td className="py-2.5 px-3 font-mono font-bold text-neutral-300">#{a.id}</td>
+                        <td className="py-2.5 px-3 text-xs ds-text-muted">{formatDateTime(a.audit_date || a.created_at)}</td>
+                        <td className="py-2.5 px-3 text-xs font-semibold text-neutral-200">{a.audited_by || 'Admin'}</td>
+                        <td className="py-2.5 px-3 text-right font-bold text-neutral-300">{a.items_count}</td>
+                        <td className="py-2.5 px-3 text-right font-black" style={{ color: Number(a.total_discrepancy_cost) > 0 ? 'var(--ds-warning)' : 'var(--ds-success)' }}>
+                          {formatCurrency(a.total_discrepancy_cost)}
+                        </td>
+                        <td className="py-2.5 px-3 text-xs ds-text-muted">{a.notes || '—'}</td>
+                        <td className="py-2.5 px-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenAuditDetail(a.id)}
+                            className="ds-btn ds-btn-xs ds-btn-secondary"
+                          >
+                            <Eye size={13} /> Ver Detalle
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* PESTAÑA 11: DIRECTORIO DE PROVEEDORES 🏢 */}
+      {/* ========================================================================= */}
+      {activeTab === 'proveedores' && (
+        <div className="space-y-6">
+          <div className="inventory-toolbar">
+            <div>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '700', color: 'var(--ds-text-primary)' }}>
+                🏢 Directorio de Proveedores
+              </h3>
+              <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--ds-text-secondary)' }}>
+                Información de contacto, condiciones comerciales, historial de abastecimiento y comunicación directa por WhatsApp.
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => exportToCSV('Proveedores_DistritoBG', suppliersList)}
+                className="ds-btn ds-btn-secondary"
+              >
+                <Download size={15} /> Exportar CSV
+              </button>
+              <button
+                type="button"
+                onClick={() => handleOpenSupplierModal()}
+                className="ds-btn ds-btn-primary"
+              >
+                <Plus size={16} /> Nuevo Proveedor
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {suppliersList.map((sup) => {
+              const phoneClean = (sup.phone || '').replace(/\D/g, '');
+              const waLink = phoneClean ? (phoneClean.startsWith('57') ? `https://wa.me/${phoneClean}` : `https://wa.me/57${phoneClean}`) : null;
+
+              return (
+                <div key={sup.id || sup.name} className="ds-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '16px' }}>
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                      <div>
+                        <h4 style={{ fontSize: '16px', fontWeight: '800', margin: 0, color: 'var(--ds-text-primary)' }}>
+                          {sup.name}
+                        </h4>
+                        {sup.category && (
+                          <span className="ds-badge ds-badge-neutral" style={{ fontSize: '11px', marginTop: '4px', display: 'inline-block' }}>
+                            {sup.category}
+                          </span>
+                        )}
+                      </div>
+                      <span className={`ds-badge ${sup.is_active !== false ? 'ds-badge-success' : 'ds-badge-neutral'}`} style={{ fontSize: '10px' }}>
+                        {sup.is_active !== false ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '13px', color: 'var(--ds-text-secondary)', margin: '12px 0' }}>
+                      {sup.contact_name && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <User size={14} color="var(--ds-text-muted)" />
+                          <span>Contacto: <strong style={{ color: 'var(--ds-text-primary)' }}>{sup.contact_name}</strong></span>
+                        </div>
+                      )}
+                      {sup.phone && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <Phone size={14} color="var(--ds-text-muted)" />
+                          <span>{sup.phone}</span>
+                        </div>
+                      )}
+                      {sup.email && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <Mail size={14} color="var(--ds-text-muted)" />
+                          <span>{sup.email}</span>
+                        </div>
+                      )}
+                      {sup.nit && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <FileText size={14} color="var(--ds-text-muted)" />
+                          <span>NIT: {sup.nit}</span>
+                        </div>
+                      )}
+                      {sup.payment_terms && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <DollarSign size={14} color="var(--ds-primary)" />
+                          <span>Condición: <strong>{sup.payment_terms}</strong></span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Estadísticas de Compras */}
+                    <div style={{ background: 'var(--ds-bg-elevated)', borderRadius: '8px', padding: '10px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', textAlign: 'center', marginBottom: '14px' }}>
+                      <div>
+                        <span style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--ds-text-muted)', fontWeight: '700' }}>Compras</span>
+                        <div style={{ fontSize: '14px', fontWeight: '800', color: 'var(--ds-text-primary)', marginTop: '2px' }}>
+                          {sup.purchases_count || 0}
+                        </div>
+                      </div>
+                      <div style={{ borderLeft: '1px solid var(--ds-border)' }}>
+                        <span style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--ds-text-muted)', fontWeight: '700' }}>Total Comprado</span>
+                        <div style={{ fontSize: '14px', fontWeight: '800', color: 'var(--ds-warning)', marginTop: '2px' }}>
+                          {formatCurrency(sup.total_spent || 0)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px', borderTop: '1px solid var(--ds-border)', paddingTop: '12px' }}>
+                    {waLink && (
+                      <a
+                        href={waLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="ds-btn ds-btn-sm"
+                        style={{ flex: 1, background: '#16a34a', borderColor: '#16a34a', color: '#fff', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                      >
+                        <MessageSquare size={14} /> WhatsApp
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleOpenSupplierModal(sup)}
+                      className="ds-btn ds-btn-secondary ds-btn-sm"
+                      style={{ flex: 1 }}
+                    >
+                      <Edit3 size={14} /> Editar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSupplier(sup.id, sup.name)}
+                      className="ds-btn ds-btn-secondary ds-btn-sm hover:ds-btn-danger"
+                      title="Eliminar o desactivar proveedor"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* PESTAÑA 12: VALORACIÓN TOTAL & KPIS MACRO 📊 (DISEÑO UNIFICADO) */}
+      {/* ========================================================================= */}
+      {activeTab === 'valoracion' && (
+        <div className="space-y-4">
+          {/* TARJETAS RESUMEN / KPIS FINANCIEROS */}
+          <section className="product-kpi-grid">
+            <article>
+              <DollarSign size={22} />
+              <div>
+                <strong>{formatCurrency(valuationData?.summary?.total_valuation || 0)}</strong>
+                <span>Valor Total en Bodega</span>
+              </div>
+            </article>
+
+            <article className={(valuationData?.waste_this_month?.total_waste_cost || 0) > 0 ? 'danger' : ''}>
+              <Trash2 size={22} />
+              <div>
+                <strong>{formatCurrency(valuationData?.waste_this_month?.total_waste_cost || 0)}</strong>
+                <span>Mermas / Desperdicios Mes ({Number(valuationData?.waste_this_month?.total_waste_units || 0).toLocaleString('es-CO')} unid)</span>
+              </div>
+            </article>
+
+            <article className={(valuationData?.summary?.low_stock_count || 0) > 0 ? 'warning' : ''}>
+              <Boxes size={22} />
+              <div>
+                <strong>{valuationData?.summary?.total_items || insumos.length}</strong>
+                <span>Insumos ({valuationData?.summary?.low_stock_count || 0} con alerta)</span>
+              </div>
+            </article>
+
+            <article>
+              <ChefHat size={22} />
+              <div>
+                <strong>{valuationData?.summary?.prepared_items_count || 0}</strong>
+                <span>Elaborados en Cocina</span>
+              </div>
+            </article>
+          </section>
+
+          {/* BARRA DE HERRAMIENTAS ESTÁNDAR */}
+          <div className="inventory-toolbar">
+            <div className="flex items-center gap-2 flex-1 max-w-md">
+              <Search size={18} className="ds-text-muted" />
+              <input
+                type="text"
+                value={valuationSearch}
+                onChange={(e) => setValuationSearch(e.target.value)}
+                placeholder="Buscar por insumo o categoría…"
+                className="ds-input ds-search"
+              />
+              {valuationSearch && (
+                <button onClick={() => setValuationSearch('')} className="ds-text-muted hover:ds-text-secondary">
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => reloadAll()}
+                disabled={busy}
+                className="ds-btn ds-btn-secondary ds-btn-sm"
+                title="Actualizar datos de valoración"
+              >
+                <RefreshCw size={14} className={busy ? 'animate-spin' : ''} />
+                <span>Actualizar Datos</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => exportToCSV('Inventario_DistritoBG_Completo', insumos)}
+                className="ds-btn ds-btn-primary ds-btn-sm"
+                title="Descargar reporte completo en formato CSV"
+              >
+                <Download size={14} />
+                <span>Exportar Inventario (CSV)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* TABLAS EN FORMATO SISTEMA */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Top Insumos con Mayor Capital Almacenado */}
+            <div className="ds-card">
+              <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--ds-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '15px', fontWeight: '700', color: 'var(--ds-text-primary)' }}>
+                    🏆 Top Insumos con Mayor Capital
+                  </h4>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: 'var(--ds-text-muted)' }}>
+                    Insumos de mayor impacto económico almacenados en bodega
+                  </p>
+                </div>
+                <span className="ds-badge ds-badge-primary">
+                  {filteredTopValued.length} insumos
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="ds-table">
+                  <thead className="ds-text-secondary font-bold uppercase text-xs tracking-wider border-b">
+                    <tr>
+                      <th className="py-3.5 px-4">Insumo</th>
+                      <th className="py-3.5 px-4 text-right">Existencia</th>
+                      <th className="py-3.5 px-4 text-right">Costo Promedio</th>
+                      <th className="py-3.5 px-4 text-right">Valor Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-100 font-medium">
+                    {filteredTopValued.map((t, idx) => (
+                      <tr key={t.id || idx} className="hover: transition-colors">
+                        <td className="py-3.5 px-4">
+                          <div className="flex items-center gap-2">
+                            <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--ds-text-muted)', width: '20px' }}>
+                              #{idx + 1}
+                            </span>
+                            <div>
+                              <div className="font-bold">{t.name}</div>
+                              <div className="text-xs ds-text-muted">{t.unit || 'unidad'}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-bold">
+                          {Number(t.stock).toLocaleString('es-CO')} {t.unit}
+                        </td>
+                        <td className="py-3.5 px-4 text-right ds-text-muted">
+                          {formatCurrency(t.unit_cost)}
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-black ds-text-warning">
+                          {formatCurrency(t.total_value)}
+                        </td>
+                      </tr>
+                    ))}
+                    {!filteredTopValued.length && (
+                      <tr>
+                        <td colSpan={4} className="py-8 text-center ds-text-muted">
+                          No se encontraron insumos valorizados
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Desglose por Categoría */}
+            <div className="ds-card">
+              <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--ds-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '15px', fontWeight: '700', color: 'var(--ds-text-primary)' }}>
+                    🏷️ Valoración por Categoría
+                  </h4>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: 'var(--ds-text-muted)' }}>
+                    Distribución de capital e insumos por familia
+                  </p>
+                </div>
+                <span className="ds-badge ds-badge-primary">
+                  {filteredCategoriesValued.length} categorías
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="ds-table">
+                  <thead className="ds-text-secondary font-bold uppercase text-xs tracking-wider border-b">
+                    <tr>
+                      <th className="py-3.5 px-4">Categoría</th>
+                      <th className="py-3.5 px-4 text-right">Insumos</th>
+                      <th className="py-3.5 px-4 text-right">% Bodega</th>
+                      <th className="py-3.5 px-4 text-right">Valor Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-100 font-medium">
+                    {filteredCategoriesValued.map((c, idx) => {
+                      const totalValuation = Number(valuationData?.summary?.total_valuation || 1);
+                      const sharePct = totalValuation > 0 ? ((c.valuation / totalValuation) * 100).toFixed(1) : 0;
+                      return (
+                        <tr key={c.category || idx} className="hover: transition-colors">
+                          <td className="py-3.5 px-4 font-bold">
+                            {c.category}
+                          </td>
+                          <td className="py-3.5 px-4 text-right font-medium ds-text-secondary">
+                            {c.items_count}
+                          </td>
+                          <td className="py-3.5 px-4 text-right">
+                            <span className="ds-badge ds-badge-secondary" style={{ fontSize: '11px' }}>
+                              {sharePct}%
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-right font-black ds-text-warning">
+                            {formatCurrency(c.valuation)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {!filteredCategoriesValued.length && (
+                      <tr>
+                        <td colSpan={4} className="py-8 text-center ds-text-muted">
+                          No se encontraron categorías valorizadas
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
       {/* MODAL: AJUSTE RÁPIDO DE STOCK MÍNIMO */}
       {/* ========================================================================= */}
       {minStockModal && minStockItem && (
@@ -3049,8 +4591,52 @@ export default function AdminInventario() {
                   </div>
                 </div>
 
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div className="ds-form-group">
+                    <label className="ds-form-label">Unidad de Compra (Empaque)</label>
+                    <input
+                      type="text"
+                      className="ds-input"
+                      value={insumoForm.purchase_unit || ''}
+                      onChange={(e) => setInsumoForm({ ...insumoForm, purchase_unit: e.target.value })}
+                      placeholder="Ej: Kg, Caja x24, Paca, Galón"
+                    />
+                  </div>
+                  <div className="ds-form-group">
+                    <label className="ds-form-label">Factor de Conversión</label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      min="0.0001"
+                      className="ds-input"
+                      value={insumoForm.conversion_factor || 1}
+                      onChange={(e) => setInsumoForm({ ...insumoForm, conversion_factor: e.target.value })}
+                      placeholder="Ej: 1000 si 1 Kg = 1000 g"
+                    />
+                    <small style={{ fontSize: '11px', color: 'var(--ds-text-muted)', display: 'block', marginTop: '2px' }}>
+                      Contenido por empaque en {insumoForm.unit}
+                    </small>
+                  </div>
+                </div>
+
+                <div className="ds-form-group" style={{ background: 'var(--ds-bg-elevated)', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--ds-border)' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', margin: 0 }}>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(insumoForm.is_prepared)}
+                      onChange={(e) => setInsumoForm({ ...insumoForm, is_prepared: e.target.checked })}
+                    />
+                    <div>
+                      <strong style={{ fontSize: '13px', color: 'var(--ds-text-primary)' }}>🍳 Es preparación interna de cocina (Sub-receta)</strong>
+                      <p style={{ margin: '2px 0 0 0', fontSize: '11px', color: 'var(--ds-text-muted)' }}>
+                        Marca esta casilla si el insumo se produce en el restaurante a partir de materias primas (ej: Salsa Tártara, Carne Molida).
+                      </p>
+                    </div>
+                  </label>
+                </div>
+
                 <div style={{ background: 'var(--ds-bg-elevated)', border: '1px solid var(--ds-border)', borderRadius: '10px', padding: '12px', fontSize: '12px', color: 'var(--ds-text-secondary)', lineHeight: 1.5 }}>
-                  ℹ️ <strong>Regla de Inventario:</strong> El stock físico siempre inicia en 0 y únicamente se incrementa al registrar una <strong>Compra de Inventario</strong>.
+                  ℹ️ <strong>Regla de Inventario:</strong> El stock físico siempre inicia en 0 y se incrementa al registrar una <strong>Compra</strong> o una <strong>Producción Interna</strong>.
                 </div>
               </div>
 
@@ -3115,6 +4701,21 @@ export default function AdminInventario() {
                       <option value="PERDIDA">Pérdida</option>
                       <option value="CONTEO_FISICO">Conteo Físico</option>
                       <option value="AJUSTE">Ajuste General</option>
+                    </select>
+                  </div>
+                  <div className="ds-form-group">
+                    <label className="ds-form-label">Causa / Categoría de la Merma</label>
+                    <select
+                      className="ds-select"
+                      value={adjustForm.waste_reason_category || 'MERMA_OPERATIVA'}
+                      onChange={(e) => setAdjustForm({ ...adjustForm, waste_reason_category: e.target.value })}
+                    >
+                      <option value="MERMA_OPERATIVA">Merma Operativa (Corte/Porcionado)</option>
+                      <option value="VENCIMIENTO">Vencimiento / Caducidad</option>
+                      <option value="DAÑO_TRANSPORTE">Daño en Transporte / Proveedor</option>
+                      <option value="ERROR_COCINA">Error de Cocina / Preparación</option>
+                      <option value="CONSUMO_INTERNO">Consumo Interno / Pruebas</option>
+                      <option value="OTRO">Otro Motivo</option>
                     </select>
                   </div>
                   <div className="ds-form-group">
@@ -3302,22 +4903,598 @@ export default function AdminInventario() {
                   </label>
                 </div>
               </div>
+            </div>
 
-              <div className="ds-modal-footer" style={{ padding: '12px 0 0 0', margin: 0, borderTop: '1px solid var(--ds-border)' }}>
-                <button type="button" onClick={() => setCopyModalOpen(false)} className="ds-btn ds-btn-secondary">
+            <div className="ds-modal-footer">
+              <button
+                type="button"
+                className="ds-btn ds-btn-secondary"
+                onClick={() => setCopyModalOpen(false)}
+                disabled={copyingRecipe}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="ds-btn ds-btn-primary"
+                onClick={handleCopyRecipe}
+                disabled={!copyTargetProductId || copyingRecipe}
+              >
+                {copyingRecipe ? 'Duplicando...' : 'Duplicar Receta'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: PROVEEDOR (CREAR / EDITAR) */}
+      {supplierModal && (
+        <div className="ds-modal-overlay" onMouseDown={(e) => e.target === e.currentTarget && setSupplierModal(false)}>
+          <div className="ds-modal" style={{ maxWidth: '520px' }}>
+            <div className="ds-modal-header">
+              <h2 className="ds-modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Building2 size={20} color="var(--ds-primary)" />
+                <span>{supplierForm.id ? 'Editar Proveedor' : 'Nuevo Proveedor'}</span>
+              </h2>
+              <button className="ds-modal-close" onClick={() => setSupplierModal(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveSupplier}>
+              <div className="ds-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div className="ds-form-group">
+                  <label className="ds-form-label">Nombre de la Empresa / Proveedor *</label>
+                  <input
+                    type="text"
+                    className="ds-input"
+                    value={supplierForm.name}
+                    onChange={(e) => setSupplierForm({ ...supplierForm, name: e.target.value })}
+                    placeholder="Ej: Distribuidora de Carnes del Norte"
+                    required
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div className="ds-form-group">
+                    <label className="ds-form-label">Persona de Contacto</label>
+                    <input
+                      type="text"
+                      className="ds-input"
+                      value={supplierForm.contact_name}
+                      onChange={(e) => setSupplierForm({ ...supplierForm, contact_name: e.target.value })}
+                      placeholder="Ej: Carlos Gómez"
+                    />
+                  </div>
+                  <div className="ds-form-group">
+                    <label className="ds-form-label">Teléfono / WhatsApp *</label>
+                    <input
+                      type="text"
+                      className="ds-input"
+                      value={supplierForm.phone}
+                      onChange={(e) => setSupplierForm({ ...supplierForm, phone: e.target.value })}
+                      placeholder="Ej: 3001234567"
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div className="ds-form-group">
+                    <label className="ds-form-label">Correo Electrónico</label>
+                    <input
+                      type="email"
+                      className="ds-input"
+                      value={supplierForm.email}
+                      onChange={(e) => setSupplierForm({ ...supplierForm, email: e.target.value })}
+                      placeholder="ventas@proveedor.com"
+                    />
+                  </div>
+                  <div className="ds-form-group">
+                    <label className="ds-form-label">NIT / Documento Fiscal</label>
+                    <input
+                      type="text"
+                      className="ds-input"
+                      value={supplierForm.nit}
+                      onChange={(e) => setSupplierForm({ ...supplierForm, nit: e.target.value })}
+                      placeholder="900.123.456-7"
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div className="ds-form-group">
+                    <label className="ds-form-label">Categoría de Suministros</label>
+                    <input
+                      type="text"
+                      className="ds-input"
+                      value={supplierForm.category}
+                      onChange={(e) => setSupplierForm({ ...supplierForm, category: e.target.value })}
+                      placeholder="Carnes, Empaques, Salsas…"
+                    />
+                  </div>
+                  <div className="ds-form-group">
+                    <label className="ds-form-label">Condición de Pago</label>
+                    <select
+                      className="ds-select"
+                      value={supplierForm.payment_terms}
+                      onChange={(e) => setSupplierForm({ ...supplierForm, payment_terms: e.target.value })}
+                    >
+                      <option value="Contado">Contado</option>
+                      <option value="Crédito 8 días">Crédito 8 días</option>
+                      <option value="Crédito 15 días">Crédito 15 días</option>
+                      <option value="Crédito 30 días">Crédito 30 días</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="ds-form-group">
+                  <label className="ds-form-label">Dirección / Ciudad</label>
+                  <input
+                    type="text"
+                    className="ds-input"
+                    value={supplierForm.address}
+                    onChange={(e) => setSupplierForm({ ...supplierForm, address: e.target.value })}
+                    placeholder="Calle 123 #45-67"
+                  />
+                </div>
+
+                <div className="ds-form-group">
+                  <label className="ds-form-label">Notas Adicionales</label>
+                  <textarea
+                    className="ds-textarea"
+                    rows="2"
+                    value={supplierForm.notes}
+                    onChange={(e) => setSupplierForm({ ...supplierForm, notes: e.target.value })}
+                    placeholder="Días de despacho, pedido mínimo, observaciones…"
+                  />
+                </div>
+              </div>
+
+              <div className="ds-modal-footer">
+                <button type="button" onClick={() => setSupplierModal(false)} className="ds-btn ds-btn-secondary">
                   Cancelar
                 </button>
-                <button
-                  type="button"
-                  disabled={!copyTargetProductId || busy}
-                  onClick={() => handlePasteRecipe(copyTargetProductId, copyMode)}
-                  className="ds-btn ds-btn-primary"
-                  style={{ background: '#16a34a', borderColor: '#16a34a' }}
-                >
-                  <ClipboardCheck size={16} />
-                  <span>Aplicar y Duplicar Receta</span>
+                <button type="submit" disabled={busy} className="ds-btn ds-btn-primary">
+                  <CheckCircle2 size={16} />
+                  <span>{supplierForm.id ? 'Guardar Cambios' : 'Registrar Proveedor'}</span>
                 </button>
               </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: SUB-RECETA (AGREGAR INGREDIENTE A PREPARADO) */}
+      {subrecipeModal && (
+        <div className="ds-modal-overlay" onMouseDown={(e) => e.target === e.currentTarget && setSubrecipeModal(false)}>
+          <div className="ds-modal" style={{ maxWidth: '480px' }}>
+            <div className="ds-modal-header">
+              <h2 className="ds-modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ChefHat size={20} color="var(--ds-primary)" />
+                <span>Ingrediente para Sub-receta</span>
+              </h2>
+              <button className="ds-modal-close" onClick={() => setSubrecipeModal(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveSubrecipe}>
+              <div className="ds-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div className="ds-form-group">
+                  <label className="ds-form-label">Insumo Preparado (Destino) *</label>
+                  <select
+                    className="ds-select"
+                    value={subrecipeForm.target_inventory_id}
+                    onChange={(e) => setSubrecipeForm({ ...subrecipeForm, target_inventory_id: e.target.value })}
+                    required
+                  >
+                    <option value="">Selecciona preparado…</option>
+                    {insumos.map((i) => (
+                      <option key={i.id} value={i.id}>
+                        {i.name} ({i.unit})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="ds-form-group">
+                  <label className="ds-form-label">Ingrediente Base a Descontar *</label>
+                  <select
+                    className="ds-select"
+                    value={subrecipeForm.ingredient_inventory_id}
+                    onChange={(e) => setSubrecipeForm({ ...subrecipeForm, ingredient_inventory_id: e.target.value })}
+                    required
+                  >
+                    <option value="">Selecciona ingrediente…</option>
+                    {insumos
+                      .filter((i) => i.id !== subrecipeForm.target_inventory_id)
+                      .map((i) => (
+                        <option key={i.id} value={i.id}>
+                          {i.name} (Unidad: {i.unit}, Stock: {Number(i.stock).toLocaleString('es-CO')})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                <div className="ds-form-group">
+                  <label className="ds-form-label">Cantidad Requerida por 1 Unidad del Preparado *</label>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    min="0.0001"
+                    className="ds-input"
+                    value={subrecipeForm.quantity}
+                    onChange={(e) => setSubrecipeForm({ ...subrecipeForm, quantity: e.target.value })}
+                    placeholder="Ej: 50 para 50g o 0.5 para 0.5 unidades"
+                    required
+                  />
+                  <small style={{ fontSize: '11px', color: 'var(--ds-text-muted)' }}>
+                    Cantidad de este ingrediente que se descuenta para producir 1 unidad/porción del insumo destino.
+                  </small>
+                </div>
+
+                <div className="ds-form-group">
+                  <label className="ds-form-label">Observaciones</label>
+                  <input
+                    type="text"
+                    className="ds-input"
+                    value={subrecipeForm.notes}
+                    onChange={(e) => setSubrecipeForm({ ...subrecipeForm, notes: e.target.value })}
+                    placeholder="Opcional: notas de preparación"
+                  />
+                </div>
+              </div>
+
+              <div className="ds-modal-footer">
+                <button type="button" onClick={() => setSubrecipeModal(false)} className="ds-btn ds-btn-secondary">
+                  Cancelar
+                </button>
+                <button type="submit" disabled={busy} className="ds-btn ds-btn-primary">
+                  <CheckCircle2 size={16} /> Guardar en Sub-receta
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: REGISTRAR LOTE DE PRODUCCIÓN DE COCINA */}
+      {produceModal && (
+        <div className="ds-modal-overlay" onMouseDown={(e) => e.target === e.currentTarget && setProduceModal(false)}>
+          <div className="ds-modal" style={{ maxWidth: '520px' }}>
+            <div className="ds-modal-header">
+              <h2 className="ds-modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ChefHat size={20} color="var(--ds-primary)" />
+                <span>Registrar Lote de Producción en Cocina</span>
+              </h2>
+              <button className="ds-modal-close" onClick={() => setProduceModal(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleProduceBatch}>
+              <div className="ds-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div className="ds-form-group">
+                  <label className="ds-form-label">Insumo Elaborado en Cocina *</label>
+                  <select
+                    className="ds-select"
+                    value={produceForm.target_inventory_id}
+                    onChange={(e) => setProduceForm({ ...produceForm, target_inventory_id: e.target.value })}
+                    required
+                  >
+                    <option value="">Selecciona preparación…</option>
+                    {insumos.map((i) => (
+                      <option key={i.id} value={i.id}>
+                        {i.name} (Stock actual: {Number(i.stock).toLocaleString('es-CO')} {i.unit})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div className="ds-form-group">
+                    <label className="ds-form-label">Cantidad Producida *</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      className="ds-input font-bold"
+                      value={produceForm.quantity_produced}
+                      onChange={(e) => setProduceForm({ ...produceForm, quantity_produced: e.target.value })}
+                      placeholder="Ej: 5"
+                      required
+                    />
+                  </div>
+                  <div className="ds-form-group">
+                    <label className="ds-form-label">Elaborado Por</label>
+                    <input
+                      type="text"
+                      className="ds-input"
+                      value={produceForm.produced_by}
+                      onChange={(e) => setProduceForm({ ...produceForm, produced_by: e.target.value })}
+                      placeholder="Ej: Cocina, Juan P."
+                    />
+                  </div>
+                </div>
+
+                <div className="ds-form-group">
+                  <label className="ds-form-label">Notas del Lote</label>
+                  <input
+                    type="text"
+                    className="ds-input"
+                    value={produceForm.notes}
+                    onChange={(e) => setProduceForm({ ...produceForm, notes: e.target.value })}
+                    placeholder="Ej: Lote semanal para fin de semana"
+                  />
+                </div>
+
+                <div style={{ background: 'var(--ds-bg-elevated)', border: '1px solid var(--ds-border)', borderRadius: '10px', padding: '12px', fontSize: '12px', color: 'var(--ds-text-secondary)', lineHeight: 1.5 }}>
+                  ⚡ <strong>Impacto Automático:</strong> El sistema descontará proporcionalmente cada uno de los ingredientes base del almacén, calculará el costo unitario exacto del lote y sumará la cantidad producida al stock disponible.
+                </div>
+              </div>
+
+              <div className="ds-modal-footer">
+                <button type="button" onClick={() => setProduceModal(false)} className="ds-btn ds-btn-secondary">
+                  Cancelar
+                </button>
+                <button type="submit" disabled={busy} className="ds-btn ds-btn-primary" style={{ background: '#16a34a', borderColor: '#16a34a' }}>
+                  <ChefHat size={16} /> Confirmar y Producir Lote
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: MODIFICADOR / ADICIÓN */}
+      {modifierModal && (
+        <div className="ds-modal-overlay" onMouseDown={(e) => e.target === e.currentTarget && setModifierModal(false)}>
+          <div className="ds-modal" style={{ maxWidth: '480px' }}>
+            <div className="ds-modal-header">
+              <h2 className="ds-modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Layers size={20} color="var(--ds-primary)" />
+                <span>{modifierForm.id ? 'Editar Adición' : 'Nueva Receta de Adición'}</span>
+              </h2>
+              <button className="ds-modal-close" onClick={() => setModifierModal(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveModifierRecipe}>
+              <div className="ds-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div className="ds-form-group">
+                  <label className="ds-form-label">Nombre del Modificador / Adición *</label>
+                  <input
+                    type="text"
+                    className="ds-input"
+                    value={modifierForm.modifier_name}
+                    onChange={(e) => setModifierForm({ ...modifierForm, modifier_name: e.target.value })}
+                    placeholder="Ej: Tocineta Extra, Queso Cheddar Doble, Salsa Tártara"
+                    required
+                  />
+                  <small style={{ fontSize: '11px', color: 'var(--ds-text-muted)' }}>
+                    Debe coincidir con el nombre de la adición seleccionada por el cliente.
+                  </small>
+                </div>
+
+                <div className="ds-form-group">
+                  <label className="ds-form-label">Insumo del Inventario a Descontar *</label>
+                  <select
+                    className="ds-select"
+                    value={modifierForm.inventory_id}
+                    onChange={(e) => setModifierForm({ ...modifierForm, inventory_id: e.target.value })}
+                    required
+                  >
+                    <option value="">Selecciona insumo…</option>
+                    {insumos.map((i) => (
+                      <option key={i.id} value={i.id}>
+                        {i.name} ({i.unit})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="ds-form-group">
+                  <label className="ds-form-label">Cantidad a Descontar por Porción *</label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    min="0.001"
+                    className="ds-input"
+                    value={modifierForm.quantity}
+                    onChange={(e) => setModifierForm({ ...modifierForm, quantity: e.target.value })}
+                    placeholder="Ej: 2 para 2 lonjas de tocineta o 30 para 30g de queso"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="ds-modal-footer">
+                <button type="button" onClick={() => setModifierModal(false)} className="ds-btn ds-btn-secondary">
+                  Cancelar
+                </button>
+                <button type="submit" disabled={busy} className="ds-btn ds-btn-primary">
+                  <CheckCircle2 size={16} /> Guardar Adición
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: PEDIDO INTELIGENTE WHATSAPP */}
+      {whatsappModal && (
+        <div className="ds-modal-overlay" onMouseDown={(e) => e.target === e.currentTarget && setWhatsappModal(false)}>
+          <div className="ds-modal" style={{ maxWidth: '600px' }}>
+            <div className="ds-modal-header">
+              <h2 className="ds-modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <MessageSquare size={20} color="#25D366" />
+                <span>Generador de Pedidos a Proveedores por WhatsApp</span>
+              </h2>
+              <button className="ds-modal-close" onClick={() => setWhatsappModal(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="ds-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ background: 'var(--ds-bg-elevated)', padding: '12px 14px', borderRadius: '10px', fontSize: '13px' }}>
+                El sistema detectó <strong>{purchaseSuggestions.length} insumos</strong> por debajo de su umbral mínimo de seguridad. Selecciona el proveedor para redactar el mensaje listo para enviar.
+              </div>
+
+              <div className="ds-form-group">
+                <label className="ds-form-label">Filtrar por Proveedor</label>
+                <select
+                  className="ds-select"
+                  value={whatsappSupplierFilter}
+                  onChange={(e) => setWhatsappSupplierFilter(e.target.value)}
+                >
+                  <option value="ALL">Todos los insumos con stock bajo ({purchaseSuggestions.length})</option>
+                  {suppliersList.map((sup) => (
+                    <option key={sup.name} value={sup.name}>
+                      {sup.name} {sup.phone ? `(${sup.phone})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Lista de Insumos Sugeridos */}
+              <div style={{ maxHeight: '220px', overflowY: 'auto', border: '1px solid var(--ds-border)', borderRadius: '8px', padding: '8px' }}>
+                {purchaseSuggestions
+                  .filter((it) => whatsappSupplierFilter === 'ALL' || (it.last_supplier && it.last_supplier.toLowerCase() === whatsappSupplierFilter.toLowerCase()))
+                  .map((it) => (
+                    <div key={it.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: '12px' }}>
+                      <div>
+                        <strong style={{ color: 'var(--ds-text-primary)' }}>{it.name}</strong>
+                        <div style={{ color: 'var(--ds-text-muted)', fontSize: '11px' }}>
+                          Stock: {Number(it.stock).toLocaleString('es-CO')} {it.unit} | Mínimo: {it.min_stock} {it.unit}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <span className="ds-badge ds-badge-warning" style={{ fontSize: '11px', fontWeight: 'bold' }}>
+                          Sugerido: {it.suggested_purchase_units} {it.purchase_unit_display}
+                        </span>
+                        <div style={{ color: 'var(--ds-text-muted)', fontSize: '10px' }}>
+                          Est: {formatCurrency(it.estimated_cost)}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+
+              <div className="ds-form-group">
+                <label className="ds-form-label">Nota o Instrucción Adicional para el Proveedor</label>
+                <input
+                  type="text"
+                  className="ds-input"
+                  value={customWhatsAppNote}
+                  onChange={(e) => setCustomWhatsAppNote(e.target.value)}
+                  placeholder="Ej: Entregar antes de las 11:00 AM, favor enviar factura electrónica"
+                />
+              </div>
+            </div>
+
+            <div className="ds-modal-footer">
+              <button type="button" onClick={() => setWhatsappModal(false)} className="ds-btn ds-btn-secondary">
+                Cerrar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const targetItems = purchaseSuggestions.filter(
+                    (it) => whatsappSupplierFilter === 'ALL' || (it.last_supplier && it.last_supplier.toLowerCase() === whatsappSupplierFilter.toLowerCase())
+                  );
+                  const supObj = suppliersList.find((s) => s.name.toLowerCase() === whatsappSupplierFilter.toLowerCase()) || { name: whatsappSupplierFilter, phone: targetItems[0]?.supplier_phone };
+                  handleSendWhatsAppOrder(supObj, targetItems);
+                }}
+                disabled={purchaseSuggestions.length === 0}
+                className="ds-btn ds-btn-primary"
+                style={{ background: '#25D366', borderColor: '#25D366', color: '#fff', fontWeight: '700' }}
+              >
+                <MessageSquare size={16} /> Abrir Pedido en WhatsApp
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: DETALLE DE AUDITORÍA */}
+      {auditDetailModal && selectedAuditDetail && (
+        <div className="ds-modal-overlay" onMouseDown={(e) => e.target === e.currentTarget && setAuditDetailModal(false)}>
+          <div className="ds-modal" style={{ maxWidth: '640px' }}>
+            <div className="ds-modal-header">
+              <div>
+                <span className="ds-page-kicker" style={{ fontSize: '11px' }}>
+                  Auditoría #{selectedAuditDetail.audit.id}
+                </span>
+                <h2 className="ds-modal-title" style={{ margin: 0 }}>
+                  Detalle de Conciliación Física
+                </h2>
+              </div>
+              <button className="ds-modal-close" onClick={() => setAuditDetailModal(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="ds-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', background: 'var(--ds-bg-elevated)', padding: '12px', borderRadius: '10px', textAlign: 'center' }}>
+                <div>
+                  <span style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--ds-text-muted)', fontWeight: '700' }}>Fecha</span>
+                  <div style={{ fontSize: '13px', fontWeight: '700', marginTop: '2px' }}>
+                    {formatDateTime(selectedAuditDetail.audit.audit_date || selectedAuditDetail.audit.created_at)}
+                  </div>
+                </div>
+                <div>
+                  <span style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--ds-text-muted)', fontWeight: '700' }}>Insumos Conciliados</span>
+                  <div style={{ fontSize: '15px', fontWeight: '800', color: 'var(--ds-primary)', marginTop: '2px' }}>
+                    {selectedAuditDetail.items?.length || 0}
+                  </div>
+                </div>
+                <div>
+                  <span style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--ds-text-muted)', fontWeight: '700' }}>Discrepancia Total</span>
+                  <div style={{ fontSize: '15px', fontWeight: '800', color: 'var(--ds-warning)', marginTop: '2px' }}>
+                    {formatCurrency(selectedAuditDetail.audit.total_discrepancy_cost || 0)}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ maxHeight: '280px', overflowY: 'auto' }}>
+                <table className="ds-table w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-neutral-700/50 uppercase ds-text-muted">
+                      <th className="py-2 px-3">Insumo</th>
+                      <th className="py-2 px-3 text-right">Sistema</th>
+                      <th className="py-2 px-3 text-right">Conteo Físico</th>
+                      <th className="py-2 px-3 text-right">Diferencia</th>
+                      <th className="py-2 px-3 text-right">Impacto en $</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-800">
+                    {(selectedAuditDetail.items || []).map((it) => (
+                      <tr key={it.id}>
+                        <td className="py-2 px-3 font-bold text-neutral-200">{it.inventory_name}</td>
+                        <td className="py-2 px-3 text-right font-mono text-neutral-400">
+                          {Number(it.system_stock).toLocaleString('es-CO')} {it.inventory_unit}
+                        </td>
+                        <td className="py-2 px-3 text-right font-mono font-bold text-neutral-100">
+                          {Number(it.counted_stock).toLocaleString('es-CO')} {it.inventory_unit}
+                        </td>
+                        <td className="py-2 px-3 text-right font-bold" style={{ color: Number(it.difference) < 0 ? 'var(--ds-danger)' : Number(it.difference) > 0 ? 'var(--ds-success)' : 'inherit' }}>
+                          {Number(it.difference) > 0 ? `+${it.difference}` : it.difference}
+                        </td>
+                        <td className="py-2 px-3 text-right font-bold" style={{ color: Number(it.cost_difference) > 0 ? 'var(--ds-warning)' : 'inherit' }}>
+                          {formatCurrency(it.cost_difference)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="ds-modal-footer">
+              <button type="button" onClick={() => setAuditDetailModal(false)} className="ds-btn ds-btn-secondary">
+                Cerrar
+              </button>
             </div>
           </div>
         </div>
