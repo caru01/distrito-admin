@@ -598,15 +598,17 @@ export default function AdminInventario() {
 
   // Proveedores sugeridos filtrados
   const filteredSuppliers = useMemo(() => {
-    const input = (purchaseForm.supplier || '').trim().toLowerCase();
-    if (!input) return suppliersList.slice(0, 6);
-    return suppliersList.filter((s) => s.toLowerCase().includes(input)).slice(0, 6);
+    const input = (typeof purchaseForm.supplier === 'string' ? purchaseForm.supplier : purchaseForm.supplier?.name || '').trim().toLowerCase();
+    const names = suppliersList.map((s) => (typeof s === 'string' ? s : s?.name || '')).filter(Boolean);
+    if (!input) return names.slice(0, 6);
+    return names.filter((s) => s.toLowerCase().includes(input)).slice(0, 6);
   }, [purchaseForm.supplier, suppliersList]);
 
   const editFilteredSuppliers = useMemo(() => {
-    const input = (editPurchaseForm.supplier || '').trim().toLowerCase();
-    if (!input) return suppliersList.slice(0, 6);
-    return suppliersList.filter((s) => s.toLowerCase().includes(input)).slice(0, 6);
+    const input = (typeof editPurchaseForm.supplier === 'string' ? editPurchaseForm.supplier : editPurchaseForm.supplier?.name || '').trim().toLowerCase();
+    const names = suppliersList.map((s) => (typeof s === 'string' ? s : s?.name || '')).filter(Boolean);
+    if (!input) return names.slice(0, 6);
+    return names.filter((s) => s.toLowerCase().includes(input)).slice(0, 6);
   }, [editPurchaseForm.supplier, suppliersList]);
 
   // ==========================================
@@ -2082,7 +2084,7 @@ export default function AdminInventario() {
                     type="text"
                     className="ds-input"
                     placeholder="Escribe o selecciona proveedor…"
-                    value={purchaseForm.supplier}
+                    value={typeof purchaseForm.supplier === 'string' ? purchaseForm.supplier : (purchaseForm.supplier?.name || '')}
                     onFocus={() => setSupplierInputFocused(true)}
                     onBlur={() => setTimeout(() => setSupplierInputFocused(false), 250)}
                     onChange={(e) => setPurchaseForm({ ...purchaseForm, supplier: e.target.value })}
@@ -2093,19 +2095,22 @@ export default function AdminInventario() {
                       <div style={{ padding: '6px 12px', fontSize: '11px', color: 'var(--ds-text-muted)', fontWeight: '700', textTransform: 'uppercase', borderBottom: '1px solid var(--ds-border)' }}>
                         Proveedores sugeridos
                       </div>
-                      {filteredSuppliers.map((sup, idx) => (
-                        <div
-                          key={idx}
-                          onMouseDown={() => {
-                            setPurchaseForm((prev) => ({ ...prev, supplier: sup }));
-                            setSupplierInputFocused(false);
-                          }}
-                          style={{ padding: '8px 12px', fontSize: '13px', cursor: 'pointer', borderBottom: '1px solid var(--ds-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                        >
-                          <span>{sup}</span>
-                          <Check size={14} color="var(--ds-primary)" />
-                        </div>
-                      ))}
+                      {filteredSuppliers.map((sup, idx) => {
+                        const supName = typeof sup === 'string' ? sup : (sup?.name || '');
+                        return (
+                          <div
+                            key={idx}
+                            onMouseDown={() => {
+                              setPurchaseForm((prev) => ({ ...prev, supplier: supName }));
+                              setSupplierInputFocused(false);
+                            }}
+                            style={{ padding: '8px 12px', fontSize: '13px', cursor: 'pointer', borderBottom: '1px solid var(--ds-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                          >
+                            <span>{supName}</span>
+                            <Check size={14} color="var(--ds-primary)" />
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -2296,7 +2301,7 @@ export default function AdminInventario() {
                         {formatCurrency(p.total_cost)}
                       </td>
                       <td>
-                        <span className="ds-badge ds-badge-neutral">{p.supplier || 'General'}</span>
+                        <span className="ds-badge ds-badge-neutral">{typeof p.supplier === 'object' ? (p.supplier?.name || 'General') : (p.supplier || 'General')}</span>
                       </td>
                       <td style={{ maxWidth: '240px', fontSize: '12px' }}>
                         {p.notes ? (
@@ -2759,7 +2764,8 @@ export default function AdminInventario() {
                     if (m.order_id) {
                       origenTexto = `Pedido #${m.order_id}${m.sold_product_title ? ` · ${m.sold_product_title}` : ''}`;
                     } else if (m.purchase_id) {
-                      origenTexto = `Compra #${m.purchase_id}${m.purchase_supplier ? ` · ${m.purchase_supplier}` : ''}`;
+                      const supStr = typeof m.purchase_supplier === 'object' ? (m.purchase_supplier?.name || '') : (m.purchase_supplier || '');
+                      origenTexto = `Compra #${m.purchase_id}${supStr ? ` · ${supStr}` : ''}`;
                     } else if (m.reason) {
                       origenTexto = m.reason;
                     }
@@ -4132,7 +4138,7 @@ export default function AdminInventario() {
                       <span className="ds-badge ds-badge-success">Ingreso de Stock</span>
                     </div>
                     <div style={{ color: 'var(--ds-text-secondary)' }}>
-                      Proveedor: <strong style={{ color: 'var(--ds-text-primary)' }}>{selectedMovement.purchase_supplier || 'General'}</strong>
+                      Proveedor: <strong style={{ color: 'var(--ds-text-primary)' }}>{typeof selectedMovement.purchase_supplier === 'object' ? (selectedMovement.purchase_supplier?.name || 'General') : (selectedMovement.purchase_supplier || 'General')}</strong>
                     </div>
                     {selectedMovement.purchase_total_cost && (
                       <div style={{ color: 'var(--ds-text-secondary)' }}>
@@ -4352,7 +4358,7 @@ export default function AdminInventario() {
                     type="text"
                     className="ds-input"
                     placeholder="Nombre o empresa del proveedor…"
-                    value={editPurchaseForm.supplier}
+                    value={typeof editPurchaseForm.supplier === 'string' ? editPurchaseForm.supplier : (editPurchaseForm.supplier?.name || '')}
                     onFocus={() => setEditSupplierInputFocused(true)}
                     onBlur={() => setTimeout(() => setEditSupplierInputFocused(false), 250)}
                     onChange={(e) => setEditPurchaseForm({ ...editPurchaseForm, supplier: e.target.value })}
@@ -4372,27 +4378,30 @@ export default function AdminInventario() {
                       <div style={{ padding: '6px 12px', fontSize: '11px', color: 'var(--ds-text-muted)', fontWeight: '700', textTransform: 'uppercase', borderBottom: '1px solid var(--ds-border)' }}>
                         Sugerencias de Proveedor
                       </div>
-                      {editFilteredSuppliers.map((sup, idx) => (
-                        <div
-                          key={idx}
-                          onMouseDown={() => {
-                            setEditPurchaseForm((prev) => ({ ...prev, supplier: sup }));
-                            setEditSupplierInputFocused(false);
-                          }}
-                          style={{
-                            padding: '8px 12px',
-                            fontSize: '12px',
-                            cursor: 'pointer',
-                            borderBottom: '1px solid var(--ds-border)',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center'
-                          }}
-                        >
-                          <span>{sup}</span>
-                          <Check size={14} color="var(--ds-primary)" />
-                        </div>
-                      ))}
+                      {editFilteredSuppliers.map((sup, idx) => {
+                        const supName = typeof sup === 'string' ? sup : (sup?.name || '');
+                        return (
+                          <div
+                            key={idx}
+                            onMouseDown={() => {
+                              setEditPurchaseForm((prev) => ({ ...prev, supplier: supName }));
+                              setEditSupplierInputFocused(false);
+                            }}
+                            style={{
+                              padding: '8px 12px',
+                              fontSize: '12px',
+                              cursor: 'pointer',
+                              borderBottom: '1px solid var(--ds-border)',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center'
+                            }}
+                          >
+                            <span>{supName}</span>
+                            <Check size={14} color="var(--ds-primary)" />
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
