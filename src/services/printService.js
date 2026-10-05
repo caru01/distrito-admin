@@ -1,7 +1,7 @@
 /**
  * ─────────────────────────────────────────────────────────────────────────────
  * SERVICIO PROFESIONAL UNIFICADO DE IMPRESIÓN DE COMANDAS TÉRMICAS ESC/POS
- * ERP Distrito BG - Altísima Legibilidad, Método de Pago & Tipo de Entrega
+ * Formato DISTRIC HOUSE - Optimizado para papel 58(48) x 3276 mm sin espacios sobrantes
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -10,12 +10,12 @@ const formatter = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 
 /**
  * Función principal para imprimir el ticket unificado de Comanda / Pedido
  * @param {Object} order - Objeto del pedido
- * @param {Number} paperWidth - 80 (default) | 58
+ * @param {Number} paperWidth - 58 (default 58mm / 48mm imprimible) | 80
  */
-export const printTicket = (order, paperWidth = 80) => {
+export const printTicket = (order, paperWidth = 58) => {
   if (!order) return;
 
-  const printWindow = window.open('', '_blank', `width=${paperWidth === 58 ? 320 : 420},height=650`);
+  const printWindow = window.open('', '_blank', 'width=320,height=550');
   if (!printWindow) {
     alert('Por favor habilite las ventanas emergentes (popups) para imprimir los tickets.');
     return;
@@ -30,29 +30,51 @@ export const printTicket = (order, paperWidth = 80) => {
   setTimeout(() => {
     printWindow.print();
     printWindow.close();
-  }, 300);
+  }, 250);
 };
 
 /**
- * Generador HTML con alta legibilidad, Método de Pago, Tipo de Entrega y toques de color originales
+ * Generador HTML según especificación DISTRIC HOUSE:
+ * - Tamaño base de fuente: 12px
+ * - Espaciado ultra-compacto para evitar desbordes y saltos en 48mm
+ * - Sin espacios en blanco sobrantes al inicio ni al final
+ * - Etiquetas normales (400), valores en negrita (700/800)
  */
-export const generateSingleComandaHTML = (order, paperWidth = 80) => {
+export const generateSingleComandaHTML = (order, paperWidth = 58) => {
   const is58 = paperWidth === 58;
+  const printableWidth = is58 ? '44mm' : '72mm';
   const items = Array.isArray(order.cart_json) ? order.cart_json : (order.cart || []);
 
   const orderDate = order.created_at ? new Date(order.created_at) : new Date();
   const formattedDate = orderDate.toLocaleDateString('es-CO', { timeZone: 'America/Bogota' });
   const formattedTime = orderDate.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
+  const formattedDateTime = `${formattedDate} ${formattedTime}`;
 
-  const originText = order.source || 'Salón';
+  const orderNumber = String(order.id || '1').padStart(4, '0');
+  const customerName = order.customer_name || order.customer?.name || order.name || 'Cliente';
+  const customerPhone = order.customer_phone || order.customer?.phone || order.phone || 'Sin teléfono';
   const deliveryType = order.delivery_type || order.deliveryType || 'Domicilio';
+
+  let cashierName = order.cajero || order.user || order.cashierName || '';
+  if (!cashierName) {
+    try {
+      const stored = localStorage.getItem('distrito_user_profile');
+      if (stored) {
+        const u = JSON.parse(stored);
+        cashierName = [u.name, u.last_name].filter(Boolean).join(' ') || u.username || '';
+      }
+    } catch (e) {}
+  }
+  if (!cashierName) cashierName = 'Camilo Rincones';
+
+  const address = order.address || order.customer?.address || (String(deliveryType).toLowerCase() === 'mesa' ? `Mesa ${order.mesa || ''}`.trim() : 'En local');
+  const barrio = order.barrio || order.customer?.barrio || 'N/A';
+
   const paymentMethod = order.payment_method || order.paymentMethod || 'Efectivo';
-  const orderNumber = String(order.id || '1258').padStart(4, '0');
-  const cashierName = order.cajero || order.user || 'Camilo Rincones';
 
   // Cálculos de Subtotal, Domicilio y Total
   const subtotal = items.reduce((sum, i) => sum + ((i.price || 0) * (i.quantity || i.qty || 1)), 0);
-  const deliveryFee = (deliveryType.toLowerCase() === 'domicilio') ? Math.max(0, Number(order.delivery_fee || 0)) : 0;
+  const deliveryFee = (String(deliveryType).toLowerCase() === 'domicilio') ? Math.max(0, Number(order.delivery_fee || 0)) : 0;
   const grandTotal = Number(order.total ?? (subtotal + deliveryFee));
 
   let productsRowsHtml = '';
@@ -66,7 +88,7 @@ export const generateSingleComandaHTML = (order, paperWidth = 80) => {
     let modifiersHtml = '';
     if (Array.isArray(modifiers) && modifiers.length > 0) {
       modifiersHtml = `<div class="modifier-item">` +
-        modifiers.map(m => `<div>• ${typeof m === 'string' ? m : (m.name || m.label)}</div>`).join('') +
+        modifiers.map(m => `<div>• ${typeof m === 'string' ? m : (m.name || m.label || m.title)}</div>`).join('') +
       `</div>`;
     } else if (item.notes) {
       modifiersHtml = `<div class="modifier-item"><div>• ${item.notes}</div></div>`;
@@ -75,7 +97,7 @@ export const generateSingleComandaHTML = (order, paperWidth = 80) => {
     productsRowsHtml += `
       <div class="product-row">
         <div class="product-left">
-          <span class="qty">${qty}</span>
+          <span class="qty">${qty}x</span>
           <span class="product-name">${title}</span>
         </div>
         <div class="product-price">${formatter.format(itemTotal)}</div>
@@ -84,271 +106,388 @@ export const generateSingleComandaHTML = (order, paperWidth = 80) => {
     `;
   });
 
-  return `
-    <!DOCTYPE html>
-    <html lang="es">
-    <head>
-      <meta charset="UTF-8">
-      <title>Comanda #${orderNumber}</title>
-      <style>
-        @page { size: ${paperWidth}mm auto; margin: 0; }
-        body {
-          font-family: 'Segoe UI', Arial, sans-serif;
-          font-size: ${is58 ? '13px' : '14px'};
-          color: #000;
-          background: #fff;
-          margin: 0;
-          padding: ${is58 ? '10px 8px' : '16px 12px'};
-          width: 100%;
-          box-sizing: border-box;
-          -webkit-print-color-adjust: exact;
-          line-height: 1.35;
-        }
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Comanda #${orderNumber}</title>
+  <style>
+    @page {
+      size: ${is58 ? '58mm auto' : '80mm auto'};
+      margin: 0mm;
+    }
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    html, body {
+      width: 100% !important;
+      margin: 0 auto !important;
+      padding: 0 !important;
+      height: auto !important;
+      min-height: 0 !important;
+      background: #fff;
+      color: #000;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 12px;
+      line-height: 1.2;
+      letter-spacing: -0.2px;
+      -webkit-print-color-adjust: exact;
+    }
+    @media print {
+      html, body {
+        width: 100% !important;
+        margin: 0 auto !important;
+        padding: 0 !important;
+        height: auto !important;
+      }
+      .ticket-wrapper {
+        width: ${printableWidth} !important;
+        max-width: ${printableWidth} !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+        padding-left: 1mm !important;
+        padding-right: 1mm !important;
+        height: auto !important;
+      }
+    }
 
-        .text-center { text-align: center; }
-        .dashed-divider {
-          border-bottom: 2px dashed #000;
-          margin: 12px 0;
-          width: 100%;
-        }
+    .ticket-wrapper {
+      width: 100%;
+      max-width: ${printableWidth};
+      margin: 0 auto;
+      padding: 1px 1mm 0 1mm;
+      box-sizing: border-box;
+    }
 
-        /* ENCABEZADO INSTITUCIONAL CENTRADO */
-        .brand-header {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          text-align: center;
-          margin-bottom: 8px;
-        }
-        .burger-icon {
-          width: ${is58 ? '38px' : '46px'};
-          height: ${is58 ? '38px' : '46px'};
-          margin-bottom: 2px;
-        }
-        .brand-name {
-          font-size: ${is58 ? '22px' : '26px'};
-          font-weight: 900;
-          letter-spacing: -0.5px;
-          line-height: 1.1;
-          color: #000;
-        }
-        .brand-slogan {
-          font-size: ${is58 ? '11px' : '12px'};
-          color: #333;
-          margin-top: 4px;
-          font-weight: 600;
-        }
+    .dashed-divider {
+      border-bottom: 1px dashed #000;
+      margin: 3px 0;
+      width: 100%;
+      height: 0;
+    }
 
-        /* COMANDA INFO */
-        .comanda-title {
-          font-size: ${is58 ? '15px' : '17px'};
-          font-weight: 900;
-          text-align: center;
-          letter-spacing: 0.5px;
-          margin-bottom: 10px;
-          color: #000;
-        }
-        .info-line {
-          font-size: ${is58 ? '13px' : '14px'};
-          margin-bottom: 4px;
-          color: #000;
-        }
-        .info-label { font-weight: 800; color: #000; }
-        .order-code {
-          font-size: ${is58 ? '16px' : '18px'};
-          font-weight: 900;
-          color: #7C3AED;
-        }
+    /* TITULO PRINCIPAL CENTRADO */
+    .title-header {
+      font-size: 15px;
+      font-weight: 900;
+      text-align: center;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin: 0 0 2px 0;
+      color: #000;
+      line-height: 1.15;
+    }
 
-        /* SECCIONES PILL BADGES */
-        .pill-badge {
-          display: inline-block;
-          background-color: #000;
-          color: #fff;
-          font-size: ${is58 ? '12px' : '13px'};
-          font-weight: 900;
-          padding: 4px 12px;
-          border-radius: 4px;
-          letter-spacing: 0.5px;
-          margin-bottom: 10px;
-          text-transform: uppercase;
-        }
+    /* TITULO DE SECCION CENTRADO */
+    .section-header {
+      font-size: 12px;
+      font-weight: 800;
+      text-align: center;
+      margin: 2px 0;
+      color: #000;
+      line-height: 1.15;
+    }
 
-        /* LISTA PRODUCTOS */
-        .product-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          margin-top: 8px;
-          font-size: ${is58 ? '13px' : '15px'};
-        }
-        .product-left {
-          display: flex;
-          align-items: flex-start;
-          gap: 10px;
-          flex: 1;
-        }
-        .qty {
-          font-size: ${is58 ? '14px' : '16px'};
-          font-weight: 900;
-          min-width: 16px;
-        }
-        .product-name {
-          font-weight: 800;
-          line-height: 1.2;
-        }
-        .product-price {
-          font-weight: 900;
-          font-size: ${is58 ? '13px' : '15px'};
-          white-space: nowrap;
-          margin-left: 8px;
-        }
-        .modifier-item {
-          margin-left: ${is58 ? '26px' : '30px'};
-          margin-top: 3px;
-          margin-bottom: 6px;
-          font-size: ${is58 ? '12px' : '13px'};
-          color: #222;
-          font-weight: 600;
-        }
+    /* FILAS DE INFORMACION: Etiqueta normal, Valor en Negrita */
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      flex-wrap: wrap;
+      font-size: 12px;
+      margin-bottom: 1.5px;
+      color: #000;
+      line-height: 1.2;
+      gap: 2px;
+    }
+    .info-label {
+      font-weight: 400;
+      font-size: 12px;
+      flex-shrink: 0;
+      margin-right: 4px;
+    }
+    .info-value {
+      font-weight: 700;
+      text-align: right;
+      word-break: break-word;
+      overflow-wrap: break-word;
+      font-size: 12px;
+      flex: 1 1 auto;
+      max-width: 100%;
+    }
+    .order-number {
+      font-weight: 900;
+      font-size: 13px;
+    }
 
-        /* RESUMEN DE TOTALES */
-        .totals-container {
-          margin-top: 6px;
-        }
-        .total-row {
-          display: flex;
-          justify-content: space-between;
-          font-size: ${is58 ? '13px' : '14px'};
-          margin-bottom: 4px;
-          color: #000;
-          font-weight: 600;
-        }
-        .grand-total {
-          font-size: ${is58 ? '17px' : '20px'};
-          font-weight: 900;
-          border-top: 2px solid #000;
-          border-bottom: 2px solid #000;
-          padding: 6px 0;
-          margin-top: 8px;
-        }
+    /* FILAS APILADAS: Etiqueta arriba, Valor abajo */
+    .info-stacked {
+      margin-bottom: 2px;
+      font-size: 12px;
+      line-height: 1.2;
+    }
+    .info-value-stacked {
+      font-weight: 700;
+      font-size: 12px;
+      line-height: 1.2;
+      word-break: break-word;
+      overflow-wrap: break-word;
+      color: #000;
+    }
 
-        /* OBSERVACIONES */
-        .obs-text {
-          font-size: ${is58 ? '13px' : '14px'};
-          font-weight: 700;
-          line-height: 1.4;
-          white-space: pre-line;
-          color: #000;
-        }
+    /* FILAS DE PRODUCTOS EN NEGRITA */
+    .product-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-top: 2.5px;
+      font-size: 12px;
+      line-height: 1.2;
+    }
+    .product-left {
+      display: flex;
+      align-items: flex-start;
+      gap: 3px;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .qty {
+      font-weight: 800;
+      min-width: 15px;
+      flex-shrink: 0;
+      font-size: 12px;
+    }
+    .product-name {
+      font-weight: 800;
+      line-height: 1.15;
+      word-break: break-word;
+      overflow-wrap: break-word;
+      font-size: 12px;
+    }
+    .product-price {
+      font-weight: 800;
+      white-space: nowrap;
+      margin-left: 3px;
+      text-align: right;
+      flex-shrink: 0;
+      font-size: 12px;
+    }
+    .modifier-item {
+      margin-left: 16px;
+      margin-top: 1px;
+      margin-bottom: 2px;
+      font-size: 10.5px;
+      color: #222;
+      font-weight: 400;
+      line-height: 1.15;
+      word-break: break-word;
+    }
 
-        /* FOOTER */
-        .thanks-title {
-          font-size: ${is58 ? '16px' : '18px'};
-          font-weight: 900;
-          color: #7C3AED;
-          margin-bottom: 3px;
-        }
-        .footer-sub {
-          font-size: ${is58 ? '12px' : '13px'};
-          font-weight: 700;
-          color: #000;
-        }
-      </style>
-    </head>
-    <body>
-      
-      <!-- ENCABEZADO INSTITUCIONAL CENTRADO -->
-      <div class="brand-header">
-        <div class="brand-name">DISTRITO BG</div>
-        <div class="brand-slogan">Más que hamburguesas, una experiencia.</div>
+    /* TOTALES: Etiquetas normales, Valores en negrita */
+    .totals-container {
+      margin-top: 1.5px;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      flex-wrap: wrap;
+      font-size: 12px;
+      margin-bottom: 1.5px;
+      color: #000;
+      line-height: 1.2;
+      gap: 2px;
+    }
+    .total-label {
+      font-weight: 400;
+      font-size: 12px;
+      flex-shrink: 0;
+      margin-right: 4px;
+    }
+    .total-value {
+      font-weight: 800;
+      text-align: right;
+      font-size: 12px;
+      flex: 1 1 auto;
+    }
+    .grand-total {
+      font-size: 13.5px;
+      border-top: 1px dashed #000;
+      padding-top: 3px;
+      margin-top: 3px;
+      line-height: 1.2;
+    }
+    .grand-total .total-label {
+      font-weight: 400;
+      font-size: 13.5px;
+    }
+    .grand-total .total-value {
+      font-weight: 900;
+      font-size: 14px;
+    }
+
+    /* OBSERVACIONES */
+    .obs-text {
+      font-size: 11.5px;
+      font-weight: 700;
+      line-height: 1.2;
+      white-space: pre-line;
+      word-break: break-word;
+      color: #000;
+      margin-top: 1.5px;
+    }
+
+    /* PIE DE PAGINA / COPYRIGHT */
+    .ticket-footer {
+      text-align: center;
+      font-size: 10px;
+      font-weight: 400;
+      line-height: 1.2;
+      color: #000;
+      margin-top: 3px;
+      margin-bottom: 0;
+      padding-bottom: 0;
+      word-break: break-word;
+    }
+
+    .ticket-wrapper > *:last-child,
+    .totals-container > *:last-child,
+    .ticket-footer:last-child {
+      margin-bottom: 0 !important;
+      padding-bottom: 0 !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="ticket-wrapper">
+    <div class="dashed-divider"></div>
+
+    <!-- TITULO PRINCIPAL CENTRADO -->
+    <div class="title-header">DISTRIC HOUSE</div>
+
+    <div class="dashed-divider"></div>
+
+    <!-- SECCION: INFORMACION GENERAL DEL PEDIDO -->
+    <div class="info-row">
+      <span class="info-label">Pedido:</span>
+      <span class="info-value order-number">#${orderNumber}</span>
+    </div>
+    <div class="info-stacked">
+      <div class="info-label">Fecha y hora :</div>
+      <div class="info-value-stacked">${formattedDateTime}</div>
+    </div>
+
+    <div class="dashed-divider"></div>
+
+    <!-- SECCION: DETALLE DEL PEDIDO CENTRADO -->
+    <div class="section-header">Detalle del pedido</div>
+
+    <div class="dashed-divider"></div>
+
+    <!-- PRODUCTOS -->
+    <div>
+      ${productsRowsHtml}
+    </div>
+
+    <!-- SUBTOTAL -->
+    <div class="total-row" style="margin-top: 3px;">
+      <span class="total-label">Subtotal :</span>
+      <span class="total-value">${formatter.format(subtotal)}</span>
+    </div>
+
+    <!-- OBSERVACIONES -->
+    <div class="info-row" style="margin-top: 2px;">
+      <span class="info-label">Observaciones :</span>
+      <span class="info-value">${order.notes || ''}</span>
+    </div>
+
+    <div class="dashed-divider"></div>
+
+    <!-- SECCION: DATOS CLIENTE CENTRADO -->
+    <div class="section-header">Datos cliente</div>
+
+    <div class="dashed-divider"></div>
+
+    <div class="info-row">
+      <span class="info-label">Nombre :</span>
+      <span class="info-value">${customerName}</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Telefono:</span>
+      <span class="info-value">${customerPhone}</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Tipo de entrega :</span>
+      <span class="info-value" style="text-transform: capitalize;">${deliveryType}</span>
+    </div>
+
+    <div class="dashed-divider"></div>
+
+    <!-- SECCION: DOMICILIO CENTRADO -->
+    <div class="section-header">Domicilio</div>
+
+    <div class="dashed-divider"></div>
+
+    <div class="info-stacked">
+      <div class="info-label">Fecha y Hora :</div>
+      <div class="info-value-stacked">${formattedDateTime}</div>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Costo del domicilio:</span>
+      <span class="info-value">${formatter.format(deliveryFee)}</span>
+    </div>
+    <div class="info-stacked">
+      <div class="info-label">Dirección :</div>
+      <div class="info-value-stacked">${address}</div>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Barrio:</span>
+      <span class="info-value">${barrio}</span>
+    </div>
+
+    <div class="dashed-divider"></div>
+
+    <!-- SECCION: TOTALES -->
+    <div class="totals-container">
+      <div class="info-stacked">
+        <div class="total-label">Tipo de pago:</div>
+        <div class="info-value-stacked" style="text-transform: capitalize;">${paymentMethod}</div>
+      </div>
+      <div class="total-row" style="margin-top: 2px;">
+        <span class="total-label">Costo del domicilio:</span>
+        <span class="total-value">${formatter.format(deliveryFee)}</span>
       </div>
 
       <div class="dashed-divider"></div>
 
-      <!-- COMANDA DE COCINA INFO -->
-      <div class="comanda-title">COMANDA DE COCINA</div>
-
-      <div class="info-line">
-        <span class="info-label">Pedido:</span> <span class="order-code">#${orderNumber}</span>
+      <div class="total-row grand-total" style="border-top: none; margin-top: 0; padding-top: 0;">
+        <span class="total-label">Total:</span>
+        <span class="total-value">${formatter.format(grandTotal)}</span>
       </div>
-      <div class="info-line">
-        <span class="info-label">Fecha:</span> <span>${formattedDate} &nbsp; ${formattedTime}</span>
-      </div>
-      <div class="info-line">
-        <span class="info-label">Origen:</span> <span>${originText}</span> ${order.mesa ? `&nbsp;&nbsp;&nbsp;&nbsp; <span class="info-label">Mesa:</span> <span>${order.mesa}</span>` : ''}
-      </div>
-      <div class="info-line">
-        <span class="info-label">Tipo de Entrega:</span> <span style="font-weight:800; text-transform:uppercase;">${deliveryType}</span>
-      </div>
-      <div class="info-line">
-        <span class="info-label">Método de Pago:</span> <span style="font-weight:800; text-transform:uppercase;">${paymentMethod}</span>
-      </div>
-      ${order.voucher_reference ? `
-        <div class="info-line">
-          <span class="info-label">Comprobante N°:</span> <span style="font-weight:800; color:#7C3AED;">#${order.voucher_reference}</span>
+      ${paymentMethod.toLowerCase() === 'efectivo' && order.cashAmount !== undefined && order.cashAmount > 0 ? `
+        <div class="total-row" style="margin-top: 2.5px; font-size: 11px;">
+          <span class="total-label">Efectivo Recibido:</span>
+          <span class="total-value">${formatter.format(order.cashAmount)}</span>
+        </div>
+        <div class="total-row" style="font-size: 11.5px;">
+          <span class="total-label">Cambio:</span>
+          <span class="total-value">${formatter.format(order.change_required || 0)}</span>
         </div>
       ` : ''}
-      <div class="info-line">
-        <span class="info-label">Cajero:</span> <span>${cashierName}</span>
-      </div>
+    </div>
 
-      <!-- DATOS DEL CLIENTE POR SEPARADOS -->
-      ${order.customer_name ? `
-        <div class="info-line"><span class="info-label">Nombre:</span> <span>${order.customer_name}</span></div>
-      ` : ''}
-      ${order.customer_phone ? `
-        <div class="info-line"><span class="info-label">Teléfono:</span> <span>${order.customer_phone}</span></div>
-      ` : ''}
-      ${order.address ? `
-        <div class="info-line"><span class="info-label">Dirección:</span> <span>${order.address}</span></div>
-      ` : ''}
-      ${order.barrio ? `
-        <div class="info-line"><span class="info-label">Barrio:</span> <span>${order.barrio}</span></div>
-      ` : ''}
-
-      <div class="dashed-divider"></div>
-
-      <!-- SECCIÓN PRODUCTOS -->
-      <div class="pill-badge">PRODUCTOS</div>
-
-      <div>
-        ${productsRowsHtml}
-      </div>
-
-      <!-- RESUMEN DE TOTALES -->
-      <div class="dashed-divider"></div>
-      <div class="totals-container">
-        <div class="total-row"><span>Subtotal:</span><span>${formatter.format(subtotal)}</span></div>
-        ${deliveryFee > 0 ? `<div class="total-row"><span>Domicilio:</span><span>${formatter.format(deliveryFee)}</span></div>` : ''}
-        <div class="total-row grand-total"><span>TOTAL:</span><span>${formatter.format(grandTotal)}</span></div>
-        ${paymentMethod.toLowerCase() === 'efectivo' && order.cashAmount !== undefined ? `
-          <div class="total-row" style="margin-top: 4px; font-size: ${is58 ? '13px' : '14px'};">
-            <span>Efectivo Recibido:</span><span>${formatter.format(order.cashAmount)}</span>
-          </div>
-          <div class="total-row" style="font-weight: 700; font-size: ${is58 ? '13px' : '14px'};">
-            <span>Cambio:</span><span>${formatter.format(order.change_required || 0)}</span>
-          </div>
-        ` : ''}
-      </div>
-
-      <!-- SECCIÓN OBSERVACIONES -->
-      ${order.notes ? `
-        <div class="dashed-divider"></div>
-        <div class="pill-badge">OBSERVACIONES</div>
-        <div class="obs-text">${order.notes}</div>
-      ` : ''}
-
-      <div class="dashed-divider"></div>
-
-      <!-- MENSAJE FINAL -->
-      <div class="text-center" style="margin-top: 8px;">
-        <div class="thanks-title">¡Gracias!</div>
-        <div class="footer-sub">En cocina hacemos tu pedido con amor ❤️</div>
-      </div>
-
-    </body>
-    </html>
-  `;
+    <!-- PIE DE PAGINA / COPYRIGHT Y REDES SOCIALES -->
+    <div class="dashed-divider"></div>
+    <div class="ticket-footer">
+      <div>© 2026 Distric House. Todos los derechos reservados</div>
+      <div style="margin-top: 2px;"><span style="font-weight: 400;">Instagram :</span> <span style="font-weight: 700;">districhouse</span></div>
+      <div><span style="font-weight: 400;">TikTok :</span> <span style="font-weight: 700;">districhouse</span></div>
+    </div>
+  </div>
+</body>
+</html>`;
 };

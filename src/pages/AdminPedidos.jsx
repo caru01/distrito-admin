@@ -302,7 +302,7 @@ export default function AdminPedidos() {
   };
 
   const handlePrintOrder = (order) => {
-    printTicket(order, 80);
+    printTicket(order, 58);
   };
 
   const handlePrepareOrder = async (order) => {

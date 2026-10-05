@@ -609,7 +609,7 @@ export default function TomarPedido() {
         };
 
         // 🖨️ Generar e imprimir comanda de cocina automáticamente
-        printTicket(printOrder, 80);
+        printTicket(printOrder, 58);
 
         try { sessionStorage.removeItem('distrito_admin_orders_cache'); } catch (e) {}
         showToast(editId ? '✓ Pedido actualizado' : (sendToKitchen ? '📦 Pedido enviado a cocina' : '✓ Pedido guardado'));
