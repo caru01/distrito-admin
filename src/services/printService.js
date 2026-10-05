@@ -54,6 +54,13 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
   const customerName = order.customer_name || order.customer?.name || order.name || 'Cliente';
   const customerPhone = order.customer_phone || order.customer?.phone || order.phone || 'Sin teléfono';
   const deliveryType = order.delivery_type || order.deliveryType || 'Domicilio';
+  const deliveryTypeRaw = String(deliveryType).trim().toLowerCase();
+  const isPickupOrCounter = deliveryTypeRaw.includes('recoger') || 
+                            deliveryTypeRaw.includes('mostrador') || 
+                            deliveryTypeRaw.includes('mesa') || 
+                            deliveryTypeRaw.includes('local') ||
+                            deliveryTypeRaw.includes('llevar');
+  const isDelivery = !isPickupOrCounter;
 
   let cashierName = order.cajero || order.user || order.cashierName || '';
   if (!cashierName) {
@@ -67,14 +74,18 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
   }
   if (!cashierName) cashierName = 'Camilo Rincones';
 
-  const address = order.address || order.customer?.address || (String(deliveryType).toLowerCase() === 'mesa' ? `Mesa ${order.mesa || ''}`.trim() : 'En local');
-  const barrio = order.barrio || order.customer?.barrio || 'N/A';
+  const address = order.address || order.customer?.address || '';
+  const barrio = order.barrio || order.customer?.barrio || '';
+  const apartment = order.delivery_apartment || order.apartment || order.apartamento || order.customer?.apartment || order.customer?.apartamento || '';
+  const tower = order.delivery_tower || order.tower || order.torre || order.customer?.tower || order.customer?.torre || '';
+  const floor = order.delivery_floor || order.floor || order.piso || order.customer?.floor || order.customer?.piso || '';
+  const reference = order.delivery_reference || order.reference || order.referencia || order.customer?.reference || order.customer?.referencia || '';
 
   const paymentMethod = order.payment_method || order.paymentMethod || 'Efectivo';
 
   // Cálculos de Subtotal, Domicilio y Total
   const subtotal = items.reduce((sum, i) => sum + ((i.price || 0) * (i.quantity || i.qty || 1)), 0);
-  const deliveryFee = (String(deliveryType).toLowerCase() === 'domicilio') ? Math.max(0, Number(order.delivery_fee || 0)) : 0;
+  const deliveryFee = isDelivery ? Math.max(0, Number(order.delivery_fee || 0)) : 0;
   const grandTotal = Number(order.total ?? (subtotal + deliveryFee));
 
   let productsRowsHtml = '';
@@ -425,6 +436,7 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
       <span class="info-value" style="text-transform: capitalize;">${deliveryType}</span>
     </div>
 
+    ${isDelivery ? `
     <div class="dashed-divider"></div>
 
     <!-- SECCION: DOMICILIO CENTRADO -->
@@ -442,12 +454,39 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
     </div>
     <div class="info-stacked">
       <div class="info-label">Dirección :</div>
-      <div class="info-value-stacked">${address}</div>
+      <div class="info-value-stacked">${address || 'N/A'}</div>
     </div>
+    ${barrio ? `
     <div class="info-row">
       <span class="info-label">Barrio:</span>
       <span class="info-value">${barrio}</span>
     </div>
+    ` : ''}
+    ${apartment ? `
+    <div class="info-row">
+      <span class="info-label">Apartamento :</span>
+      <span class="info-value">${apartment}</span>
+    </div>
+    ` : ''}
+    ${tower ? `
+    <div class="info-row">
+      <span class="info-label">Torre :</span>
+      <span class="info-value">${tower}</span>
+    </div>
+    ` : ''}
+    ${floor ? `
+    <div class="info-row">
+      <span class="info-label">Piso :</span>
+      <span class="info-value">${floor}</span>
+    </div>
+    ` : ''}
+    ${reference ? `
+    <div class="info-stacked">
+      <div class="info-label">Referencia :</div>
+      <div class="info-value-stacked">${reference}</div>
+    </div>
+    ` : ''}
+    ` : ''}
 
     <div class="dashed-divider"></div>
 
@@ -457,10 +496,12 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
         <div class="total-label">Tipo de pago:</div>
         <div class="info-value-stacked" style="text-transform: capitalize;">${paymentMethod}</div>
       </div>
+      ${isDelivery ? `
       <div class="total-row" style="margin-top: 2px;">
         <span class="total-label">Costo del domicilio:</span>
         <span class="total-value">${formatter.format(deliveryFee)}</span>
       </div>
+      ` : ''}
 
       <div class="dashed-divider"></div>
 
