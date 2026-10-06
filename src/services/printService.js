@@ -55,12 +55,19 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
   const customerPhone = order.customer_phone || order.customer?.phone || order.phone || 'Sin teléfono';
   const deliveryType = order.delivery_type || order.deliveryType || 'Domicilio';
   const deliveryTypeRaw = String(deliveryType).trim().toLowerCase();
-  const isPickupOrCounter = deliveryTypeRaw.includes('recoger') || 
-                            deliveryTypeRaw.includes('mostrador') || 
-                            deliveryTypeRaw.includes('mesa') || 
-                            deliveryTypeRaw.includes('local') ||
-                            deliveryTypeRaw.includes('llevar');
-  const isDelivery = !isPickupOrCounter;
+
+  // Solo es domicilio si explícitamente es 'domicilio'.
+  // Las órdenes de mostrador usan la clave 'presencial', y las de recoger usan 'recoger'.
+  const isDelivery = deliveryTypeRaw === 'domicilio' || (deliveryTypeRaw.includes('domicilio') && !deliveryTypeRaw.includes('no'));
+
+  let displayDeliveryType = deliveryType;
+  if (deliveryTypeRaw === 'presencial') {
+    displayDeliveryType = 'Mostrador';
+  } else if (deliveryTypeRaw === 'recoger') {
+    displayDeliveryType = 'Recoger';
+  } else if (deliveryTypeRaw === 'domicilio') {
+    displayDeliveryType = 'Domicilio';
+  }
 
   let cashierName = order.cajero || order.user || order.cashierName || '';
   if (!cashierName) {
@@ -189,6 +196,16 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
       margin: 0 0 2px 0;
       color: #000;
       line-height: 1.15;
+    }
+
+    /* SUBTITULO / DATOS DEL LOCAL */
+    .store-subtitle {
+      font-size: 11px;
+      font-weight: 400;
+      text-align: center;
+      color: #000;
+      line-height: 1.2;
+      margin: 1px 0;
     }
 
     /* TITULO DE SECCION CENTRADO */
@@ -379,6 +396,9 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
 
     <!-- TITULO PRINCIPAL CENTRADO -->
     <div class="title-header">DISTRIC HOUSE</div>
+    <div class="store-subtitle">Diagonal 18C #25A -22</div>
+    <div class="store-subtitle">Los Fundadores</div>
+    <div class="store-subtitle">WhatsApp 322-823-6926</div>
 
     <div class="dashed-divider"></div>
 
@@ -433,7 +453,7 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
     </div>
     <div class="info-row">
       <span class="info-label">Tipo de entrega :</span>
-      <span class="info-value" style="text-transform: capitalize;">${deliveryType}</span>
+      <span class="info-value" style="text-transform: capitalize;">${displayDeliveryType}</span>
     </div>
 
     ${isDelivery ? `
