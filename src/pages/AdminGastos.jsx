@@ -2,11 +2,40 @@ import { API_URL } from '../config/api';
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Calendar, DollarSign, Tag, FileText, X, Edit3, CreditCard, Camera, Eye } from 'lucide-react';
 
+// --- Fechas sin desfase de zona horaria ---
+// expense_date es un DATE (sin hora). Si se pasa por new Date()/toISOString() se interpreta
+// como medianoche UTC y en Colombia (UTC-5) se muestra el día anterior.
+const BOGOTA_TZ = 'America/Bogota';
+
+// Fecha local (hora Colombia) de un Date -> 'YYYY-MM-DD'
+function localDateKey(date = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: BOGOTA_TZ }).format(date);
+}
+
+// 'YYYY-MM-DD' del gasto: usa expense_date tal cual; si no hay, usa created_at en hora Colombia.
+function expenseDateKey(gasto) {
+  const raw = gasto?.expense_date;
+  if (raw) {
+    const match = String(raw).match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match) return match[1];
+  }
+  return gasto?.created_at ? localDateKey(new Date(gasto.created_at)) : '';
+}
+
+// 'YYYY-MM-DD' -> 'DD/MM/YYYY'
+function formatDateKey(key) {
+  if (!key) return '';
+  const [y, m, d] = key.split('-');
+  return `${d}/${m}/${y}`;
+}
+
 export default function AdminGastos() {
   const [gastos, setGastos] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [editId, setEditId] = useState(null);
+  const [suppliers, setSuppliers] = useState([]);
+  const [customProvider, setCustomProvider] = useState(false);
   
   const [formData, setFormData] = useState({
     category: 'Arriendo',
@@ -15,7 +44,7 @@ export default function AdminGastos() {
     subtotal: '',
     iva: '',
     iva_percentage: '',
-    expense_date: new Date().toISOString().split('T')[0],
+    expense_date: localDateKey(),
     payment_method: 'Efectivo',
     receipt_url: '',
     items: [],
@@ -29,13 +58,13 @@ export default function AdminGastos() {
     const d = new Date();
     const day = d.getDay() || 7; // Sunday is 0, make it 7
     d.setDate(d.getDate() - day + 1);
-    return d.toISOString().split('T')[0];
+    return localDateKey(d);
   };
   const getEndOfWeek = () => {
     const d = new Date();
     const day = d.getDay() || 7;
     d.setDate(d.getDate() - day + 7);
-    return d.toISOString().split('T')[0];
+    return localDateKey(d);
   };
 
   const [startDate, setStartDate] = useState(getStartOfWeek());
@@ -105,15 +134,31 @@ export default function AdminGastos() {
     }
   };
 
+  // Proveedores guardados (módulo Inventario > Proveedores)
+  const fetchSuppliers = async () => {
+    try {
+      const token = sessionStorage.getItem('distrito_admin_token');
+      const res = await fetch(`${API_URL}/admin/suppliers`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const json = await res.json();
+      if (json.status === 'ok') setSuppliers((json.suppliers || []).filter(s => s.is_active !== false));
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener('resize', handleResize);
     fetchData();
+    fetchSuppliers();
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const openNewModal = () => {
     setEditId(null);
+    setCustomProvider(false);
     setFormData({
       category: 'Arriendo',
       description: '',
@@ -121,7 +166,7 @@ export default function AdminGastos() {
       subtotal: '',
       iva: '',
       iva_percentage: '',
-      expense_date: new Date().toISOString().split('T')[0],
+      expense_date: localDateKey(),
       payment_method: 'Efectivo',
       receipt_url: '',
       items: [],
@@ -132,6 +177,7 @@ export default function AdminGastos() {
 
   const handleEdit = (g) => {
     setEditId(g.id);
+    setCustomProvider(false);
     let parsedItems = [];
     if (g.items) {
       try {
@@ -154,7 +200,7 @@ export default function AdminGastos() {
       subtotal: subtotalVal,
       iva: ivaVal || '',
       iva_percentage: ivaPerc,
-      expense_date: g.expense_date ? new Date(g.expense_date).toISOString().split('T')[0] : new Date(g.created_at).toISOString().split('T')[0],
+      expense_date: expenseDateKey(g),
       payment_method: g.payment_method || 'Efectivo',
       receipt_url: g.receipt_url || '',
       items: parsedItems,
@@ -270,7 +316,7 @@ export default function AdminGastos() {
   };
 
   const filteredGastos = gastos.filter(g => {
-    const gDate = new Date(g.expense_date || g.created_at).toISOString().split('T')[0];
+    const gDate = expenseDateKey(g);
     if (startDate && gDate < startDate) return false;
     if (endDate && gDate > endDate) return false;
     return true;
@@ -325,7 +371,7 @@ export default function AdminGastos() {
                 <div key={g.id} className="ds-table-card">
                   <div className="ds-table-card-row">
                     <span className="ds-table-card-label">FECHA</span>
-                    <span className="ds-table-card-value">{new Date(g.expense_date || g.created_at).toLocaleDateString()}</span>
+                    <span className="ds-table-card-value">{formatDateKey(expenseDateKey(g))}</span>
                   </div>
                   <div className="ds-table-card-row">
                     <span className="ds-table-card-label">CATEGORÍA</span>
@@ -376,7 +422,7 @@ export default function AdminGastos() {
                   {filteredGastos.map(g => (
                     <tr key={g.id}>
                       <td>
-                        {new Date(g.expense_date || g.created_at).toLocaleDateString()}
+                        {formatDateKey(expenseDateKey(g))}
                       </td>
                       <td>
                         <span className="ds-badge ds-badge-neutral">{g.category}</span>
@@ -458,7 +504,52 @@ export default function AdminGastos() {
 
                 <div className="ds-form-group">
                   <label className="ds-form-label"><Tag size={16}/> Proveedor (Opcional)</label>
-                  <input type="text" className="ds-input" placeholder="Ej: Distribuidora XYZ" value={formData.provider} onChange={e => setFormData({...formData, provider: e.target.value})} />
+                  {(() => {
+                    const supplierNames = suppliers.map(s => s.name);
+                    const unlisted = formData.provider && !supplierNames.includes(formData.provider);
+                    return (
+                      <>
+                        <select
+                          className="ds-select"
+                          value={customProvider ? '__custom__' : formData.provider}
+                          onChange={e => {
+                            if (e.target.value === '__custom__') {
+                              setCustomProvider(true);
+                              setFormData({ ...formData, provider: '' });
+                            } else {
+                              setCustomProvider(false);
+                              setFormData({ ...formData, provider: e.target.value });
+                            }
+                          }}
+                        >
+                          <option value="">— Sin proveedor —</option>
+                          {suppliers.map(s => (
+                            <option key={s.id} value={s.name}>{s.name}</option>
+                          ))}
+                          {unlisted && !customProvider && (
+                            <option value={formData.provider}>{formData.provider} (no registrado)</option>
+                          )}
+                          <option value="__custom__">Otro (escribir nombre)…</option>
+                        </select>
+                        {customProvider && (
+                          <input
+                            type="text"
+                            className="ds-input"
+                            style={{ marginTop: '8px' }}
+                            placeholder="Nombre del proveedor"
+                            autoFocus
+                            value={formData.provider}
+                            onChange={e => setFormData({ ...formData, provider: e.target.value })}
+                          />
+                        )}
+                        {suppliers.length === 0 && (
+                          <small style={{ color: 'var(--ds-text-secondary)', display: 'block', marginTop: '6px' }}>
+                            No hay proveedores guardados. Puedes crearlos en Inventario &gt; Proveedores.
+                          </small>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <div className="ds-form-group">
@@ -551,7 +642,7 @@ export default function AdminGastos() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <p style={{ margin: 0, fontSize: '12px', color: '#BDBDBD' }}>Fecha</p>
-                  <p style={{ margin: 0, fontWeight: '600' }}>{new Date(viewGasto.expense_date || viewGasto.created_at).toLocaleDateString()}</p>
+                  <p style={{ margin: 0, fontWeight: '600' }}>{formatDateKey(expenseDateKey(viewGasto))}</p>
                 </div>
                 <div>
                   <p style={{ margin: 0, fontSize: '12px', color: '#BDBDBD' }}>Categoría</p>
