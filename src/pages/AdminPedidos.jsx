@@ -83,6 +83,31 @@ export default function AdminPedidos() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDate, setFilterDate] = useState(() => colombiaDateKey());
 
+  // Más filtros states
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
+  const [sortByValue, setSortByValue] = useState('default');
+  const [filterDeliveryType, setFilterDeliveryType] = useState('todos');
+  const [filterSource, setFilterSource] = useState('todos');
+
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (filterDateFrom || filterDateTo) count++;
+    if (sortByValue !== 'default') count++;
+    if (filterDeliveryType !== 'todos') count++;
+    if (filterSource !== 'todos') count++;
+    return count;
+  }, [filterDateFrom, filterDateTo, sortByValue, filterDeliveryType, filterSource]);
+
+  const resetMoreFilters = () => {
+    setFilterDateFrom('');
+    setFilterDateTo('');
+    setSortByValue('default');
+    setFilterDeliveryType('todos');
+    setFilterSource('todos');
+  };
+
   // Modal & Print State
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [openMenuId, setOpenMenuId] = useState(null);
@@ -411,34 +436,78 @@ export default function AdminPedidos() {
 
   const tabs = ['Todos', 'Recibidos', 'En cocina', 'Listos para despacho', 'En reparto', 'Entregados', 'Pago pendiente', 'Cancelados'];
 
-  // 🚀 OPTIMIZACIÓN 2: Filtrado memoizado ultra-rápido a 60 FPS
+  // 🚀 OPTIMIZACIÓN 2: Filtrado memoizado ultra-rápido a 60 FPS con Más Filtros
   const filteredOrders = useMemo(() => {
-    const searchLower = searchQuery.toLowerCase();
-    return orders.filter(order => {
+    const searchLower = searchQuery.toLowerCase().trim();
+    let result = orders.filter(order => {
       const matchesTab = activeTab === 'Todos' ||
         (activeTab === 'Recibidos' && order.status === 'Nuevo') ||
         (activeTab === 'En cocina' && order.status === 'En preparación') ||
         (activeTab === 'Listos para despacho' && ['Listo', 'Asignado externo', 'Entregado al operador externo'].includes(order.status)) ||
         (activeTab === 'En reparto' && order.status === 'En camino') ||
-        (activeTab === 'Entregados' && order.status === 'Entregado') ||
+        (activeTab === 'Entregados' && (order.status === 'Entregado' || order.status === 'Completado')) ||
         (activeTab === 'Pago pendiente' && order.status === 'Pendiente Pago') ||
         (activeTab === 'Cancelados' && order.status === 'Cancelado');
 
-      const matchesSearch = !searchQuery ||
+      const matchesSearch = !searchLower ||
         String(order?.id || '').includes(searchLower) ||
         (order.customer_name && order.customer_name.toLowerCase().includes(searchLower)) ||
         (order.customer_phone && order.customer_phone.includes(searchLower)) ||
         (order.source && order.source.toLowerCase().includes(searchLower)) ||
         (order.external_provider_reference && order.external_provider_reference.toLowerCase().includes(searchLower));
 
+      // Filtro de fecha o rango de fechas
       let matchesDate = true;
-      if (filterDate && order.created_at) {
+      if (order.created_at) {
         const orderDate = new Date(order.created_at);
-        matchesDate = !Number.isNaN(orderDate.getTime()) && colombiaDateKey(orderDate) === filterDate;
+        if (!Number.isNaN(orderDate.getTime())) {
+          const dateKey = colombiaDateKey(orderDate);
+          if (filterDateFrom || filterDateTo) {
+            if (filterDateFrom && dateKey < filterDateFrom) matchesDate = false;
+            if (filterDateTo && dateKey > filterDateTo) matchesDate = false;
+          } else if (filterDate) {
+            matchesDate = dateKey === filterDate;
+          }
+        }
       }
-      return matchesTab && matchesSearch && matchesDate;
+
+      // Filtro por tipo de entrega (domicilio / recoger)
+      let matchesDelivery = true;
+      if (filterDeliveryType !== 'todos') {
+        const dType = String(order.delivery_type || '').toLowerCase();
+        if (filterDeliveryType === 'domicilio') {
+          matchesDelivery = dType === 'domicilio';
+        } else if (filterDeliveryType === 'recoger') {
+          matchesDelivery = ['recoger', 'mostrador', 'mesa'].includes(dType);
+        }
+      }
+
+      // Filtro por origen del pedido
+      let matchesSource = true;
+      if (filterSource !== 'todos') {
+        const src = String(order.source || '').toLowerCase();
+        const targetSrc = filterSource.toLowerCase();
+        if (targetSrc === 'presencial') {
+          matchesSource = src === 'presencial' || src === 'mostrador';
+        } else if (targetSrc === 'rappi') {
+          matchesSource = src.includes('rappi');
+        } else {
+          matchesSource = src === targetSrc;
+        }
+      }
+
+      return matchesTab && matchesSearch && matchesDate && matchesDelivery && matchesSource;
     });
-  }, [orders, activeTab, searchQuery, filterDate]);
+
+    // Ordenar por valor (menor a mayor / mayor a menor)
+    if (sortByValue === 'asc') {
+      result = [...result].sort((a, b) => Number(a.total || 0) - Number(b.total || 0));
+    } else if (sortByValue === 'desc') {
+      result = [...result].sort((a, b) => Number(b.total || 0) - Number(a.total || 0));
+    }
+
+    return result;
+  }, [orders, activeTab, searchQuery, filterDate, filterDateFrom, filterDateTo, filterDeliveryType, filterSource, sortByValue]);
 
   const getStatusBadge = (status, order = null) => {
     const meta = orderStatusMeta(status, {
@@ -574,12 +643,21 @@ export default function AdminPedidos() {
 
   const ordersInDate = useMemo(() => {
     return orders.filter(o => {
-      if (!filterDate || !o.created_at) return true;
+      if (!o.created_at) return true;
       const orderDate = new Date(o.created_at);
       if (isNaN(orderDate.getTime())) return false;
-      return colombiaDateKey(orderDate) === filterDate;
+      const dateKey = colombiaDateKey(orderDate);
+      if (filterDateFrom || filterDateTo) {
+        if (filterDateFrom && dateKey < filterDateFrom) return false;
+        if (filterDateTo && dateKey > filterDateTo) return false;
+        return true;
+      }
+      if (filterDate) {
+        return dateKey === filterDate;
+      }
+      return true;
     });
-  }, [orders, filterDate]);
+  }, [orders, filterDate, filterDateFrom, filterDateTo]);
 
   const statNuevos = ordersInDate.filter(o => o.status === 'Nuevo').length;
   const statPreparacion = ordersInDate.filter(o => o.status === 'En preparación').length;
@@ -719,10 +797,135 @@ export default function AdminPedidos() {
             style={{ backgroundColor: 'transparent', color: 'var(--ds-text-primary)', border: 'none', outline: 'none', fontSize: '15px', cursor: 'pointer', colorScheme: 'dark' }} />
           {filterDate && <button onClick={() => setFilterDate('')} style={{ background: 'none', border: 'none', color: 'var(--ds-text-muted)', cursor: 'pointer', marginLeft: '8px', padding: '4px' }}><X size={16} /></button>}
         </div>
-        <button className="ds-btn ds-btn-secondary" style={{ height: '52px' }}>
-          <Filter size={18} color="var(--ds-primary)" /> Más Filtros
+        <button
+          type="button"
+          className={`ds-btn ${showMoreFilters || activeFiltersCount > 0 ? 'ds-btn-primary' : 'ds-btn-secondary'}`}
+          style={{ height: '52px', display: 'flex', alignItems: 'center', gap: '8px' }}
+          onClick={() => setShowMoreFilters(prev => !prev)}
+        >
+          <Filter size={18} color={showMoreFilters || activeFiltersCount > 0 ? '#000' : 'var(--ds-primary)'} />
+          Más Filtros
+          {activeFiltersCount > 0 && (
+            <span style={{
+              backgroundColor: '#000',
+              color: '#FFF',
+              borderRadius: '999px',
+              padding: '2px 8px',
+              fontSize: '11px',
+              fontWeight: '700'
+            }}>
+              {activeFiltersCount}
+            </span>
+          )}
         </button>
       </div>
+
+      {/* Panel Desplegable: Más Filtros */}
+      {showMoreFilters && (
+        <div
+          className="ds-card"
+          style={{
+            marginBottom: '24px',
+            backgroundColor: 'var(--ds-bg-surface)',
+            border: '1px solid var(--ds-border)',
+            borderRadius: '16px',
+            padding: '20px'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '700', fontSize: '15px', color: 'var(--ds-text-primary)' }}>
+              <Filter size={18} color="var(--ds-primary)" /> Filtros avanzados
+            </div>
+            {activeFiltersCount > 0 && (
+              <button
+                type="button"
+                className="ds-btn ds-btn-ghost ds-btn-sm"
+                onClick={resetMoreFilters}
+                style={{ color: '#EF4444', fontWeight: '600' }}
+              >
+                Limpiar filtros ({activeFiltersCount})
+              </button>
+            )}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '16px' }}>
+            {/* Rango de fecha: Desde */}
+            <div className="ds-form-group" style={{ margin: 0 }}>
+              <label className="ds-form-label" style={{ fontSize: '13px' }}>Fecha desde</label>
+              <input
+                type="date"
+                value={filterDateFrom}
+                onChange={e => {
+                  setFilterDateFrom(e.target.value);
+                  if (e.target.value) setFilterDate('');
+                }}
+                className="ds-input"
+                style={{ colorScheme: 'dark' }}
+              />
+            </div>
+
+            {/* Rango de fecha: Hasta */}
+            <div className="ds-form-group" style={{ margin: 0 }}>
+              <label className="ds-form-label" style={{ fontSize: '13px' }}>Fecha hasta</label>
+              <input
+                type="date"
+                value={filterDateTo}
+                onChange={e => {
+                  setFilterDateTo(e.target.value);
+                  if (e.target.value) setFilterDate('');
+                }}
+                className="ds-input"
+                style={{ colorScheme: 'dark' }}
+              />
+            </div>
+
+            {/* Ordenar por valor */}
+            <div className="ds-form-group" style={{ margin: 0 }}>
+              <label className="ds-form-label" style={{ fontSize: '13px' }}>Ordenar por valor ($)</label>
+              <select
+                value={sortByValue}
+                onChange={e => setSortByValue(e.target.value)}
+                className="ds-select"
+              >
+                <option value="default">Recientes (predeterminado)</option>
+                <option value="asc">Menor a mayor ($)</option>
+                <option value="desc">Mayor a menor ($)</option>
+              </select>
+            </div>
+
+            {/* Tipo de entrega */}
+            <div className="ds-form-group" style={{ margin: 0 }}>
+              <label className="ds-form-label" style={{ fontSize: '13px' }}>Tipo de entrega</label>
+              <select
+                value={filterDeliveryType}
+                onChange={e => setFilterDeliveryType(e.target.value)}
+                className="ds-select"
+              >
+                <option value="todos">Todos los tipos</option>
+                <option value="domicilio">Solo a Domicilio</option>
+                <option value="recoger">Solo para Recoger</option>
+              </select>
+            </div>
+
+            {/* Origen del pedido */}
+            <div className="ds-form-group" style={{ margin: 0 }}>
+              <label className="ds-form-label" style={{ fontSize: '13px' }}>Origen del pedido</label>
+              <select
+                value={filterSource}
+                onChange={e => setFilterSource(e.target.value)}
+                className="ds-select"
+              >
+                <option value="todos">Todos los orígenes</option>
+                <option value="Web">Web</option>
+                <option value="WhatsApp">WhatsApp</option>
+                <option value="Presencial">Presencial / Mostrador</option>
+                <option value="Teléfono">Teléfono</option>
+                <option value="Rappi">Rappi</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="ds-tabs" style={{ marginBottom: '24px' }}>
         {tabs.map(tab => {

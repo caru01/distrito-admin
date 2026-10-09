@@ -55,6 +55,19 @@ export default function AdminLayout() {
   }, [location.pathname, navigate]);
 
   useEffect(() => {
+    if (loading) return;
+    const navEntries = window.performance?.getEntriesByType?.('navigation');
+    const isPerfReload = navEntries?.[0]?.type === 'reload';
+    const isLegacyReload = window.performance?.navigation?.type === 1;
+    const isSessionReload = sessionStorage.getItem('distrito_page_reloaded') === 'true';
+
+    if ((isPerfReload || isLegacyReload || isSessionReload) && location.pathname !== '/admin') {
+      try { sessionStorage.removeItem('distrito_page_reloaded'); } catch (e) {}
+      navigate('/admin', { replace: true });
+    }
+  }, [loading, location.pathname, navigate]);
+
+  useEffect(() => {
     mainContentRef.current?.scrollTo({ top: 0, behavior: 'auto' });
     setIsMobileMenuOpen(false);
   }, [location.pathname]);

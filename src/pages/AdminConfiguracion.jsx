@@ -11,7 +11,8 @@ import {
 
 
 export default function AdminConfiguracion() {
-  const [activeTab, setActiveTab] = useState('Apariencia');
+  const [activeTab, setActiveTab] = useState('General');
+  const [previewSurface, setPreviewSurface] = useState('web');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [locatingStore, setLocatingStore] = useState(false);
@@ -569,8 +570,197 @@ export default function AdminConfiguracion() {
             </div>
 
             <div className="ds-card settings-theme-preview">
-              <div className="ds-card-header"><h2 className="ds-card-title"><Palette size={22} /> Vista previa de la tienda</h2></div>
-              <div className="ds-card-body"><div className="theme-preview" style={{ background: settings.web_background_color, color: settings.web_text_color }}><div style={{ background: settings.web_surface_color }}><strong>{settings.web_hero_title || settings.restaurant_name || 'Tu restaurante'}</strong><p>{settings.web_hero_subtitle || 'Los cambios publicados se aplican a todos los usuarios.'}</p><button style={{ background: settings.web_primary_color }}>Hacer pedido</button></div></div></div>
+              <div className="ds-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                <h2 className="ds-card-title"><Palette size={22} color="var(--ds-primary)" /> Vista previa en vivo</h2>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    className={`ds-btn ds-btn-sm ${previewSurface === 'web' ? 'ds-btn-primary' : 'ds-btn-secondary'}`}
+                    onClick={() => setPreviewSurface('web')}
+                  >
+                    Tienda Virtual
+                  </button>
+                  <button
+                    type="button"
+                    className={`ds-btn ds-btn-sm ${previewSurface === 'admin' ? 'ds-btn-primary' : 'ds-btn-secondary'}`}
+                    onClick={() => setPreviewSurface('admin')}
+                  >
+                    Panel Admin
+                  </button>
+                  <button
+                    type="button"
+                    className={`ds-btn ds-btn-sm ${previewSurface === 'delivery' ? 'ds-btn-primary' : 'ds-btn-secondary'}`}
+                    onClick={() => setPreviewSurface('delivery')}
+                  >
+                    Delivery
+                  </button>
+                </div>
+              </div>
+              <div className="ds-card-body">
+                {previewSurface === 'web' && (
+                  <div
+                    className="theme-preview"
+                    style={{
+                      background: settings.web_background_color || '#0D0D0D',
+                      color: settings.web_text_color || '#FFFFFF',
+                      fontFamily: settings.web_font_family === 'friendly' ? "'Poppins', 'Nunito', sans-serif" : settings.web_font_family === 'classic' ? "Georgia, serif" : settings.web_font_family === 'system' ? "system-ui, sans-serif" : "'Montserrat', 'Inter', sans-serif",
+                      padding: '24px',
+                      borderRadius: '16px',
+                      border: '1px solid rgba(255,255,255,0.08)'
+                    }}
+                  >
+                    {/* Header tienda */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', paddingBottom: '14px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        {(settings.web_logo || settings.logo) ? (
+                          <img src={settings.web_logo || settings.logo} alt="Logo" style={{ width: '36px', height: '36px', objectFit: 'contain', borderRadius: '8px' }} />
+                        ) : (
+                          <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: settings.web_primary_color || '#D4A017', display: 'grid', placeItems: 'center', color: '#000', fontWeight: 'bold' }}>D</div>
+                        )}
+                        <strong style={{ fontSize: '17px' }}>{settings.web_page_title || settings.restaurant_name || 'Distrito BG'}</strong>
+                      </div>
+                      <span style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '999px', background: `${settings.web_primary_color}22`, color: settings.web_primary_color || '#D4A017', fontWeight: '600' }}>Abierto ahora</span>
+                    </div>
+
+                    {/* Hero */}
+                    <div style={{ marginBottom: '20px' }}>
+                      <h3 style={{ margin: '0 0 6px 0', fontSize: '20px', fontWeight: '800' }}>{settings.web_hero_title || 'Más que comida, una experiencia'}</h3>
+                      <p style={{ margin: 0, opacity: 0.8, fontSize: '14px' }}>{settings.web_hero_subtitle || 'Pedidos preparados al momento.'}</p>
+                    </div>
+
+                    {/* Muestra de tarjeta de producto con el estilo seleccionado */}
+                    <div
+                      style={{
+                        background: settings.web_surface_color || '#171717',
+                        borderRadius: settings.web_card_style === 'rounded' ? '18px' : settings.web_card_style === 'compact' ? '8px' : '14px',
+                        border: settings.web_card_style === 'outlined' ? `2px solid ${settings.web_primary_color || '#D4A017'}` : '1px solid rgba(255,255,255,0.08)',
+                        padding: settings.web_card_style === 'compact' ? '12px' : '18px',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: '16px'
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: '700', fontSize: '15px', marginBottom: '4px' }}>Distric Burger Especial</div>
+                        <div style={{ opacity: 0.75, fontSize: '13px', marginBottom: '8px' }}>Carne artesanal, queso cheddar, tocineta crocante y salsa de la casa.</div>
+                        <div style={{ fontSize: '16px', fontWeight: '800', color: settings.web_primary_color || '#D4A017' }}>$ 28.000</div>
+                      </div>
+                      <button
+                        type="button"
+                        style={{
+                          background: settings.web_primary_color || '#D4A017',
+                          color: '#000',
+                          border: 'none',
+                          padding: '10px 18px',
+                          borderRadius: settings.web_card_style === 'compact' ? '6px' : '10px',
+                          fontWeight: '700',
+                          fontSize: '13px',
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        + Agregar
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {previewSurface === 'admin' && (
+                  <div
+                    className="theme-preview"
+                    style={{
+                      background: settings.admin_background_color || '#0D0D0D',
+                      color: settings.admin_text_color || '#FFFFFF',
+                      fontFamily: settings.admin_font_family === 'friendly' ? "'Poppins', 'Nunito', sans-serif" : settings.admin_font_family === 'classic' ? "Georgia, serif" : settings.admin_font_family === 'system' ? "system-ui, sans-serif" : "'Inter', 'Montserrat', sans-serif",
+                      padding: '24px',
+                      borderRadius: '16px',
+                      border: '1px solid rgba(255,255,255,0.08)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+                      {(settings.admin_logo || settings.logo) ? (
+                        <img src={settings.admin_logo || settings.logo} alt="Logo" style={{ width: '32px', height: '32px', objectFit: 'contain', borderRadius: '6px' }} />
+                      ) : (
+                        <div style={{ width: '32px', height: '32px', borderRadius: '6px', background: settings.admin_primary_color || '#D4A017', display: 'grid', placeItems: 'center', color: '#000', fontWeight: 'bold' }}>A</div>
+                      )}
+                      <strong>{settings.admin_sidebar_title || settings.admin_page_title || 'Distrito Admin'}</strong>
+                      <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.1)', marginLeft: 'auto' }}>Densidad: {settings.admin_density === 'compact' ? 'Compacta' : 'Cómoda'}</span>
+                    </div>
+                    <div
+                      style={{
+                        background: settings.admin_surface_color || '#151515',
+                        borderRadius: '12px',
+                        padding: settings.admin_density === 'compact' ? '12px' : '20px',
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: '13px', opacity: 0.7, marginBottom: '4px' }}>Ventas confirmadas hoy</div>
+                        <div style={{ fontSize: '24px', fontWeight: '800', color: settings.admin_primary_color || '#D4A017' }}>$ 380.000</div>
+                      </div>
+                      <span style={{ padding: '6px 12px', borderRadius: '8px', background: `${settings.admin_primary_color}22`, color: settings.admin_primary_color || '#D4A017', fontSize: '12px', fontWeight: '700' }}>14 pedidos</span>
+                    </div>
+                  </div>
+                )}
+
+                {previewSurface === 'delivery' && (
+                  <div
+                    className="theme-preview"
+                    style={{
+                      background: settings.delivery_background_color || '#090909',
+                      color: settings.delivery_text_color || '#FFFFFF',
+                      fontFamily: settings.delivery_font_family === 'friendly' ? "'Poppins', 'Nunito', sans-serif" : settings.delivery_font_family === 'classic' ? "Georgia, serif" : settings.delivery_font_family === 'system' ? "system-ui, sans-serif" : "'Montserrat', 'Inter', sans-serif",
+                      padding: '24px',
+                      borderRadius: '16px',
+                      border: '1px solid rgba(255,255,255,0.08)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+                      {(settings.delivery_logo || settings.logo) ? (
+                        <img src={settings.delivery_logo || settings.logo} alt="Logo" style={{ width: '32px', height: '32px', objectFit: 'contain', borderRadius: '6px' }} />
+                      ) : (
+                        <div style={{ width: '32px', height: '32px', borderRadius: '6px', background: settings.delivery_primary_color || '#D4A017', display: 'grid', placeItems: 'center', color: '#000', fontWeight: 'bold' }}>🛵</div>
+                      )}
+                      <strong>{settings.delivery_heading || 'Pedidos disponibles'}</strong>
+                    </div>
+                    <p style={{ margin: '0 0 16px 0', opacity: 0.8, fontSize: '13px' }}>{settings.delivery_subtitle || 'Acepta, recoge y entrega desde un solo lugar.'}</p>
+                    <div
+                      style={{
+                        background: settings.delivery_surface_color || '#151515',
+                        borderRadius: settings.delivery_card_style === 'rounded' ? '18px' : settings.delivery_card_style === 'compact' ? '8px' : '14px',
+                        border: settings.delivery_card_style === 'outlined' ? `2px solid ${settings.delivery_primary_color || '#D4A017'}` : '1px solid rgba(255,255,255,0.08)',
+                        padding: settings.delivery_card_style === 'compact' ? '12px' : '16px',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}
+                    >
+                      <div>
+                        <strong style={{ fontSize: '15px' }}>Pedido #0045 · Domicilio</strong>
+                        <div style={{ fontSize: '13px', opacity: 0.7, marginTop: '2px' }}>Carrera 15 # 85-30 · El Poblado</div>
+                      </div>
+                      <button
+                        type="button"
+                        style={{
+                          background: settings.delivery_primary_color || '#D4A017',
+                          color: '#000',
+                          border: 'none',
+                          padding: '8px 14px',
+                          borderRadius: '8px',
+                          fontWeight: '700',
+                          fontSize: '12px'
+                        }}
+                      >
+                        Aceptar
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
