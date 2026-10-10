@@ -24,3 +24,10 @@ export function formatDateTime(value) {
     timeStyle: 'short',
   });
 }
+
+export function formatDateOnly(value) {
+  if (!value) return '—';
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) return `${match[3]}/${match[2]}/${match[1]}`;
+  return String(value);
+}

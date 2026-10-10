@@ -9,7 +9,7 @@ import {
   LayoutGrid, List, ArrowUpDown, SlidersHorizontal, PackageX
 } from 'lucide-react';
 import { API_URL } from '../config/api';
-import { formatCurrency, formatDateTime } from '../utils/formatters';
+import { formatCurrency, formatDateTime, formatDateOnly } from '../utils/formatters';
 
 const authFetch = (url, options = {}) => {
   const token = sessionStorage.getItem('distrito_admin_token');
@@ -99,6 +99,15 @@ export default function AdminInventario() {
     conversion_factor: 1
   });
 
+  // Helper para obtener fecha actual en zona horaria Bogotá (YYYY-MM-DD)
+  const getTodayColombia = () => {
+    try {
+      return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
+    } catch {
+      return new Date().toISOString().slice(0, 10);
+    }
+  };
+
   // Formulario de Compra de Inventario
   const [purchaseForm, setPurchaseForm] = useState({
     inventory_id: '',
@@ -107,7 +116,7 @@ export default function AdminInventario() {
     unit_cost: '',
     total_cost: '',
     supplier: '',
-    purchase_date: new Date().toISOString().slice(0, 10),
+    purchase_date: getTodayColombia(),
     notes: ''
   });
 
@@ -1114,7 +1123,7 @@ export default function AdminInventario() {
         unit_cost: '',
         total_cost: '',
         supplier: '',
-        purchase_date: new Date().toISOString().slice(0, 10),
+        purchase_date: getTodayColombia(),
         notes: ''
       });
       await Promise.all([loadPurchases(), loadInsumos(), loadMovements(), loadSuppliers()]);
@@ -2281,7 +2290,7 @@ export default function AdminInventario() {
                   {purchases.map((p) => (
                     <tr key={p.id}>
                       <td className="font-mono ds-text-muted" style={{ fontSize: '12px', whiteSpace: 'nowrap' }}>
-                        {p.purchase_date ? new Date(p.purchase_date).toLocaleDateString('es-CO') : '—'}
+                        {formatDateOnly(p.purchase_date)}
                       </td>
                       <td>
                         <strong>{p.inventory_title}</strong>

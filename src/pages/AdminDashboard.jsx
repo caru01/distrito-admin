@@ -1,10 +1,10 @@
-﻿import React, { useCallback, useContext, useEffect, useMemo, useState, useRef } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  AlertTriangle, Archive, ArrowRight, Banknote, BarChart3, CalendarClock,
-  CheckCircle, ChefHat, CircleDollarSign, Clock, CreditCard, ExternalLink,
+  AlertTriangle, Archive, ArrowRight, Banknote, BarChart3, Calendar, CalendarClock,
+  CheckCircle, ChefHat, CircleDollarSign, Clock, CreditCard, ExternalLink, Filter,
   Layers, Megaphone, Package, Plus, RefreshCw, Settings, ShoppingBag,
-  ShoppingCart, Star, Store, Tags, TrendingUp, Truck, Zap,
+  ShoppingCart, Star, Store, Tags, TrendingUp, Truck, X, Zap,
 } from 'lucide-react';
 import { API_URL, STOREFRONT_URL } from '../config/api';
 import { AuthContext } from '../context/AuthContext';
@@ -19,7 +19,8 @@ const EMPTY_DASHBOARD = {
   orders: {
     today: 0, new: 0, preparing: 0, ready: 0, onTheWay: 0,
     pendingPayment: 0, completed: 0, cancelled: 0, active: 0,
-    revenue: 0, averageTicket: 0,
+    revenue: 0, totalRevenue: 0, deliveryRevenue: 0, deliveryOrdersCount: 0,
+    averageTicket: 0,
   },
   products: { total: 0, active: 0, inactive: 0, featured: 0 },
   inventory: { total: 0, critical: 0, outOfStock: 0 },
@@ -49,6 +50,14 @@ function relativeTime(value) {
   return new Date(timestamp).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' });
 }
 
+const getTodayColombia = () => {
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
+};
+
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const { user, hasPermission } = useContext(AuthContext);
@@ -57,6 +66,12 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(!cached);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+
+  // Filtros de fecha para Pulso de la tienda
+  const [filterDate, setFilterDate] = useState(() => getTodayColombia());
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
+  const [showRangeFilter, setShowRangeFilter] = useState(false);
 
   // Rentabilidad
   const PROFITABILITY_PERIODS = [
@@ -71,7 +86,7 @@ export default function AdminDashboard() {
 
   const isFetchingRef = useRef(false);
 
-  const loadDashboard = useCallback(async ({ silent = false } = {}) => {
+  const loadDashboard = useCallback(async ({ silent = false, startDate, endDate } = {}) => {
     if (isFetchingRef.current) return;
     const token = sessionStorage.getItem('distrito_admin_token');
     if (!token) return;
@@ -82,7 +97,16 @@ export default function AdminDashboard() {
     setError('');
 
     try {
-      const response = await fetch(`${API_URL}/admin/dashboard`, {
+      const params = new URLSearchParams();
+      if (startDate && endDate) {
+        params.append('startDate', startDate);
+        params.append('endDate', endDate);
+      } else if (startDate) {
+        params.append('date', startDate);
+      }
+
+      const queryString = params.toString() ? `?${params.toString()}` : '';
+      const response = await fetch(`${API_URL}/admin/dashboard${queryString}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await response.json();
@@ -90,9 +114,11 @@ export default function AdminDashboard() {
         throw new Error(data.error || 'No fue posible cargar el dashboard.');
       }
       setDashboard(data.dashboard);
-      try {
-        sessionStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify(data.dashboard));
-      } catch { /* El dashboard funciona aunque el almacenamiento esté lleno. */ }
+      if (!startDate && !endDate) {
+        try {
+          sessionStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify(data.dashboard));
+        } catch { /* El dashboard funciona aunque el almacenamiento esté lleno. */ }
+      }
     } catch (requestError) {
       setError(requestError.message || 'No fue posible actualizar el resumen.');
     } finally {
@@ -102,13 +128,33 @@ export default function AdminDashboard() {
     }
   }, []);
 
+  // Cargar y refrescar según filtros de fecha
   useEffect(() => {
-    loadDashboard({ silent: Boolean(cached) });
-    const interval = setInterval(() => {
+    if (filterDateFrom || filterDateTo) {
+      const s = filterDateFrom || filterDateTo;
+      const e = filterDateTo || filterDateFrom;
+      loadDashboard({ silent: true, startDate: s, endDate: e });
+    } else if (filterDate) {
+      loadDashboard({ silent: true, startDate: filterDate, endDate: filterDate });
+    } else {
       loadDashboard({ silent: true });
+    }
+  }, [filterDate, filterDateFrom, filterDateTo, loadDashboard]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (filterDateFrom || filterDateTo) {
+        const s = filterDateFrom || filterDateTo;
+        const e = filterDateTo || filterDateFrom;
+        loadDashboard({ silent: true, startDate: s, endDate: e });
+      } else if (filterDate) {
+        loadDashboard({ silent: true, startDate: filterDate, endDate: filterDate });
+      } else {
+        loadDashboard({ silent: true });
+      }
     }, 60000);
     return () => clearInterval(interval);
-  }, [cached, loadDashboard]);
+  }, [filterDate, filterDateFrom, filterDateTo, loadDashboard]);
 
   const loadProfitability = useCallback(async (period) => {
     const token = sessionStorage.getItem('distrito_admin_token');
@@ -154,12 +200,16 @@ export default function AdminDashboard() {
     ? `${String(schedule.currentSchedule.open_time || '').slice(0, 5)} - ${String(schedule.currentSchedule.close_time || '').slice(0, 5)}`
     : schedule?.statusText || 'Horario no disponible';
 
+  const isDateFiltered = Boolean(filterDateFrom || filterDateTo || (filterDate && filterDate !== getTodayColombia()));
+  const isSingleToday = !filterDateFrom && !filterDateTo && filterDate === getTodayColombia();
+
   const metrics = [
-    { label: 'Pedidos de hoy', value: orders.today, note: `${orders.active} requieren atención`, icon: ShoppingBag, tone: 'primary' },
+    { label: isSingleToday ? 'Pedidos de hoy' : 'Pedidos del período', value: orders.today, note: `${orders.active} requieren atención`, icon: ShoppingBag, tone: 'primary' },
     { label: 'Ventas confirmadas', value: money.format(Number(orders.revenue || 0)), note: `${orders.completed} pedidos completados`, icon: Banknote, tone: 'success' },
+    { label: 'Domicilios', value: money.format(Number(orders.deliveryRevenue || 0)), note: `${orders.deliveryOrdersCount || 0} entregas a domicilio`, icon: Truck, tone: 'violet' },
     { label: 'Pedidos en curso', value: orders.active, note: `${orders.new} nuevos · ${orders.preparing} en cocina`, icon: Clock, tone: 'warning' },
     { label: 'Ticket promedio', value: money.format(Number(orders.averageTicket || 0)), note: 'Solo pedidos completados', icon: CircleDollarSign, tone: 'info' },
-    { label: 'Productos activos', value: products.active, note: `${products.featured} destacados en tienda`, icon: Package, tone: 'violet' },
+    { label: 'Productos activos', value: products.active, note: `${products.featured} destacados en tienda`, icon: Package, tone: 'primary' },
     { label: 'Stock crítico', value: inventory.critical, note: inventory.outOfStock ? `${inventory.outOfStock} agotados` : 'Sin productos agotados', icon: AlertTriangle, tone: inventory.critical ? 'danger' : 'success' },
   ];
 
@@ -217,7 +267,7 @@ export default function AdminDashboard() {
           <a className="ds-btn ds-btn-secondary ds-btn-lg" href={STOREFRONT_URL} target="_blank" rel="noreferrer">
             <ExternalLink size={19} /> Ver tienda virtual
           </a>
-          <button type="button" className="ds-btn ds-btn-ghost" onClick={() => loadDashboard({ silent: true })} disabled={refreshing}>
+          <button type="button" className="ds-btn ds-btn-ghost" onClick={() => loadDashboard({ silent: true, startDate: filterDateFrom || filterDate, endDate: filterDateTo || filterDate })} disabled={refreshing}>
             <RefreshCw size={18} className={refreshing ? 'dashboard-spin' : ''} /> {refreshing ? 'Actualizando' : 'Actualizar'}
           </button>
         </div>
@@ -227,19 +277,187 @@ export default function AdminDashboard() {
         <div className="dashboard-error" role="alert">
           <AlertTriangle size={20} />
           <span>{error} Se mantienen los últimos datos disponibles.</span>
-          <button type="button" onClick={() => loadDashboard({ silent: true })}>Reintentar</button>
+          <button type="button" onClick={() => loadDashboard({ silent: true, startDate: filterDateFrom || filterDate, endDate: filterDateTo || filterDate })}>Reintentar</button>
         </div>
       )}
 
       <section aria-labelledby="dashboard-metrics-title">
-        <div className="dashboard-section-heading">
+        <div className="dashboard-section-heading" style={{ flexWrap: 'wrap', alignItems: 'center', gap: '16px' }}>
           <div>
-            <span className="dashboard-section-kicker">Hoy</span>
-            <h2 id="dashboard-metrics-title">Pulso de la tienda</h2>
+            <h2 id="dashboard-metrics-title" style={{ margin: 0 }}>Pulso de la tienda</h2>
+            <span className="dashboard-updated">
+              {isSingleToday
+                ? 'Datos operativos en tiempo real (Hoy)'
+                : filterDateFrom && filterDateTo
+                  ? `Filtrado por rango: ${filterDateFrom} al ${filterDateTo}`
+                  : `Filtrado por fecha: ${filterDate}`}
+            </span>
           </div>
-          <span className="dashboard-updated">Datos operativos en tiempo real</span>
+
+          {/* Controles de Filtro de Fecha y Rango */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginLeft: 'auto' }}>
+            {!showRangeFilter ? (
+              /* Filtro por Fecha Única */
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                backgroundColor: 'var(--ds-bg-surface)',
+                border: '1px solid var(--ds-border)',
+                borderRadius: '12px',
+                padding: '0 12px',
+                height: '42px',
+                gap: '8px'
+              }}>
+                <Calendar size={16} color="var(--ds-primary)" />
+                <label style={{ fontSize: '13px', fontWeight: '600', color: 'var(--ds-text-secondary)' }}>Fecha:</label>
+                <input
+                  type="date"
+                  value={filterDate}
+                  onClick={(e) => { try { e.target.showPicker?.(); } catch {} }}
+                  onChange={(e) => {
+                    setFilterDate(e.target.value);
+                    setFilterDateFrom('');
+                    setFilterDateTo('');
+                  }}
+                  style={{
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    outline: 'none',
+                    color: 'var(--ds-text-primary)',
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    colorScheme: 'dark'
+                  }}
+                />
+                {filterDate && filterDate !== getTodayColombia() && (
+                  <button
+                    type="button"
+                    onClick={() => setFilterDate(getTodayColombia())}
+                    title="Volver a Hoy"
+                    style={{ background: 'none', border: 'none', color: 'var(--ds-text-muted)', cursor: 'pointer', padding: '2px', display: 'flex' }}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            ) : (
+              /* Filtro por Rango de Fecha */
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                backgroundColor: 'var(--ds-bg-surface)',
+                border: '1px solid var(--ds-border)',
+                borderRadius: '12px',
+                padding: '0 12px',
+                height: '42px',
+                gap: '8px',
+                flexWrap: 'wrap'
+              }}>
+                <Calendar size={16} color="var(--ds-primary)" />
+                <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--ds-text-secondary)' }}>Desde:</label>
+                <input
+                  type="date"
+                  value={filterDateFrom}
+                  onClick={(e) => { try { e.target.showPicker?.(); } catch {} }}
+                  onChange={(e) => {
+                    setFilterDateFrom(e.target.value);
+                    setFilterDate('');
+                  }}
+                  style={{
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    outline: 'none',
+                    color: 'var(--ds-text-primary)',
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    colorScheme: 'dark'
+                  }}
+                />
+                <span style={{ color: 'var(--ds-text-muted)', fontSize: '12px' }}>–</span>
+                <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--ds-text-secondary)' }}>Hasta:</label>
+                <input
+                  type="date"
+                  value={filterDateTo}
+                  onClick={(e) => { try { e.target.showPicker?.(); } catch {} }}
+                  onChange={(e) => {
+                    setFilterDateTo(e.target.value);
+                    setFilterDate('');
+                  }}
+                  style={{
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    outline: 'none',
+                    color: 'var(--ds-text-primary)',
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    colorScheme: 'dark'
+                  }}
+                />
+                {(filterDateFrom || filterDateTo) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFilterDateFrom('');
+                      setFilterDateTo('');
+                      setFilterDate(getTodayColombia());
+                    }}
+                    title="Limpiar rango"
+                    style={{ background: 'none', border: 'none', color: 'var(--ds-text-muted)', cursor: 'pointer', padding: '2px', display: 'flex' }}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Alternador Fecha Única / Rango de Fechas */}
+            <button
+              type="button"
+              className={`ds-btn ds-btn-sm ${showRangeFilter ? 'ds-btn-primary' : 'ds-btn-secondary'}`}
+              style={{ height: '42px', padding: '0 14px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              onClick={() => {
+                if (showRangeFilter) {
+                  // Cambiar a fecha única
+                  setShowRangeFilter(false);
+                  setFilterDateFrom('');
+                  setFilterDateTo('');
+                  setFilterDate(getTodayColombia());
+                } else {
+                  // Cambiar a rango
+                  setShowRangeFilter(true);
+                  setFilterDate('');
+                  setFilterDateFrom(getTodayColombia());
+                  setFilterDateTo(getTodayColombia());
+                }
+              }}
+            >
+              <Filter size={15} />
+              {showRangeFilter ? 'Fecha única' : 'Rango de fechas'}
+            </button>
+
+            {/* Botón rápido "Hoy" si está filtrado */}
+            {isDateFiltered && (
+              <button
+                type="button"
+                className="ds-btn ds-btn-ghost ds-btn-sm"
+                style={{ height: '42px', color: 'var(--ds-primary)', fontWeight: '600' }}
+                onClick={() => {
+                  setShowRangeFilter(false);
+                  setFilterDateFrom('');
+                  setFilterDateTo('');
+                  setFilterDate(getTodayColombia());
+                }}
+              >
+                Hoy
+              </button>
+            )}
+          </div>
         </div>
-        <div className="dashboard-metrics-grid">
+
+        <div className={`dashboard-metrics-grid ${refreshing ? 'ds-metrics-refreshing' : ''}`} style={{ opacity: refreshing ? 0.6 : 1, transition: 'opacity 0.2s ease' }}>
           {metrics.map(({ label, value, note, icon: Icon, tone }) => (
             <article key={label} className="dashboard-metric-card">
               <div className={`dashboard-icon dashboard-icon-${tone}`}><Icon size={22} /></div>

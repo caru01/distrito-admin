@@ -665,8 +665,39 @@ export default function AdminPedidos() {
   const completedOrders = ordersInDate.filter(o => o.status === 'Entregado' || o.status === 'Completado');
   const totalDomicilios = completedOrders.reduce((s, o) => s + (o.delivery_fee || 0), 0);
   const totalVentas = completedOrders.reduce((s, o) => s + ((o.total || 0) - (o.delivery_fee || 0)), 0);
-  const totalEfectivo = completedOrders.filter(o => (o.payment_method || '').toLowerCase() === 'efectivo').reduce((s, o) => s + ((o.total || 0) - (o.delivery_fee || 0)), 0);
-  const totalTransferencia = completedOrders.filter(o => ['transferencia', 'nequi', 'tarjeta'].includes((o.payment_method || '').toLowerCase())).reduce((s, o) => s + ((o.total || 0) - (o.delivery_fee || 0)), 0);
+  let totalEfectivo = 0;
+  let totalTransferencia = 0;
+
+  completedOrders.forEach(o => {
+    const net = (o.total || 0) - (o.delivery_fee || 0);
+    const pm = (o.payment_method || '').toLowerCase();
+    
+    if (pm === 'efectivo') {
+      totalEfectivo += net;
+    } else if (['transferencia', 'nequi', 'tarjeta'].includes(pm)) {
+      totalTransferencia += net;
+    } else if (pm === 'compartido') {
+      let ef = 0;
+      let tr = 0;
+      if (o.notes) {
+        const efMatch = o.notes.match(/\$([\d.,]+)\s*efectivo/i);
+        const trMatch = o.notes.match(/\$([\d.,]+)\s*transferencia/i);
+        if (efMatch) ef = parseInt(efMatch[1].replace(/[.,]/g, ''), 10);
+        if (trMatch) tr = parseInt(trMatch[1].replace(/[.,]/g, ''), 10);
+      }
+      
+      const splitTotal = ef + tr;
+      if (splitTotal > 0 && splitTotal === (o.total || 0)) {
+        const efNet = Math.round(ef * (net / splitTotal));
+        const trNet = net - efNet;
+        totalEfectivo += efNet;
+        totalTransferencia += trNet;
+      } else {
+        totalEfectivo += Math.round(net / 2);
+        totalTransferencia += net - Math.round(net / 2);
+      }
+    }
+  });
 
   return (
     <div className="ds-page">
