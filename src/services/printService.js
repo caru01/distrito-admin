@@ -42,7 +42,7 @@ export const printTicket = (order, paperWidth = 58) => {
  */
 export const generateSingleComandaHTML = (order, paperWidth = 58) => {
   const is58 = paperWidth === 58;
-  const printableWidth = is58 ? '44mm' : '72mm';
+  const printableWidth = is58 ? '48mm' : '72mm';
   const items = Array.isArray(order.cart_json) ? order.cart_json : (order.cart || []);
 
   const orderDate = order.created_at ? new Date(order.created_at) : new Date();
@@ -131,7 +131,7 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
   <title>Comanda #${orderNumber}</title>
   <style>
     @page {
-      size: ${is58 ? '58mm auto' : '80mm auto'};
+      size: ${is58 ? '48mm auto' : '72mm auto'};
       margin: 0mm;
     }
     *, *::before, *::after {
@@ -141,6 +141,7 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
     }
     html, body {
       width: 100% !important;
+      max-width: ${printableWidth} !important;
       margin: 0 auto !important;
       padding: 0 !important;
       height: auto !important;
@@ -149,25 +150,28 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
       color: #000;
       font-family: Arial, Helvetica, sans-serif;
       font-size: 12px;
-      line-height: 1.2;
+      line-height: 1.25;
       letter-spacing: -0.2px;
       -webkit-print-color-adjust: exact;
+      overflow-x: hidden !important;
     }
     @media print {
       html, body {
         width: 100% !important;
+        max-width: ${printableWidth} !important;
         margin: 0 auto !important;
         padding: 0 !important;
         height: auto !important;
+        overflow-x: hidden !important;
       }
       .ticket-wrapper {
-        width: ${printableWidth} !important;
+        width: 100% !important;
         max-width: ${printableWidth} !important;
-        margin-left: auto !important;
-        margin-right: auto !important;
-        padding-left: 1mm !important;
-        padding-right: 1mm !important;
+        margin: 0 auto !important;
+        padding-left: 2.5mm !important;
+        padding-right: 2.5mm !important;
         height: auto !important;
+        box-sizing: border-box !important;
       }
     }
 
@@ -175,7 +179,7 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
       width: 100%;
       max-width: ${printableWidth};
       margin: 0 auto;
-      padding: 1px 1mm 0 1mm;
+      padding: 1px 2.5mm 0 2.5mm;
       box-sizing: border-box;
     }
 
