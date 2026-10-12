@@ -144,6 +144,13 @@ export default function AdminInventario() {
     edit_reason: ''
   });
 
+  // Filtros avanzados del Historial de Compras (Proveedor, Insumo, Rango de Fecha, Búsqueda)
+  const [purchaseFilterSupplier, setPurchaseFilterSupplier] = useState('ALL');
+  const [purchaseFilterInsumo, setPurchaseFilterInsumo] = useState('');
+  const [purchaseDateFrom, setPurchaseDateFrom] = useState('');
+  const [purchaseDateTo, setPurchaseDateTo] = useState('');
+  const [purchaseSearch, setPurchaseSearch] = useState('');
+
   // Recetas
   const [selectedRecipeProduct, setSelectedRecipeProduct] = useState('');
   const [newRecipeInsumo, setNewRecipeInsumo] = useState('');
@@ -617,8 +624,60 @@ export default function AdminInventario() {
     const input = (typeof editPurchaseForm.supplier === 'string' ? editPurchaseForm.supplier : editPurchaseForm.supplier?.name || '').trim().toLowerCase();
     const names = suppliersList.map((s) => (typeof s === 'string' ? s : s?.name || '')).filter(Boolean);
     if (!input) return names.slice(0, 6);
-    return names.filter((s) => s.toLowerCase().includes(input)).slice(0, 6);
   }, [editPurchaseForm.supplier, suppliersList]);
+
+  // Proveedores únicos para el filtro de historial de compras
+  const uniquePurchaseSuppliers = useMemo(() => {
+    const set = new Set();
+    suppliersList.forEach((s) => {
+      const name = typeof s === 'object' ? s?.name : s;
+      if (name && typeof name === 'string' && name.trim()) set.add(name.trim());
+    });
+    purchases.forEach((p) => {
+      const name = typeof p.supplier === 'object' ? p.supplier?.name : p.supplier;
+      if (name && typeof name === 'string' && name.trim()) set.add(name.trim());
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'es'));
+  }, [suppliersList, purchases]);
+
+  // Compras filtradas por proveedor, insumo, rango de fechas y buscador
+  const filteredPurchases = useMemo(() => {
+    return purchases.filter((p) => {
+      if (purchaseFilterInsumo && String(p.inventory_id) !== String(purchaseFilterInsumo)) {
+        return false;
+      }
+      if (purchaseFilterSupplier && purchaseFilterSupplier !== 'ALL') {
+        const suppName = typeof p.supplier === 'object' ? (p.supplier?.name || '') : String(p.supplier || '');
+        if (suppName.trim().toLowerCase() !== purchaseFilterSupplier.trim().toLowerCase()) {
+          return false;
+        }
+      }
+      if (purchaseDateFrom) {
+        const pDate = (p.purchase_date || '').slice(0, 10);
+        if (pDate && pDate < purchaseDateFrom) return false;
+      }
+      if (purchaseDateTo) {
+        const pDate = (p.purchase_date || '').slice(0, 10);
+        if (pDate && pDate > purchaseDateTo) return false;
+      }
+      if (purchaseSearch.trim()) {
+        const q = purchaseSearch.trim().toLowerCase();
+        const suppName = typeof p.supplier === 'object' ? (p.supplier?.name || '') : String(p.supplier || '');
+        const matchInsumo = (p.inventory_title || '').toLowerCase().includes(q);
+        const matchSupplier = suppName.toLowerCase().includes(q);
+        const matchNotes = (p.notes || '').toLowerCase().includes(q);
+        const matchId = String(p.id).includes(q);
+        if (!matchInsumo && !matchSupplier && !matchNotes && !matchId) return false;
+      }
+      return true;
+    });
+  }, [purchases, purchaseFilterInsumo, purchaseFilterSupplier, purchaseDateFrom, purchaseDateTo, purchaseSearch]);
+
+  const purchaseMetrics = useMemo(() => {
+    const totalCost = filteredPurchases.reduce((acc, curr) => acc + (Number(curr.total_cost) || 0), 0);
+    const count = filteredPurchases.length;
+    return { totalCost, count };
+  }, [filteredPurchases]);
 
   // ==========================================
   // HANDLERS: INSUMOS Y STOCK MÍNIMO
@@ -1214,6 +1273,7 @@ export default function AdminInventario() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...adjustForm,
+          direction: 'SUBTRACT',
           reason: fullReason
         })
       });
@@ -2260,16 +2320,148 @@ export default function AdminInventario() {
             </form>
           </section>
 
-          {/* 2. Historial de Compras (Abajo, Ancho Completo, con Notas Visibles) */}
+          {/* 2. Historial de Compras (Con Filtros por Proveedor, Insumo, Rango de Fecha y Buscador) */}
           <section className="ds-card">
-            <div className="ds-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="ds-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
               <div>
-                <h2 className="ds-card-title" style={{ margin: 0 }}>Historial de Compras</h2>
+                <h2 className="ds-card-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <ShoppingCart size={20} color="var(--ds-primary)" />
+                  <span>Historial de Compras</span>
+                </h2>
                 <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--ds-text-secondary)' }}>
-                  Registro de compras y facturación con trazabilidad y notas
+                  Registro de compras y facturación con trazabilidad y filtros avanzados
                 </p>
               </div>
-              <span className="ds-badge ds-badge-neutral">{purchases.length} registradas</span>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <span className="ds-badge ds-badge-neutral">
+                  {filteredPurchases.length} de {purchases.length} compras
+                </span>
+                <span className="ds-badge ds-badge-warning" style={{ fontWeight: '700', fontSize: '12px' }}>
+                  Total filtrado: {formatCurrency(purchaseMetrics.totalCost)}
+                </span>
+              </div>
+            </div>
+
+            {/* Barra de Filtros de Compras */}
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--ds-border)', background: 'var(--ds-surface-secondary)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', alignItems: 'flex-end' }}>
+                
+                {/* 1. Filtro por Proveedor */}
+                <div className="ds-form-group">
+                  <label className="ds-form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Building2 size={14} color="var(--ds-primary)" />
+                    <span>Proveedor</span>
+                  </label>
+                  <select
+                    className="ds-select"
+                    value={purchaseFilterSupplier}
+                    onChange={(e) => setPurchaseFilterSupplier(e.target.value)}
+                  >
+                    <option value="ALL">Todos los proveedores ({uniquePurchaseSuppliers.length})</option>
+                    {uniquePurchaseSuppliers.map((sup) => (
+                      <option key={sup} value={sup}>
+                        {sup}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 2. Filtro por Insumo */}
+                <div className="ds-form-group">
+                  <label className="ds-form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Boxes size={14} color="var(--ds-primary)" />
+                    <span>Insumo</span>
+                  </label>
+                  <select
+                    className="ds-select"
+                    value={purchaseFilterInsumo}
+                    onChange={(e) => setPurchaseFilterInsumo(e.target.value)}
+                  >
+                    <option value="">Todos los insumos ({insumos.length})</option>
+                    {insumos.map((i) => (
+                      <option key={i.id} value={i.id}>
+                        {i.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 3. Fecha Desde */}
+                <div className="ds-form-group">
+                  <label className="ds-form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Calendar size={14} />
+                    <span>Fecha Desde</span>
+                  </label>
+                  <input
+                    type="date"
+                    className="ds-input"
+                    value={purchaseDateFrom}
+                    onChange={(e) => setPurchaseDateFrom(e.target.value)}
+                  />
+                </div>
+
+                {/* 4. Fecha Hasta */}
+                <div className="ds-form-group">
+                  <label className="ds-form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Calendar size={14} />
+                    <span>Fecha Hasta</span>
+                  </label>
+                  <input
+                    type="date"
+                    className="ds-input"
+                    value={purchaseDateTo}
+                    onChange={(e) => setPurchaseDateTo(e.target.value)}
+                  />
+                </div>
+
+                {/* 5. Buscador de texto libre */}
+                <div className="ds-form-group">
+                  <label className="ds-form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Search size={14} />
+                    <span>Buscar por texto</span>
+                  </label>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      className="ds-input"
+                      placeholder="Factura, nota, etc..."
+                      value={purchaseSearch}
+                      onChange={(e) => setPurchaseSearch(e.target.value)}
+                    />
+                    {purchaseSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setPurchaseSearch('')}
+                        style={{ position: 'absolute', right: '8px', background: 'none', border: 'none', color: 'var(--ds-text-muted)', cursor: 'pointer', padding: '2px' }}
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Barra de acción: Limpiar Filtros cuando alguno esté activo */}
+              {(purchaseFilterSupplier !== 'ALL' || purchaseFilterInsumo || purchaseDateFrom || purchaseDateTo || purchaseSearch) && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', paddingTop: '10px', borderTop: '1px dashed var(--ds-border)', flexWrap: 'wrap', gap: '8px' }}>
+                  <span style={{ fontSize: '12px', color: 'var(--ds-text-muted)' }}>
+                    Filtros activos: Mostrando <strong>{filteredPurchases.length}</strong> de <strong>{purchases.length}</strong> compras · Total: <strong>{formatCurrency(purchaseMetrics.totalCost)}</strong>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPurchaseFilterSupplier('ALL');
+                      setPurchaseFilterInsumo('');
+                      setPurchaseDateFrom('');
+                      setPurchaseDateTo('');
+                      setPurchaseSearch('');
+                    }}
+                    className="ds-btn ds-btn-secondary ds-btn-sm"
+                  >
+                    <X size={14} /> Limpiar Filtros
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="ds-table-container">
@@ -2287,7 +2479,7 @@ export default function AdminInventario() {
                   </tr>
                 </thead>
                 <tbody>
-                  {purchases.map((p) => (
+                  {filteredPurchases.map((p) => (
                     <tr key={p.id}>
                       <td className="font-mono ds-text-muted" style={{ fontSize: '12px', whiteSpace: 'nowrap' }}>
                         {formatDateOnly(p.purchase_date)}
@@ -2330,10 +2522,33 @@ export default function AdminInventario() {
                       </td>
                     </tr>
                   ))}
-                  {!purchases.length && (
+                  {!filteredPurchases.length && (
                     <tr>
-                      <td colSpan={8} className="ds-empty-state" style={{ textAlign: 'center', padding: '32px' }}>
-                        No hay compras registradas aún.
+                      <td colSpan={8} className="ds-empty-state" style={{ textAlign: 'center', padding: '36px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                          <ShoppingCart size={32} color="var(--ds-text-muted)" style={{ opacity: 0.6 }} />
+                          <strong style={{ fontSize: '14px' }}>
+                            {purchases.length > 0 
+                              ? 'No se encontraron compras con los filtros seleccionados.' 
+                              : 'No hay compras registradas aún.'}
+                          </strong>
+                          {purchases.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPurchaseFilterSupplier('ALL');
+                                setPurchaseFilterInsumo('');
+                                setPurchaseDateFrom('');
+                                setPurchaseDateTo('');
+                                setPurchaseSearch('');
+                              }}
+                              className="ds-btn ds-btn-secondary ds-btn-sm"
+                              style={{ marginTop: '6px' }}
+                            >
+                              <X size={14} /> Restablecer Filtros
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   )}
