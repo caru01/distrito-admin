@@ -328,7 +328,7 @@ export default function AdminGastos() {
     <div className="ds-page">
       <div className="ds-page-header">
         <div>
-          <h1 className="ds-page-title" style={{ color: '#D4A017' }}>Gastos Operativos</h1>
+          <h1 className="ds-page-title">Gastos Operativos</h1>
           <p style={{ margin: 0, color: '#BDBDBD' }}>Registra y controla los egresos del negocio.</p>
         </div>
         <div className="ds-page-actions">
@@ -436,7 +436,7 @@ export default function AdminGastos() {
                         <button onClick={() => setViewGasto(g)} className="ds-btn ds-btn-icon ds-btn-ghost ds-btn-sm" style={{ marginRight: '8px', color: '#8B5CF6' }} title="Ver Resumen">
                           <Eye size={18} />
                         </button>
-                        <button onClick={() => handleEdit(g)} className="ds-btn ds-btn-icon ds-btn-ghost ds-btn-sm" style={{ marginRight: '8px', color: '#D4A017' }}>
+                        <button onClick={() => handleEdit(g)} className="ds-btn ds-btn-icon ds-btn-ghost ds-btn-sm" style={{ marginRight: '8px', color: 'var(--ds-primary)' }}>
                           <Edit3 size={18} />
                         </button>
                         <button onClick={() => handleDelete(g.id)} className="ds-btn ds-btn-icon ds-btn-ghost ds-btn-sm" style={{ color: '#EF4444' }}>

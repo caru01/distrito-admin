@@ -199,7 +199,7 @@ export default function AdminCategorias() {
               <div style={{ fontSize: '32px', fontWeight: '700', color: '#FFFFFF', marginBottom: '4px' }}>{categories.length}</div>
               <div style={{ color: '#BDBDBD', fontSize: '14px', fontWeight: '500' }}>Total de categorías</div>
             </div>
-            <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: 'rgba(212, 160, 23, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D4A017' }}>
+            <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: 'rgba(179, 4, 1, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#B30401' }}>
               <Package size={28} />
             </div>
           </div>
@@ -219,8 +219,8 @@ export default function AdminCategorias() {
       </div>
 
       {/* Barra de Búsqueda y Ayuda de Reordenamiento */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', padding: '10px 16px', backgroundColor: 'rgba(212, 160, 23, 0.08)', borderRadius: '12px', border: '1px solid rgba(212, 160, 23, 0.2)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#D4A017', fontSize: '14px', fontWeight: '600' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', padding: '10px 16px', backgroundColor: 'rgba(179, 4, 1, 0.08)', borderRadius: '12px', border: '1px solid rgba(179, 4, 1, 0.25)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#B30401', fontSize: '14px', fontWeight: '600' }}>
           <ArrowUpDown size={18} />
           <span>Orden en Tienda Web: Arrastra las filas o usa las flechas ⬆️ ⬇️ para definir el orden en que tus clientes verán las categorías.</span>
         </div>
@@ -291,13 +291,13 @@ export default function AdminCategorias() {
                   </div>
                 </td>
                 <td>
-                  <div style={{ width: '48px', height: '48px', borderRadius: '12px', backgroundColor: '#1A1A1A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', border: '1px solid #333333' }}>
+                  <div style={{ width: '48px', height: '48px', borderRadius: '12px', backgroundColor: 'var(--ds-bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', border: '1px solid var(--ds-border)' }}>
                     {cat.image || '🍔'}
                   </div>
                 </td>
-                <td style={{ color: '#FFFFFF', fontWeight: '700', fontSize: '15px' }}>{cat.name}</td>
-                <td style={{ color: '#BDBDBD', fontSize: '14px' }}>{cat.description || cat.desc}</td>
-                <td style={{ color: '#FFFFFF', fontWeight: '600', fontSize: '15px', textAlign: 'center' }}>{cat.products || 0}</td>
+                <td style={{ color: 'var(--ds-text-primary)', fontWeight: '700', fontSize: '15px' }}>{cat.name}</td>
+                <td style={{ color: 'var(--ds-text-secondary)', fontSize: '14px' }}>{cat.description || cat.desc}</td>
+                <td style={{ color: 'var(--ds-text-primary)', fontWeight: '600', fontSize: '15px', textAlign: 'center' }}>{cat.products || 0}</td>
                 <td>
                   <span className={`ds-badge ${cat.status === 'Activa' ? 'ds-badge-success' : 'ds-badge-danger'}`}>
                     {cat.status}
@@ -392,7 +392,7 @@ export default function AdminCategorias() {
                     type="button"
                     onClick={() => setShowIconPicker(!showIconPicker)}
                     style={{ 
-                      width: '48px', height: '48px', flexShrink: 0, backgroundColor: '#1A1A1A', border: '1px solid #333333', 
+                      width: '48px', height: '48px', flexShrink: 0, backgroundColor: 'var(--ds-bg-elevated)', border: '1px solid var(--ds-border)', 
                       borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', cursor: 'pointer'
                     }}
                   >
@@ -411,9 +411,9 @@ export default function AdminCategorias() {
                   {/* Dropdown de Iconos */}
                   {showIconPicker && (
                     <div className="admin-category-emoji-picker" style={{ 
-                      position: 'absolute', top: '56px', left: 0, backgroundColor: '#1A1A1A', border: '1px solid #333333', 
+                      position: 'absolute', top: '56px', left: 0, backgroundColor: 'var(--ds-bg-surface)', border: '1px solid var(--ds-border)', 
                       borderRadius: '12px', padding: '12px', display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: '8px',
-                      zIndex: 10, boxShadow: '0 4px 20px rgba(0,0,0,0.5)', width: '400px', maxHeight: '300px', overflowY: 'auto'
+                      zIndex: 10, boxShadow: 'var(--ds-shadow-lg)', width: '400px', maxHeight: '300px', overflowY: 'auto'
                     }}>
                       {EMOJI_OPTIONS.map(emoji => (
                         <button
@@ -425,7 +425,7 @@ export default function AdminCategorias() {
                           }}
                           style={{
                             width: '40px', height: '40px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            backgroundColor: currentCategory.image === emoji ? '#D4A017' : 'transparent',
+                            backgroundColor: currentCategory.image === emoji ? '#B30401' : 'transparent',
                             fontSize: '20px', border: 'none', cursor: 'pointer'
                           }}
                         >

@@ -56,7 +56,7 @@ export default function AdminAuditoria() {
       <div className="ds-page-header">
         <div>
           <h2 className="ds-page-title" style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <Shield size={32} color="#D4A017" />
+            <Shield size={32} color="#B30401" />
             Auditoría y Seguridad
           </h2>
         </div>

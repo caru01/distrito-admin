@@ -34,9 +34,9 @@ export default function AdminConfiguracion() {
     welcome_message: '',
     currency: 'COP', timezone: 'America/Bogota', language: 'es', date_format: 'DD/MM/YYYY', time_format: '12h',
     nequi_number: '', bancolombia_number: '',
-    web_primary_color: '#D4A017', web_background_color: '#0D0D0D', web_surface_color: '#171717', web_text_color: '#FFFFFF',
-    admin_primary_color: '#D4A017', admin_background_color: '#0D0D0D', admin_surface_color: '#151515', admin_text_color: '#FFFFFF',
-    delivery_primary_color: '#D4A017', delivery_background_color: '#090909', delivery_surface_color: '#151515', delivery_text_color: '#FFFFFF',
+    web_primary_color: '#B30401', web_background_color: '#0D0D0D', web_surface_color: '#171717', web_text_color: '#FFFFFF',
+    admin_primary_color: '#B30401', admin_background_color: '#0D0D0D', admin_surface_color: '#151515', admin_text_color: '#FFFFFF',
+    delivery_primary_color: '#B30401', delivery_background_color: '#090909', delivery_surface_color: '#151515', delivery_text_color: '#FFFFFF',
     web_logo: '', web_page_title: 'Distrito BG', web_hero_title: 'Más que comida, una experiencia', web_hero_subtitle: 'Pedidos preparados al momento.', web_font_family: 'modern', web_card_style: 'rounded',
     admin_logo: '', admin_page_title: 'Distrito BG Admin', admin_sidebar_title: 'Distrito BG', admin_font_family: 'modern', admin_density: 'comfortable',
     delivery_logo: '', delivery_page_title: 'Distrito BG Delivery', delivery_heading: 'Pedidos disponibles', delivery_subtitle: 'Acepta, recoge y entrega desde un solo lugar.', delivery_font_family: 'modern', delivery_card_style: 'rounded',
@@ -408,7 +408,7 @@ export default function AdminConfiguracion() {
             <div className="ds-card">
               <div className="ds-card-header">
                 <h2 className="ds-card-title">
-                  <Building2 size={24} color="#D4A017" /> Información del Restaurante
+                  <Building2 size={24} color="#B30401" /> Información del Restaurante
                 </h2>
               </div>
               
@@ -459,16 +459,16 @@ export default function AdminConfiguracion() {
                   <label className="ds-form-label">Logotipo del Restaurante</label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flexWrap: 'wrap' }}>
                     {settings.logo ? (
-                      <img src={settings.logo} alt="Logo" style={{ width: '80px', height: '80px', objectFit: 'contain', borderRadius: '12px', border: '1px solid #2A2A2A', backgroundColor: '#000' }} />
+                      <img src={settings.logo} alt="Logo" style={{ width: '80px', height: '80px', objectFit: 'contain', borderRadius: '12px', border: '1px solid var(--ds-border)', backgroundColor: 'var(--ds-bg-elevated)' }} />
                     ) : (
-                      <div style={{ width: '80px', height: '80px', backgroundColor: '#1A1A1A', borderRadius: '12px', border: '1px dashed #333', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Building2 color="#666" />
+                      <div style={{ width: '80px', height: '80px', backgroundColor: 'var(--ds-bg-elevated)', borderRadius: '12px', border: '1px dashed var(--ds-border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Building2 color="var(--ds-text-muted)" />
                       </div>
                     )}
-                    <div className="admin-settings-logo-upload" style={{ flex: 1, minWidth: '250px', border: '1px dashed #333333', borderRadius: '12px', padding: '24px', textAlign: 'center', backgroundColor: 'rgba(255,255,255,0.02)' }}>
-                      <Upload size={24} color="#D4A017" style={{ margin: '0 auto 8px' }} />
+                    <div className="admin-settings-logo-upload" style={{ flex: 1, minWidth: '250px', border: '1px dashed var(--ds-border)', borderRadius: '12px', padding: '24px', textAlign: 'center', backgroundColor: 'var(--ds-bg-elevated)' }}>
+                      <Upload size={24} color="#B30401" style={{ margin: '0 auto 8px' }} />
                       <div style={{ fontWeight: '600' }}>Subir nuevo logo</div>
-                      <div style={{ fontSize: '13px', color: '#BDBDBD', marginTop: '4px' }}>Sube una imagen o usa una URL</div>
+                      <div style={{ fontSize: '13px', color: 'var(--ds-text-secondary)', marginTop: '4px' }}>Sube una imagen o usa una URL</div>
                       <input type="file" accept="image/png,image/jpeg,image/webp" className="ds-input" style={{ marginTop: '12px' }} onChange={e => {
                         const file = e.target.files?.[0]; if (!file) return;
                         if (file.size > 2 * 1024 * 1024) return setSaveMessage('❌ El logo no debe superar 2 MB');
@@ -485,7 +485,7 @@ export default function AdminConfiguracion() {
             <div className="ds-card">
               <div className="ds-card-header">
                 <h2 className="ds-card-title">
-                  <Globe size={24} color="#D4A017" /> Redes Sociales y Enlaces
+                  <Globe size={24} color="#B30401" /> Redes Sociales y Enlaces
                 </h2>
               </div>
               <div className="ds-card-body ds-form">
@@ -512,7 +512,7 @@ export default function AdminConfiguracion() {
 
             <div className="ds-card">
               <div className="ds-card-header">
-                <h2 className="ds-card-title"><BellRing size={24} color="#D4A017" /> Alertas de pedidos</h2>
+                <h2 className="ds-card-title"><BellRing size={24} color="#B30401" /> Alertas de pedidos</h2>
               </div>
               <div className="ds-card-body ds-form">
                 <p className="ds-text-muted">La misma preferencia se aplica al panel y a Distrito Delivery. La voz disponible puede variar según el dispositivo.</p>
@@ -615,11 +615,11 @@ export default function AdminConfiguracion() {
                         {(settings.web_logo || settings.logo) ? (
                           <img src={settings.web_logo || settings.logo} alt="Logo" style={{ width: '36px', height: '36px', objectFit: 'contain', borderRadius: '8px' }} />
                         ) : (
-                          <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: settings.web_primary_color || '#D4A017', display: 'grid', placeItems: 'center', color: '#000', fontWeight: 'bold' }}>D</div>
+                          <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: settings.web_primary_color || '#B30401', display: 'grid', placeItems: 'center', color: '#000', fontWeight: 'bold' }}>D</div>
                         )}
                         <strong style={{ fontSize: '17px' }}>{settings.web_page_title || settings.restaurant_name || 'Distrito BG'}</strong>
                       </div>
-                      <span style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '999px', background: `${settings.web_primary_color}22`, color: settings.web_primary_color || '#D4A017', fontWeight: '600' }}>Abierto ahora</span>
+                      <span style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '999px', background: `${settings.web_primary_color}22`, color: settings.web_primary_color || '#B30401', fontWeight: '600' }}>Abierto ahora</span>
                     </div>
 
                     {/* Hero */}
@@ -633,7 +633,7 @@ export default function AdminConfiguracion() {
                       style={{
                         background: settings.web_surface_color || '#171717',
                         borderRadius: settings.web_card_style === 'rounded' ? '18px' : settings.web_card_style === 'compact' ? '8px' : '14px',
-                        border: settings.web_card_style === 'outlined' ? `2px solid ${settings.web_primary_color || '#D4A017'}` : '1px solid rgba(255,255,255,0.08)',
+                        border: settings.web_card_style === 'outlined' ? `2px solid ${settings.web_primary_color || '#B30401'}` : '1px solid rgba(255,255,255,0.08)',
                         padding: settings.web_card_style === 'compact' ? '12px' : '18px',
                         display: 'flex',
                         justifyContent: 'space-between',
@@ -644,12 +644,12 @@ export default function AdminConfiguracion() {
                       <div>
                         <div style={{ fontWeight: '700', fontSize: '15px', marginBottom: '4px' }}>Distric Burger Especial</div>
                         <div style={{ opacity: 0.75, fontSize: '13px', marginBottom: '8px' }}>Carne artesanal, queso cheddar, tocineta crocante y salsa de la casa.</div>
-                        <div style={{ fontSize: '16px', fontWeight: '800', color: settings.web_primary_color || '#D4A017' }}>$ 28.000</div>
+                        <div style={{ fontSize: '16px', fontWeight: '800', color: settings.web_primary_color || '#B30401' }}>$ 28.000</div>
                       </div>
                       <button
                         type="button"
                         style={{
-                          background: settings.web_primary_color || '#D4A017',
+                          background: settings.web_primary_color || '#B30401',
                           color: '#000',
                           border: 'none',
                           padding: '10px 18px',
@@ -682,7 +682,7 @@ export default function AdminConfiguracion() {
                       {(settings.admin_logo || settings.logo) ? (
                         <img src={settings.admin_logo || settings.logo} alt="Logo" style={{ width: '32px', height: '32px', objectFit: 'contain', borderRadius: '6px' }} />
                       ) : (
-                        <div style={{ width: '32px', height: '32px', borderRadius: '6px', background: settings.admin_primary_color || '#D4A017', display: 'grid', placeItems: 'center', color: '#000', fontWeight: 'bold' }}>A</div>
+                        <div style={{ width: '32px', height: '32px', borderRadius: '6px', background: settings.admin_primary_color || '#B30401', display: 'grid', placeItems: 'center', color: '#000', fontWeight: 'bold' }}>A</div>
                       )}
                       <strong>{settings.admin_sidebar_title || settings.admin_page_title || 'Distrito Admin'}</strong>
                       <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.1)', marginLeft: 'auto' }}>Densidad: {settings.admin_density === 'compact' ? 'Compacta' : 'Cómoda'}</span>
@@ -700,9 +700,9 @@ export default function AdminConfiguracion() {
                     >
                       <div>
                         <div style={{ fontSize: '13px', opacity: 0.7, marginBottom: '4px' }}>Ventas confirmadas hoy</div>
-                        <div style={{ fontSize: '24px', fontWeight: '800', color: settings.admin_primary_color || '#D4A017' }}>$ 380.000</div>
+                        <div style={{ fontSize: '24px', fontWeight: '800', color: settings.admin_primary_color || '#B30401' }}>$ 380.000</div>
                       </div>
-                      <span style={{ padding: '6px 12px', borderRadius: '8px', background: `${settings.admin_primary_color}22`, color: settings.admin_primary_color || '#D4A017', fontSize: '12px', fontWeight: '700' }}>14 pedidos</span>
+                      <span style={{ padding: '6px 12px', borderRadius: '8px', background: `${settings.admin_primary_color}22`, color: settings.admin_primary_color || '#B30401', fontSize: '12px', fontWeight: '700' }}>14 pedidos</span>
                     </div>
                   </div>
                 )}
@@ -723,7 +723,7 @@ export default function AdminConfiguracion() {
                       {(settings.delivery_logo || settings.logo) ? (
                         <img src={settings.delivery_logo || settings.logo} alt="Logo" style={{ width: '32px', height: '32px', objectFit: 'contain', borderRadius: '6px' }} />
                       ) : (
-                        <div style={{ width: '32px', height: '32px', borderRadius: '6px', background: settings.delivery_primary_color || '#D4A017', display: 'grid', placeItems: 'center', color: '#000', fontWeight: 'bold' }}>🛵</div>
+                        <div style={{ width: '32px', height: '32px', borderRadius: '6px', background: settings.delivery_primary_color || '#B30401', display: 'grid', placeItems: 'center', color: '#000', fontWeight: 'bold' }}>🛵</div>
                       )}
                       <strong>{settings.delivery_heading || 'Pedidos disponibles'}</strong>
                     </div>
@@ -732,7 +732,7 @@ export default function AdminConfiguracion() {
                       style={{
                         background: settings.delivery_surface_color || '#151515',
                         borderRadius: settings.delivery_card_style === 'rounded' ? '18px' : settings.delivery_card_style === 'compact' ? '8px' : '14px',
-                        border: settings.delivery_card_style === 'outlined' ? `2px solid ${settings.delivery_primary_color || '#D4A017'}` : '1px solid rgba(255,255,255,0.08)',
+                        border: settings.delivery_card_style === 'outlined' ? `2px solid ${settings.delivery_primary_color || '#B30401'}` : '1px solid rgba(255,255,255,0.08)',
                         padding: settings.delivery_card_style === 'compact' ? '12px' : '16px',
                         display: 'flex',
                         justifyContent: 'space-between',
@@ -746,7 +746,7 @@ export default function AdminConfiguracion() {
                       <button
                         type="button"
                         style={{
-                          background: settings.delivery_primary_color || '#D4A017',
+                          background: settings.delivery_primary_color || '#B30401',
                           color: '#000',
                           border: 'none',
                           padding: '8px 14px',
@@ -769,10 +769,10 @@ export default function AdminConfiguracion() {
         {activeTab === 'Domicilios' && (
           <div className="cfg-domicilios-stack">
             {/* CARD 1: UBICACIÓN DE LA COCINA */}
-            <div className="ds-card kitchen-location-card" style={{ borderTop: '3px solid #D4A017' }}>
+            <div className="ds-card kitchen-location-card" style={{ borderTop: '3px solid #B30401' }}>
               <div className="ds-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(212,160,23,0.12)', color: '#D4A017', display: 'grid', placeItems: 'center' }}>
+                  <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(179,4,1,0.12)', color: '#B30401', display: 'grid', placeItems: 'center' }}>
                     <MapPin size={22} />
                   </div>
                   <div>
@@ -837,7 +837,7 @@ export default function AdminConfiguracion() {
                       className="cfg-preset-pill"
                       disabled={locatingStore}
                       onClick={captureStoreLocation}
-                      style={{ color: '#D4A017' }}
+                      style={{ color: '#B30401' }}
                     >
                       <LocateFixed size={15} className={locatingStore ? 'animate-spin' : ''} />
                       {locatingStore ? 'Obteniendo GPS…' : 'Usar mi ubicación actual (GPS)'}
@@ -879,7 +879,7 @@ export default function AdminConfiguracion() {
                 <div style={{ display: 'grid', gap: '8px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '12px', color: 'var(--ds-text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Navigation size={14} color="#D4A017" /> Vista previa satelital y de calles de la sede:
+                      <Navigation size={14} color="#B30401" /> Vista previa satelital y de calles de la sede:
                     </span>
                     <small style={{ color: 'var(--ds-text-muted)', fontSize: '11px' }}>
                       Punto fijado en ({Number(settings.store_latitude).toFixed(6)}, {Number(settings.store_longitude).toFixed(6)})
@@ -1120,7 +1120,7 @@ export default function AdminConfiguracion() {
             <div className="ds-card">
               <div className="ds-card-header">
                 <h2 className="ds-card-title">
-                  <CreditCard size={24} color="#D4A017" /> Métodos de Pago Activos
+                  <CreditCard size={24} color="#B30401" /> Métodos de Pago Activos
                 </h2>
               </div>
               <div className="ds-card-body">
@@ -1147,7 +1147,7 @@ export default function AdminConfiguracion() {
             <div className="ds-card">
               <div className="ds-card-header">
                 <h2 className="ds-card-title">
-                  <Settings size={24} color="#D4A017" /> Mensaje de Bienvenida
+                  <Settings size={24} color="#B30401" /> Mensaje de Bienvenida
                 </h2>
               </div>
               <div className="ds-card-body ds-form">
@@ -1164,7 +1164,7 @@ export default function AdminConfiguracion() {
             <div className="ds-card">
               <div className="ds-card-header">
                 <h2 className="ds-card-title">
-                  <Settings size={24} color="#D4A017" /> Configuración del Sistema
+                  <Settings size={24} color="#B30401" /> Configuración del Sistema
                 </h2>
               </div>
               <div className="ds-card-body ds-form">
@@ -1238,13 +1238,13 @@ export default function AdminConfiguracion() {
 const PaymentRow = ({ name, field, settings, onChange }) => {
   const isActive = settings[field];
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1A1A1A', padding: '16px 20px', borderRadius: '12px', border: '1px solid #2A2A2A' }}>
-      <div style={{ color: '#FFF', fontWeight: '500', fontSize: '15px' }}>{name}</div>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--ds-bg-surface)', padding: '16px 20px', borderRadius: '12px', border: '1px solid var(--ds-border)' }}>
+      <div style={{ color: 'var(--ds-text-primary)', fontWeight: '500', fontSize: '15px' }}>{name}</div>
       <button 
         onClick={() => onChange(field, !isActive)}
         style={{ 
           width: '50px', height: '28px', borderRadius: '999px', border: 'none', cursor: 'pointer', position: 'relative',
-          backgroundColor: isActive ? '#D4A017' : '#333333', transition: 'background-color 0.2s'
+          backgroundColor: isActive ? '#B30401' : '#CBD5E1', transition: 'background-color 0.2s'
         }}
       >
         <div style={{ 

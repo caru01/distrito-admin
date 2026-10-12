@@ -245,7 +245,7 @@ export default function AdminLogin() {
         .login-layout {
           display: flex;
           height: 100vh;
-          background-color: var(--ds-bg-base, #0D0D0D);
+          background-color: #FFFFFF;
         }
         .login-image {
           flex: 1;
@@ -257,7 +257,7 @@ export default function AdminLogin() {
         .login-image-overlay {
           position: absolute;
           inset: 0;
-          background: linear-gradient(to right, rgba(0,0,0,0.3) 0%, rgba(13,13,13,1) 100%);
+          background: linear-gradient(to right, rgba(0,0,0,0.1) 0%, rgba(255,255,255,0.7) 100%);
         }
         @media (max-width: 767px) {
           .login-image {
@@ -273,35 +273,41 @@ export default function AdminLogin() {
           padding: 40px;
           position: relative;
           z-index: 10;
-          background-color: var(--ds-bg-base, #0D0D0D);
+          background-color: #FFFFFF;
         }
         .login-card {
           width: 100%;
           max-width: 420px;
           padding: 40px;
           border-radius: 16px;
-          box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+          background-color: #FFFFFF;
+          border: 1px solid var(--ds-border, #E5E7EB);
+          box-shadow: 0 10px 25px -5px rgba(0,0,0,0.06), 0 8px 10px -6px rgba(0,0,0,0.04);
         }
         .login-header {
           text-align: center;
           margin-bottom: 30px;
         }
         .login-subtitle {
-          color: var(--ds-primary, #fbbf24);
+          color: var(--ds-primary, #B30401);
           margin: 0 0 5px 0;
+          font-family: var(--ds-font-condensed);
           font-size: 14px;
-          font-weight: bold;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
         }
         .login-title {
-          color: #fff;
+          color: var(--ds-text-primary, #0F172A);
           margin: 0 0 8px 0;
-          font-size: 26px;
+          font-family: var(--ds-font-display);
+          font-size: 28px;
           font-weight: 800;
         }
         .login-desc {
-          color: var(--ds-text-muted, #888);
+          color: var(--ds-text-muted, #64748B);
           margin: 0;
-          font-size: 13px;
+          font-size: 13.5px;
         }
         .alert-message {
           padding: 12px;
@@ -313,23 +319,23 @@ export default function AdminLogin() {
           gap: 10px;
         }
         .alert-danger {
-          background-color: rgba(239, 68, 68, 0.1);
-          color: #ef4444;
-          border: 1px solid rgba(239, 68, 68, 0.3);
+          background-color: rgba(220, 38, 38, 0.08);
+          color: #DC2626;
+          border: 1px solid rgba(220, 38, 38, 0.25);
         }
         .alert-warning {
-          background-color: rgba(245, 158, 11, 0.1);
-          color: #f59e0b;
-          border: 1px solid rgba(245, 158, 11, 0.3);
+          background-color: rgba(217, 119, 6, 0.08);
+          color: #D97706;
+          border: 1px solid rgba(217, 119, 6, 0.25);
           flex-direction: column;
           text-align: center;
         }
-        .alert-warning h3 { margin: 0; font-size: 16px; color: #fff; }
+        .alert-warning h3 { margin: 0; font-size: 16px; color: #92400E; }
         .alert-warning p { margin: 0; font-size: 14px; }
         .alert-success {
-          background-color: rgba(16, 185, 129, 0.1);
-          color: #10b981;
-          border: 1px solid rgba(16, 185, 129, 0.3);
+          background-color: rgba(22, 163, 74, 0.08);
+          color: #16A34A;
+          border: 1px solid rgba(22, 163, 74, 0.25);
         }
         .conflict-container {
           text-align: center;
@@ -346,7 +352,7 @@ export default function AdminLogin() {
           position: absolute;
           right: 14px;
           top: 14px;
-          color: #666;
+          color: var(--ds-text-muted, #64748B);
           cursor: pointer;
         }
         .login-options {
@@ -359,18 +365,19 @@ export default function AdminLogin() {
           display: flex;
           align-items: center;
           gap: 8px;
-          color: #aaa;
+          color: var(--ds-text-secondary, #475569);
           font-size: 14px;
           cursor: pointer;
         }
         .remember-me input {
-          accent-color: var(--ds-primary, #fbbf24);
+          accent-color: var(--ds-primary, #B30401);
           width: 16px;
           height: 16px;
         }
         .forgot-link {
-          color: var(--ds-primary, #fbbf24);
+          color: var(--ds-primary, #B30401);
           font-size: 13px;
+          font-weight: 600;
           text-decoration: none;
         }
         .login-footer {
@@ -378,7 +385,7 @@ export default function AdminLogin() {
           margin-top: 30px;
         }
         .secure-badge {
-          color: #10b981;
+          color: #16A34A;
           margin: 0 0 5px 0;
           font-size: 12px;
           display: flex;
@@ -387,15 +394,16 @@ export default function AdminLogin() {
           gap: 5px;
         }
         .copyright {
-          color: #555;
+          color: var(--ds-text-disabled, #94A3B8);
           margin: 0;
           font-size: 11px;
         }
         .copyright span {
-          color: var(--ds-primary, #fbbf24);
+          color: var(--ds-primary, #B30401);
+          font-weight: 700;
         }
         .modal-text {
-          color: var(--ds-text-muted, #aaa);
+          color: var(--ds-text-secondary, #475569);
           font-size: 14px;
           margin-bottom: 20px;
         }

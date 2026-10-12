@@ -547,7 +547,7 @@ export default function AdminPedidos() {
       );
     }
     if (source === 'WhatsApp') return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><MessageCircle size={16} color="#22C55E" /> WhatsApp</div>;
-    if (source === 'Presencial' || source === 'Mostrador') return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Store size={16} color="#D4A017" /> {source}</div>;
+    if (source === 'Presencial' || source === 'Mostrador') return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Store size={16} color="#B30401" /> {source}</div>;
     if (source === 'Teléfono') return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={16} color="#60A5FA" /> Teléfono</div>;
     return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Globe size={16} color="#A78BFA" /> Web</div>;
   };
@@ -834,12 +834,12 @@ export default function AdminPedidos() {
           style={{ height: '52px', display: 'flex', alignItems: 'center', gap: '8px' }}
           onClick={() => setShowMoreFilters(prev => !prev)}
         >
-          <Filter size={18} color={showMoreFilters || activeFiltersCount > 0 ? '#000' : 'var(--ds-primary)'} />
+          <Filter size={18} color={showMoreFilters || activeFiltersCount > 0 ? '#FFFFFF' : 'var(--ds-primary)'} />
           Más Filtros
           {activeFiltersCount > 0 && (
             <span style={{
-              backgroundColor: '#000',
-              color: '#FFF',
+              backgroundColor: '#B30401',
+              color: '#FFFFFF',
               borderRadius: '999px',
               padding: '2px 8px',
               fontSize: '11px',

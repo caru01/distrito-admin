@@ -122,7 +122,7 @@ export default function AdminHorarios() {
           </div>
         </div>
         <div className="ds-stat-card">
-          <div style={{ color: '#D4A017' }}><Clock size={32} /></div>
+          <div style={{ color: '#B30401' }}><Clock size={32} /></div>
           <div>
             <div className="ds-stat-value">Horario de hoy</div>
             <div className="ds-stat-label">{status?.currentSchedule?.is_active ? `${status.currentSchedule.open_time} - ${status.currentSchedule.close_time}` : 'Cerrado hoy'}</div>
@@ -144,7 +144,7 @@ export default function AdminHorarios() {
           {/* Horario Semanal */}
           <div className="ds-card">
             <div className="ds-card-header">
-              <h2 className="ds-card-title"><Calendar size={20} color="#D4A017" /> Horario Semanal</h2>
+              <h2 className="ds-card-title"><Calendar size={20} color="#B30401" /> Horario Semanal</h2>
               <button onClick={saveHorarios} disabled={isSaving} className="ds-btn ds-btn-primary ds-btn-sm">
                 <Save size={18} /> {isSaving ? 'Guardando...' : 'Guardar'}
               </button>
@@ -160,7 +160,7 @@ export default function AdminHorarios() {
                         const newH = [...horarios];
                         newH[i].is_active = e.target.checked;
                         setHorarios(newH);
-                      }} style={{ accentColor: '#D4A017' }} />
+                      }} style={{ accentColor: '#B30401' }} />
                       {h.is_active ? 'Activo' : 'Inactivo'}
                     </label>
                   </div>
@@ -259,7 +259,7 @@ export default function AdminHorarios() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           <div className="ds-card">
             <div className="ds-card-header">
-              <h2 className="ds-card-title"><Shield size={20} color="#D4A017" /> Reglas y Configuración</h2>
+              <h2 className="ds-card-title"><Shield size={20} color="#B30401" /> Reglas y Configuración</h2>
             </div>
             
             <div className="ds-card-body ds-form">
@@ -312,15 +312,15 @@ export default function AdminHorarios() {
             <div className="ds-modal-body ds-form">
               <div className="ds-form-group">
                 <label className="ds-form-label">Fecha</label>
-                <input type="date" className="ds-input" value={newException.exception_date} onChange={e => setNewException({...newException, exception_date: e.target.value})} style={{ colorScheme: 'dark' }} />
+                <input type="date" className="ds-input" value={newException.exception_date} onChange={e => setNewException({...newException, exception_date: e.target.value})} style={{ colorScheme: 'light' }} />
               </div>
               <div className="ds-form-group">
                 <label className="ds-form-label">Descripción (ej. Festivo, Evento)</label>
                 <input type="text" className="ds-input" value={newException.description} onChange={e => setNewException({...newException, description: e.target.value})} />
               </div>
               <div className="ds-form-group">
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#FFF', cursor: 'pointer', padding: '12px', backgroundColor: '#1A1A1A', borderRadius: '8px', border: '1px solid #333' }}>
-                  <input type="checkbox" checked={newException.is_closed} onChange={e => setNewException({...newException, is_closed: e.target.checked})} style={{ accentColor: '#D4A017' }} />
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--ds-text-primary)', cursor: 'pointer', padding: '12px', backgroundColor: 'var(--ds-bg-elevated)', borderRadius: '8px', border: '1px solid var(--ds-border)' }}>
+                  <input type="checkbox" checked={newException.is_closed} onChange={e => setNewException({...newException, is_closed: e.target.checked})} style={{ accentColor: '#B30401' }} />
                   Cerrado todo el día
                 </label>
               </div>

@@ -3402,7 +3402,7 @@ export default function AdminInventario() {
                   else showToast('Crea primero un insumo marcado como elaboración interna', 'error');
                 }}
                 className="ds-btn ds-btn-primary"
-                style={{ background: '#D4A017', borderColor: '#D4A017', color: '#000', fontWeight: '700' }}
+                style={{ background: 'var(--ds-primary)', borderColor: 'var(--ds-primary)', color: '#FFFFFF', fontWeight: '800' }}
               >
                 <ChefHat size={16} /> Producir Lote de Cocina
               </button>

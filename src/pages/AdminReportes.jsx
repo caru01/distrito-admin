@@ -11,7 +11,7 @@ import {
 import { API_URL } from '../config/api';
 import { formatCurrency, formatDateTime, formatNumber } from '../utils/formatters';
 
-const COLORS = ['#D4A017', '#8B5CF6', '#3B82F6', '#10B981', '#EF4444', '#F59E0B', '#06B6D4', '#EC4899'];
+const COLORS = ['#B30401', '#8B5CF6', '#3B82F6', '#10B981', '#EF4444', '#F59E0B', '#06B6D4', '#EC4899'];
 const EMPTY_REPORT = {
   kpis: {},
   trends: {},
@@ -86,16 +86,16 @@ function DailySalesBarChart({ data = [] }) {
         style={{ width: '100%', height: 'auto', maxHeight: '250px', overflow: 'visible', display: 'block' }}
       >
         <defs>
-          <linearGradient id="barSalesGold" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#D4A017" stopOpacity="1" />
-            <stop offset="100%" stopColor="#8A6508" stopOpacity="0.85" />
+          <linearGradient id="barSalesRed" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#D20501" stopOpacity="1" />
+            <stop offset="100%" stopColor="#8B0000" stopOpacity="0.85" />
           </linearGradient>
           <linearGradient id="barSalesHover" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#FFE58F" stopOpacity="1" />
-            <stop offset="100%" stopColor="#D4A017" stopOpacity="0.95" />
+            <stop offset="0%" stopColor="#FF4D4D" stopOpacity="1" />
+            <stop offset="100%" stopColor="#B30401" stopOpacity="0.95" />
           </linearGradient>
-          <filter id="goldGlow" x="-20%" y="-20%" width="140%" height="140%">
-            <feDropShadow dx="0" dy="2" stdDeviation="4" floodColor="#D4A017" floodOpacity="0.3" />
+          <filter id="redGlow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="2" stdDeviation="4" floodColor="#B30401" floodOpacity="0.3" />
           </filter>
         </defs>
 
@@ -110,7 +110,7 @@ function DailySalesBarChart({ data = [] }) {
                 y1={y}
                 x2={chartWidth - paddingRight}
                 y2={y}
-                stroke="rgba(255, 255, 255, 0.08)"
+                stroke="var(--ds-border, #E2E8F0)"
                 strokeDasharray={fraction > 0 ? '4 4' : 'none'}
               />
               <text
@@ -174,8 +174,8 @@ function DailySalesBarChart({ data = [] }) {
                 width={barWidth}
                 height={val > 0 ? Math.max(barH, 4) : 2}
                 rx={barWidth / 4}
-                fill={isHovered ? 'url(#barSalesHover)' : 'url(#barSalesGold)'}
-                filter={val > 0 ? 'url(#goldGlow)' : undefined}
+                fill={isHovered ? 'url(#barSalesHover)' : 'url(#barSalesRed)'}
+                filter={val > 0 ? 'url(#redGlow)' : undefined}
                 style={{
                   transition: 'all 0.2s ease',
                   opacity: hovered && !isHovered ? 0.5 : 1,
@@ -191,7 +191,7 @@ function DailySalesBarChart({ data = [] }) {
                   cy={y}
                   rx={barWidth / 2}
                   ry={Math.min(barWidth / 5, 6)}
-                  fill={isHovered ? '#FFFFFF' : '#FFE58F'}
+                  fill={isHovered ? '#FFFFFF' : '#FF6B6B'}
                   stroke="rgba(255, 255, 255, 0.6)"
                   strokeWidth="0.8"
                   opacity={isHovered ? 1 : 0.88}
@@ -206,7 +206,7 @@ function DailySalesBarChart({ data = [] }) {
                   textAnchor="middle"
                   fontSize="11"
                   fontWeight="bold"
-                  fill="var(--ds-primary, #D4A017)"
+                  fill="var(--ds-primary, #B30401)"
                 >
                   ${Math.round(val / 1000)}k
                 </text>
@@ -219,7 +219,7 @@ function DailySalesBarChart({ data = [] }) {
                   y={chartHeight - 12}
                   textAnchor="middle"
                   fontSize="11"
-                  fill={isHovered ? 'var(--ds-text-primary, #fff)' : 'var(--ds-text-muted, #888)'}
+                  fill={isHovered ? 'var(--ds-text-primary, #0F172A)' : 'var(--ds-text-muted, #64748B)'}
                   fontWeight={isHovered ? 'bold' : 'normal'}
                 >
                   {dateLabel}
@@ -238,20 +238,20 @@ function DailySalesBarChart({ data = [] }) {
             left: `${(hovered.x / chartWidth) * 100}%`,
             top: `${Math.max(5, (hovered.y / chartHeight) * 100 - 28)}%`,
             transform: 'translate(-50%, -100%)',
-            background: '#151518',
-            border: '1px solid var(--ds-primary, #D4A017)',
+            background: '#FFFFFF',
+            border: '1px solid var(--ds-border)',
             borderRadius: '8px',
             padding: '7px 14px',
             pointerEvents: 'none',
             zIndex: 20,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.7)',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
             whiteSpace: 'nowrap',
           }}
         >
-          <div style={{ fontSize: '11px', color: 'var(--ds-text-muted, #aaa)' }}>
-            Fecha: <strong style={{ color: '#fff' }}>{hovered.item.date}</strong>
+          <div style={{ fontSize: '11px', color: 'var(--ds-text-muted)' }}>
+            Fecha: <strong style={{ color: 'var(--ds-text-primary)' }}>{hovered.item.date}</strong>
           </div>
-          <div style={{ fontSize: '13.5px', fontWeight: 'bold', color: 'var(--ds-primary, #D4A017)', marginTop: '2px' }}>
+          <div style={{ fontSize: '13.5px', fontWeight: 'bold', color: 'var(--ds-primary, #B30401)', marginTop: '2px' }}>
             {formatCurrency(hovered.item.ventas)}
           </div>
         </div>
@@ -431,8 +431,8 @@ function TopClientsCylinderChart({ clients = [], onSelectClient, className = '' 
   const cylinderWidth = Math.min(Math.max(slotWidth * 0.48, 26), 56);
 
   const clientGradients = [
+    { from: '#B30401', mid: '#FF6B6B', to: '#8B0000', cap: '#FF8A8A', glow: '#B30401' },
     { from: '#8B5CF6', mid: '#C4B5FD', to: '#6D28D9', cap: '#DDD6FE', glow: '#8B5CF6' },
-    { from: '#D4A017', mid: '#FFF3C4', to: '#8A6508', cap: '#FFE58F', glow: '#D4A017' },
     { from: '#3B82F6', mid: '#BFDBFE', to: '#1D4ED8', cap: '#93C5FD', glow: '#3B82F6' },
     { from: '#10B981', mid: '#A7F3D0', to: '#047857', cap: '#6EE7B7', glow: '#10B981' },
     { from: '#F59E0B', mid: '#FDE68A', to: '#B45309', cap: '#FCD34D', glow: '#F59E0B' },
@@ -638,24 +638,24 @@ function TopClientsCylinderChart({ clients = [], onSelectClient, className = '' 
                 left: `${(hovered.x / chartWidth) * 100}%`,
                 top: `${Math.max(4, (hovered.y / chartHeight) * 100 - 30)}%`,
                 transform: 'translate(-50%, -100%)',
-                background: '#151518',
-                border: '1px solid var(--ds-primary, #D4A017)',
+                background: '#FFFFFF',
+                border: '1px solid var(--ds-border)',
                 borderRadius: '10px',
                 padding: '9px 14px',
                 pointerEvents: 'none',
                 zIndex: 25,
-                boxShadow: '0 8px 26px rgba(0,0,0,0.8), 0 0 14px rgba(212,160,23,0.3)',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.12), 0 0 10px rgba(179,4,1,0.15)',
                 whiteSpace: 'nowrap',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-                <Crown size={14} color="#D4A017" />
-                <strong style={{ color: '#fff', fontSize: '13px' }}>{hovered.client.name}</strong>
+                <Crown size={14} color="#B30401" />
+                <strong style={{ color: 'var(--ds-text-primary)', fontSize: '13px' }}>{hovered.client.name}</strong>
               </div>
               <div style={{ fontSize: '11px', color: 'var(--ds-text-muted)' }}>
-                {hovered.client.phone || 'Sin teléfono'} · Fav: <span style={{ color: '#FFE58F' }}>{hovered.client.favoriteProduct}</span>
+                {hovered.client.phone || 'Sin teléfono'} · Fav: <span style={{ color: 'var(--ds-primary)' }}>{hovered.client.favoriteProduct}</span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginTop: '6px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '4px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginTop: '6px', borderTop: '1px solid var(--ds-border)', paddingTop: '4px' }}>
                 <span style={{ color: '#10B981', fontWeight: 'bold', fontSize: '12.5px' }}>
                   {formatCurrency(hovered.client.total)}
                 </span>
@@ -686,7 +686,7 @@ function TopClientsCylinderChart({ clients = [], onSelectClient, className = '' 
                       border: `1.5px solid ${colors.from}`,
                     }}
                   >
-                    {idx === 0 ? <Crown size={18} color="#D4A017" /> : client.name?.charAt(0)?.toUpperCase() || 'C'}
+                    {idx === 0 ? <Crown size={18} color="#B30401" /> : client.name?.charAt(0)?.toUpperCase() || 'C'}
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <strong style={{ fontSize: '13px', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1538,8 +1538,8 @@ export default function AdminReportes() {
                                   width: '32px',
                                   height: '32px',
                                   borderRadius: '8px',
-                                  background: isCombo ? 'rgba(59,130,246,0.12)' : 'rgba(212,160,23,0.12)',
-                                  color: isCombo ? '#3B82F6' : '#D4A017',
+                                  background: isCombo ? 'rgba(59,130,246,0.12)' : 'rgba(179,4,1,0.12)',
+                                  color: isCombo ? '#3B82F6' : '#B30401',
                                   display: 'grid',
                                   placeItems: 'center',
                                   flexShrink: 0

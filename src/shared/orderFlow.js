@@ -8,7 +8,7 @@ const ORDER_STATUS_META = Object.freeze({
   Listo: { label: 'Listo para despacho', description: 'Disponible para que un domiciliario lo acepte.', tone: 'ready', color: '#06B6D4', background: 'rgba(6,182,212,.14)' },
   'Asignado externo': { label: 'Operador asignado', description: 'La empresa aliada fue seleccionada y recogerá el pedido.', tone: 'external-assigned', color: '#8B5CF6', background: 'rgba(139,92,246,.14)' },
   'Entregado al operador externo': { label: 'Entregado al operador', description: 'Distrito BG entregó físicamente el pedido al aliado logístico.', tone: 'external-handoff', color: '#0EA5E9', background: 'rgba(14,165,233,.14)' },
-  'En camino': { label: 'En reparto', description: 'El domiciliario se dirige al cliente.', tone: 'delivery', color: '#D4A017', background: 'rgba(212,160,23,.16)' },
+  'En camino': { label: 'En reparto', description: 'El domiciliario se dirige al cliente.', tone: 'delivery', color: '#B30401', background: 'rgba(179,4,1,.16)' },
   Entregado: { label: 'Entregado', description: 'El pedido fue recibido por el cliente.', tone: 'delivered', color: '#22C55E', background: 'rgba(34,197,94,.14)' },
   Cancelado: { label: 'Cancelado', description: 'El pedido salió del flujo operativo.', tone: 'cancelled', color: '#EF4444', background: 'rgba(239,68,68,.14)' },
   'Pendiente Pago': { label: 'Pago pendiente', description: 'Requiere confirmar o completar el pago.', tone: 'payment', color: '#8B5CF6', background: 'rgba(139,92,246,.14)' },
@@ -20,7 +20,7 @@ const DELIVERY_STATUS_META = Object.freeze({
   Recogido: { label: 'Recogido', description: 'El pedido salió del restaurante.', tone: 'picked-up', color: '#F59E0B', background: 'rgba(245,158,11,.14)' },
   'Asignado externo': { label: 'Operador asignado', description: 'La empresa aliada fue seleccionada.', tone: 'external-assigned', color: '#8B5CF6', background: 'rgba(139,92,246,.14)' },
   'Entregado al operador externo': { label: 'Entregado al operador', description: 'El aliado logístico ya recibió el pedido.', tone: 'external-handoff', color: '#0EA5E9', background: 'rgba(14,165,233,.14)' },
-  'En camino': { label: 'En reparto', description: 'La entrega está en curso.', tone: 'delivery', color: '#D4A017', background: 'rgba(212,160,23,.16)' },
+  'En camino': { label: 'En reparto', description: 'La entrega está en curso.', tone: 'delivery', color: '#B30401', background: 'rgba(179,4,1,.16)' },
   Entregado: { label: 'Entregado', description: 'La entrega fue finalizada.', tone: 'delivered', color: '#22C55E', background: 'rgba(34,197,94,.14)' },
   Cancelado: { label: 'Cancelado', description: 'La entrega fue cancelada.', tone: 'cancelled', color: '#EF4444', background: 'rgba(239,68,68,.14)' },
 });
