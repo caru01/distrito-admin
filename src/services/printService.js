@@ -42,7 +42,7 @@ export const printTicket = (order, paperWidth = 58) => {
  */
 export const generateSingleComandaHTML = (order, paperWidth = 58) => {
   const is58 = paperWidth === 58;
-  const printableWidth = is58 ? '47mm' : '72mm';
+  const printableWidth = is58 ? '41mm' : '72mm';
   const items = Array.isArray(order.cart_json) ? order.cart_json : (order.cart || []);
 
   const orderDate = order.created_at ? new Date(order.created_at) : new Date();
@@ -149,7 +149,7 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
       background: #fff;
       color: #000;
       font-family: Arial, Helvetica, sans-serif;
-      font-size: 11px;
+      font-size: 10.5px;
       line-height: 1.2;
       letter-spacing: -0.2px;
       -webkit-print-color-adjust: exact;
@@ -168,7 +168,7 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
         width: 100% !important;
         max-width: ${printableWidth} !important;
         margin: 0 !important;
-        padding-left: 1mm !important;
+        padding-left: 0.5mm !important;
         padding-right: 1.5mm !important;
         height: auto !important;
         box-sizing: border-box !important;
@@ -179,7 +179,7 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
       width: 100%;
       max-width: ${printableWidth};
       margin: 0;
-      padding: 1px 1.5mm 0 1mm;
+      padding: 1px 1.5mm 0 0.5mm;
       box-sizing: border-box;
       overflow-x: hidden;
     }
@@ -193,7 +193,7 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
 
     /* TITULO PRINCIPAL CENTRADO */
     .title-header {
-      font-size: 14.5px;
+      font-size: 13.5px;
       font-weight: 900;
       text-align: center;
       letter-spacing: 0.5px;
@@ -205,17 +205,17 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
 
     /* SUBTITULO / DATOS DEL LOCAL */
     .store-subtitle {
-      font-size: 10.5px;
+      font-size: 9.5px;
       font-weight: 400;
       text-align: center;
       color: #000;
-      line-height: 1.2;
+      line-height: 1.15;
       margin: 1px 0;
     }
 
     /* TITULO DE SECCION CENTRADO */
     .section-header {
-      font-size: 11.5px;
+      font-size: 11px;
       font-weight: 800;
       text-align: center;
       margin: 2px 0;
@@ -229,7 +229,7 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
       justify-content: space-between;
       align-items: baseline;
       flex-wrap: wrap;
-      font-size: 11px;
+      font-size: 10.5px;
       margin-bottom: 1.5px;
       color: #000;
       line-height: 1.2;
@@ -237,7 +237,7 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
     }
     .info-label {
       font-weight: 400;
-      font-size: 11px;
+      font-size: 10.5px;
       flex-shrink: 0;
       margin-right: 4px;
     }
@@ -246,25 +246,25 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
       text-align: right;
       word-break: break-word;
       overflow-wrap: break-word;
-      font-size: 11px;
+      font-size: 10.5px;
       flex: 1 1 auto;
       max-width: 100%;
     }
     .order-number {
       font-weight: 900;
-      font-size: 12.5px;
+      font-size: 12px;
     }
 
     /* FILAS APILADAS: Etiqueta arriba, Valor abajo */
     .info-stacked {
       margin-bottom: 2px;
-      font-size: 11px;
+      font-size: 10.5px;
       width: 100%;
       line-height: 1.2;
     }
     .info-value-stacked {
       font-weight: 700;
-      font-size: 11px;
+      font-size: 10.5px;
       line-height: 1.2;
       word-break: break-word;
       overflow-wrap: break-word;
@@ -277,7 +277,7 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
       justify-content: space-between;
       align-items: flex-start;
       margin-top: 2px;
-      font-size: 11px;
+      font-size: 10.5px;
       width: 100%;
       line-height: 1.2;
     }
@@ -290,30 +290,30 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
     }
     .qty {
       font-weight: 800;
-      min-width: 15px;
+      min-width: 14px;
       flex-shrink: 0;
-      font-size: 11px;
+      font-size: 10.5px;
     }
     .product-name {
       font-weight: 800;
       line-height: 1.15;
       word-break: break-word;
       overflow-wrap: break-word;
-      font-size: 11px;
+      font-size: 10.5px;
     }
     .product-price {
       font-weight: 800;
       white-space: nowrap;
-      margin-left: 3px;
+      margin-left: 2px;
       text-align: right;
       flex-shrink: 0;
-      font-size: 11px;
+      font-size: 10.5px;
     }
     .modifier-item {
-      margin-left: 12px;
+      margin-left: 10px;
       margin-top: 1px;
       margin-bottom: 2px;
-      font-size: 9.5px;
+      font-size: 9px;
       color: #222;
       font-weight: 400;
       line-height: 1.15;
@@ -331,7 +331,7 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
       justify-content: space-between;
       align-items: baseline;
       flex-wrap: wrap;
-      font-size: 11px;
+      font-size: 10.5px;
       margin-bottom: 1.5px;
       color: #000;
       line-height: 1.2;
@@ -339,35 +339,35 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
     }
     .total-label {
       font-weight: 400;
-      font-size: 11px;
+      font-size: 10.5px;
       flex-shrink: 0;
       margin-right: 4px;
     }
     .total-value {
       font-weight: 800;
       text-align: right;
-      font-size: 11px;
+      font-size: 10.5px;
       flex: 1 1 auto;
     }
     .grand-total {
-      font-size: 12.5px;
+      font-size: 12px;
       border-top: 1px dashed #000;
-      padding-top: 2.5px;
-      margin-top: 2.5px;
+      padding-top: 2px;
+      margin-top: 2px;
       line-height: 1.2;
     }
     .grand-total .total-label {
       font-weight: 400;
-      font-size: 12.5px;
+      font-size: 12px;
     }
     .grand-total .total-value {
       font-weight: 900;
-      font-size: 13px;
+      font-size: 12.5px;
     }
 
     /* OBSERVACIONES */
     .obs-text {
-      font-size: 11px;
+      font-size: 10.5px;
       font-weight: 700;
       line-height: 1.2;
       white-space: pre-line;
@@ -379,7 +379,7 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
     /* PIE DE PAGINA / COPYRIGHT */
     .ticket-footer {
       text-align: center;
-      font-size: 9.5px;
+      font-size: 9px;
       font-weight: 400;
       line-height: 1.2;
       color: #000;
@@ -461,7 +461,7 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
       <span class="info-value">${customerPhone}</span>
     </div>
     <div class="info-row">
-      <span class="info-label">Tipo de entrega :</span>
+      <span class="info-label">Entrega :</span>
       <span class="info-value" style="text-transform: capitalize;">${displayDeliveryType}</span>
     </div>
 
