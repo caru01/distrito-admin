@@ -78,8 +78,11 @@ export default function AdminDashboard() {
     { value: '15d', label: 'Últ. 15 días' },
     { value: 'weekly', label: 'Esta semana' },
     { value: 'monthly', label: 'Este mes' },
+    { value: 'custom', label: 'Personalizado' },
   ];
   const [profPeriod, setProfPeriod] = useState('15d');
+  const [profDateFrom, setProfDateFrom] = useState('');
+  const [profDateTo, setProfDateTo] = useState('');
   const [profData, setProfData] = useState(null);
   const [profLoading, setProfLoading] = useState(false);
   const [profError, setProfError] = useState('');
@@ -156,13 +159,19 @@ export default function AdminDashboard() {
     return () => clearInterval(interval);
   }, [filterDate, filterDateFrom, filterDateTo, loadDashboard]);
 
-  const loadProfitability = useCallback(async (period) => {
+  const loadProfitability = useCallback(async ({ period, startDate, endDate } = {}) => {
     const token = sessionStorage.getItem('distrito_admin_token');
     if (!token) return;
     setProfLoading(true);
     setProfError('');
     try {
-      const response = await fetch(`${API_URL}/admin/dashboard/profitability?period=${period}`, {
+      let url = `${API_URL}/admin/dashboard/profitability`;
+      if (startDate && endDate) {
+        url += `?startDate=${startDate}&endDate=${endDate}`;
+      } else if (period) {
+        url += `?period=${period}`;
+      }
+      const response = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await response.json();
@@ -179,8 +188,14 @@ export default function AdminDashboard() {
   }, []);
 
   useEffect(() => {
-    loadProfitability(profPeriod);
-  }, [profPeriod, loadProfitability]);
+    if (profPeriod === 'custom') {
+      if (profDateFrom && profDateTo) {
+        loadProfitability({ startDate: profDateFrom, endDate: profDateTo });
+      }
+    } else {
+      loadProfitability({ period: profPeriod });
+    }
+  }, [profPeriod, profDateFrom, profDateTo, loadProfitability]);
 
   if (loading) {
     return (
@@ -473,24 +488,89 @@ export default function AdminDashboard() {
 
       {/* ─── TARJETA RENTABILIDAD */}
       <section className="ds-card dashboard-panel dashboard-profitability-card" aria-labelledby="profitability-title">
-        <div className="ds-card-header">
+        <div className="ds-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
           <div>
             <span className="dashboard-section-kicker">Finanzas</span>
             <h2 id="profitability-title" className="ds-card-title">Rentabilidad</h2>
           </div>
-          <div className="dashboard-profitability-period-selector" role="group" aria-label="Período de rentabilidad">
-            {PROFITABILITY_PERIODS.map(({ value, label }) => (
-              <button
-                key={value}
-                type="button"
-                className={`dashboard-period-btn${profPeriod === value ? ' active' : ''}`}
-                onClick={() => { setProfPeriod(value); }}
-                disabled={profLoading}
-                aria-pressed={profPeriod === value}
-              >
-                {label}
-              </button>
-            ))}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <div className="dashboard-profitability-period-selector" role="group" aria-label="Período de rentabilidad">
+              {PROFITABILITY_PERIODS.map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={`dashboard-period-btn${profPeriod === value ? ' active' : ''}`}
+                  onClick={() => {
+                    setProfPeriod(value);
+                    if (value === 'custom' && (!profDateFrom || !profDateTo)) {
+                      const today = getTodayColombia();
+                      const past = new Date();
+                      past.setDate(past.getDate() - 14);
+                      const pastStr = past.toISOString().slice(0, 10);
+                      setProfDateFrom(pastStr);
+                      setProfDateTo(today);
+                    }
+                  }}
+                  disabled={profLoading}
+                  aria-pressed={profPeriod === value}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {profPeriod === 'custom' && (
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                backgroundColor: 'var(--ds-bg-surface)',
+                border: '1px solid var(--ds-border)',
+                borderRadius: '10px',
+                padding: '0 10px',
+                height: '36px',
+                gap: '6px',
+                fontSize: '12px'
+              }}>
+                <Calendar size={14} color="var(--ds-primary)" />
+                <label style={{ fontSize: '11px', color: 'var(--ds-text-secondary)', fontWeight: '600' }}>Desde:</label>
+                <input
+                  type="date"
+                  value={profDateFrom}
+                  max={profDateTo || undefined}
+                  onClick={(e) => { try { e.target.showPicker?.(); } catch {} }}
+                  onChange={(e) => setProfDateFrom(e.target.value)}
+                  style={{
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    outline: 'none',
+                    color: 'var(--ds-text-primary)',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    colorScheme: 'dark'
+                  }}
+                />
+                <span style={{ color: 'var(--ds-text-muted)' }}>–</span>
+                <label style={{ fontSize: '11px', color: 'var(--ds-text-secondary)', fontWeight: '600' }}>Hasta:</label>
+                <input
+                  type="date"
+                  value={profDateTo}
+                  min={profDateFrom || undefined}
+                  onClick={(e) => { try { e.target.showPicker?.(); } catch {} }}
+                  onChange={(e) => setProfDateTo(e.target.value)}
+                  style={{
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    outline: 'none',
+                    color: 'var(--ds-text-primary)',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    colorScheme: 'dark'
+                  }}
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -559,49 +639,39 @@ export default function AdminDashboard() {
                     </small>
                   </article>
 
-                  <article className="dashboard-profitability-item">
-                    <span className="dashboard-profitability-label">Ventas netas totales</span>
-                    <strong className="dashboard-profitability-value">{fmt(profData.netSales)}</strong>
+                  <article className="dashboard-profitability-item" style={{ borderLeft: '3px solid #F59E0B' }}>
+                    <span className="dashboard-profitability-label">
+                      Cartera Pendiente de Cobro
+                      <span className="dashboard-profitability-badge" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#F59E0B', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+                        Pendiente
+                      </span>
+                    </span>
+                    <strong className="dashboard-profitability-value" style={{ color: Number(profData.pendingPaymentTotal) > 0 ? '#F59E0B' : 'var(--ds-text-primary)' }}>
+                      {fmt(profData.pendingPaymentTotal || 0)}
+                    </strong>
                     <small>
-                      Productos ({fmt(profData.productSales)}) + Domicilios ({fmt(profData.deliveryFeeTotal)})
+                      {Number(profData.pendingPaymentCount) > 0
+                        ? `${profData.pendingPaymentCount} pedido${profData.pendingPaymentCount !== 1 ? 's' : ''} pendiente${profData.pendingPaymentCount !== 1 ? 's' : ''} por pagar · No sumado a las ventas ni a la caja real`
+                        : 'Sin pedidos pendientes de cobro · No afecta las ventas ni la caja real'}
+                    </small>
+                  </article>
+
+                  <article className="dashboard-profitability-item dashboard-profitability-highlight dashboard-profitability-success">
+                    <span className="dashboard-profitability-label">
+                      Dinero Real en Mano
+                      <span className="dashboard-profitability-badge" style={{ background: '#10B981', color: '#fff' }}>Caja y Bancos</span>
+                    </span>
+                    <strong className="dashboard-profitability-value" style={{ color: '#10B981' }}>{fmt(profData.realCashFlow)}</strong>
+                    <small>
+                      Solo comida: {fmt(profData.foodNetCash)} · Tras compras y gastos
                     </small>
                   </article>
 
                   <article className="dashboard-profitability-item">
-                    <span className="dashboard-profitability-label">
-                      Costo de productos
-                      {profData.cogsIsPartial && Number(profData.completedCount) > 0 && (
-                        <span className="dashboard-profitability-badge">Parcial</span>
-                      )}
-                    </span>
-                    {Number(profData.completedCount) === 0 ? (
-                      <>
-                        <strong className="dashboard-profitability-value">—</strong>
-                        <small>Sin pedidos completados en el período</small>
-                      </>
-                    ) : (
-                      <>
-                        <strong className="dashboard-profitability-value">{fmt(profData.totalCogs)}</strong>
-                        <small className={profData.cogsIsPartial ? 'dashboard-profitability-warning' : ''}>
-                          {profData.cogsIsPartial
-                            ? `Cobertura: ${profData.cogsCoveredOrders}/${profData.completedCount} pedidos (${profData.cogsCoveragePct}%)`
-                            : `Cobertura completa: ${profData.cogsCoveredOrders}/${profData.completedCount} pedidos con receta`}
-                        </small>
-                      </>
-                    )}
-                  </article>
-
-                  <article className={`dashboard-profitability-item dashboard-profitability-highlight dashboard-profitability-${marginTone}`}>
-                    <span className="dashboard-profitability-label">
-                      Ganancia bruta
-                      {profData.cogsIsPartial && (
-                        <span className="dashboard-profitability-badge">Provisional</span>
-                      )}
-                    </span>
-                    <strong className="dashboard-profitability-value">{fmt(profData.grossProfit)}</strong>
+                    <span className="dashboard-profitability-label">Compras de Insumos Pagadas</span>
+                    <strong className="dashboard-profitability-value" style={{ color: '#F59E0B' }}>{fmt(profData.inventoryPurchases)}</strong>
                     <small>
-                      Margen bruto: {fmtPct(profData.grossMarginPct)}
-                      {profData.cogsIsPartial && ' (provisional)'}
+                      {profData.inventoryPurchasesCount || 0} compras de insumos pagadas a proveedores
                     </small>
                   </article>
 
@@ -622,13 +692,50 @@ export default function AdminDashboard() {
 
                   <article className="dashboard-profitability-item">
                     <span className="dashboard-profitability-label">
-                      Ganancia después de gastos
+                      Insumos por recetas (COGS)
+                      {profData.cogsIsPartial && Number(profData.completedCount) > 0 && (
+                        <span className="dashboard-profitability-badge">Parcial</span>
+                      )}
+                    </span>
+                    {Number(profData.completedCount) === 0 ? (
+                      <>
+                        <strong className="dashboard-profitability-value">—</strong>
+                        <small>Sin pedidos completados en el período</small>
+                      </>
+                    ) : (
+                      <>
+                        <strong className="dashboard-profitability-value">{fmt(profData.totalCogs)}</strong>
+                        <small className={profData.cogsIsPartial ? 'dashboard-profitability-warning' : ''}>
+                          {profData.cogsIsPartial
+                            ? `Solo consumo de recetas (${profData.cogsCoveredOrders}/${profData.completedCount} pedidos) · No se suma con compras pagadas`
+                            : `Solo valor gastado de insumos por recetas vendidas · No se suma con compras de insumos pagadas`}
+                        </small>
+                      </>
+                    )}
+                  </article>
+
+                  <article className={`dashboard-profitability-item dashboard-profitability-highlight dashboard-profitability-${marginTone}`}>
+                    <span className="dashboard-profitability-label">
+                      Margen bruto (por recetas)
+                      {profData.cogsIsPartial && (
+                        <span className="dashboard-profitability-badge">Provisional</span>
+                      )}
+                    </span>
+                    <strong className="dashboard-profitability-value">{fmt(profData.grossProfit)}</strong>
+                    <small>
+                      Margen bruto: {fmtPct(profData.grossMarginPct)}
+                      {profData.cogsIsPartial && ' (provisional)'}
+                    </small>
+                  </article>
+
+                  <article className="dashboard-profitability-item">
+                    <span className="dashboard-profitability-label">
+                      Ganancia neta contable
                       <span className="dashboard-profitability-badge">estimada</span>
                     </span>
                     <strong className="dashboard-profitability-value">{fmt(profData.profitAfterExpenses)}</strong>
                     <small>
-                      Ganancia bruta - Gastos registrados
-                      {(!profData.hasExpenses || profData.cogsIsPartial) && ' · Datos parciales'}
+                      Ganancia por recetas − Gastos registrados
                     </small>
                   </article>
                 </div>

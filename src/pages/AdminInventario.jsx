@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   Archive, Boxes, Edit3, Plus, Search, X, ShoppingCart, Layers, DollarSign,
   Trash2, CheckCircle2, ShieldAlert, Utensils, TrendingUp, AlertTriangle, AlertCircle,
@@ -6,7 +7,8 @@ import {
   Filter, Calendar, User, Eye, Sparkles, ChevronRight, ChevronDown, RefreshCw,
   Copy, ClipboardCheck, Building2, Phone, Mail, ChefHat, Scale, Download,
   MessageSquare, PieChart, CheckSquare, BarChart3, Truck,
-  LayoutGrid, List, ArrowUpDown, SlidersHorizontal, PackageX
+  LayoutGrid, List, ArrowUpDown, SlidersHorizontal, PackageX,
+  Camera, Paperclip, ExternalLink
 } from 'lucide-react';
 import { API_URL } from '../config/api';
 import { formatCurrency, formatDateTime, formatDateOnly } from '../utils/formatters';
@@ -25,8 +27,20 @@ const authFetch = (url, options = {}) => {
 export default function AdminInventario() {
   const fetchAuth = authFetch;
   
+  const location = useLocation();
+
   // TABS: 'estado_stock' | 'alertas' | 'insumos' | 'compras' | 'recetas' | 'kardex' | 'rentabilidad'
   const [activeTab, setActiveTab] = useState('estado_stock'); 
+
+  // Sincronizar tab desde URL query param (ej: ?tab=alertas)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tabParam = params.get('tab');
+    if (tabParam && ['estado_stock', 'alertas', 'insumos', 'compras', 'recetas', 'kardex', 'rentabilidad'].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [location.search]);
+
   const [query, setQuery] = useState('');
   
   // Data collections
@@ -117,7 +131,8 @@ export default function AdminInventario() {
     total_cost: '',
     supplier: '',
     purchase_date: getTodayColombia(),
-    notes: ''
+    notes: '',
+    invoice_url: ''
   });
 
   // Proveedor Autocomplete Dropdown State
@@ -141,8 +156,12 @@ export default function AdminInventario() {
     supplier: '',
     purchase_date: '',
     notes: '',
-    edit_reason: ''
+    edit_reason: '',
+    invoice_url: ''
   });
+
+  // Modal para ver Factura / Comprobante
+  const [viewInvoicePurchase, setViewInvoicePurchase] = useState(null);
 
   // Filtros avanzados del Historial de Compras (Proveedor, Insumo, Rango de Fecha, Búsqueda)
   const [purchaseFilterSupplier, setPurchaseFilterSupplier] = useState('ALL');
@@ -1156,6 +1175,61 @@ export default function AdminInventario() {
   // ==========================================
   // HANDLERS: COMPRAS Y EDICIÓN SEGURA
   // ==========================================
+  const handleInvoiceFileUpload = (e, isEdit = false) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type === 'application/pdf') {
+      if (file.size > 5 * 1024 * 1024) {
+        showToast('El archivo PDF supera los 5MB. Sube un archivo más liviano.', 'error');
+        e.target.value = '';
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const dataUrl = event.target.result;
+        if (isEdit) {
+          setEditPurchaseForm((prev) => ({ ...prev, invoice_url: dataUrl }));
+        } else {
+          setPurchaseForm((prev) => ({ ...prev, invoice_url: dataUrl }));
+        }
+        showToast('✓ Factura en PDF adjuntada correctamente');
+      };
+      reader.readAsDataURL(file);
+    } else if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new window.Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 1200;
+          let width = img.width;
+          let height = img.height;
+          if (width > MAX_WIDTH) {
+            height = Math.round((height * MAX_WIDTH) / width);
+            width = MAX_WIDTH;
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+          if (isEdit) {
+            setEditPurchaseForm((prev) => ({ ...prev, invoice_url: dataUrl }));
+          } else {
+            setPurchaseForm((prev) => ({ ...prev, invoice_url: dataUrl }));
+          }
+          showToast('✓ Foto de factura adjuntada y optimizada');
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    } else {
+      showToast('Formato no compatible. Por favor sube una imagen o un archivo PDF.', 'error');
+      e.target.value = '';
+    }
+  };
+
   const handleSavePurchase = async (e) => {
     e.preventDefault();
     if (!purchaseForm.inventory_id) return showToast('Selecciona un insumo para la compra', 'error');
@@ -1183,7 +1257,8 @@ export default function AdminInventario() {
         total_cost: '',
         supplier: '',
         purchase_date: getTodayColombia(),
-        notes: ''
+        notes: '',
+        invoice_url: ''
       });
       await Promise.all([loadPurchases(), loadInsumos(), loadMovements(), loadSuppliers()]);
     } catch (err) {
@@ -1210,7 +1285,8 @@ export default function AdminInventario() {
       supplier: purchase.supplier || '',
       purchase_date: purchase.purchase_date ? String(purchase.purchase_date).slice(0, 10) : '',
       notes: purchase.notes || '',
-      edit_reason: ''
+      edit_reason: '',
+      invoice_url: purchase.invoice_url || ''
     });
     setEditPurchaseModal(true);
   };
@@ -2282,8 +2358,8 @@ export default function AdminInventario() {
                 </div>
               )}
 
-              {/* Fila Fecha y Notas */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 240px) 1fr', gap: '16px' }}>
+              {/* Fila Fecha, Notas y Factura Adjunta */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
                 <div className="ds-form-group">
                   <label className="ds-form-label">Fecha de Compra *</label>
                   <input
@@ -2295,14 +2371,85 @@ export default function AdminInventario() {
                   />
                 </div>
                 <div className="ds-form-group">
-                  <label className="ds-form-label">Notas u Observaciones del Insumo / Factura</label>
+                  <label className="ds-form-label">Notas u Observaciones del Insumo</label>
                   <input
                     type="text"
                     className="ds-input"
-                    placeholder="Ej: Factura #1042, Proveedor Don Pedro, lote fresco, etc."
+                    placeholder="Ej: Factura #1042, Proveedor Don Pedro, etc."
                     value={purchaseForm.notes}
                     onChange={(e) => setPurchaseForm({ ...purchaseForm, notes: e.target.value })}
                   />
+                </div>
+                <div className="ds-form-group">
+                  <label className="ds-form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Paperclip size={14} color="var(--ds-primary)" />
+                    <span>Factura / Comprobante (PDF o Foto)</span>
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minHeight: '38px', flexWrap: 'wrap' }}>
+                    <label
+                      className="ds-btn ds-btn-secondary ds-btn-sm"
+                      style={{ cursor: 'pointer', height: '38px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                    >
+                      <Camera size={15} />
+                      <span>{purchaseForm.invoice_url ? 'Cambiar Factura' : 'Adjuntar Factura'}</span>
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        onChange={(e) => handleInvoiceFileUpload(e, false)}
+                        style={{ display: 'none' }}
+                      />
+                    </label>
+
+                    {purchaseForm.invoice_url && (
+                      <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        background: 'rgba(16, 185, 129, 0.12)',
+                        border: '1px solid rgba(16, 185, 129, 0.35)',
+                        borderRadius: '8px',
+                        padding: '4px 10px',
+                        height: '38px'
+                      }}>
+                        {purchaseForm.invoice_url.startsWith('data:application/pdf') ? (
+                          <span style={{ fontSize: '12px', color: '#10B981', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <FileText size={16} /> PDF Adjunto
+                          </span>
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <img
+                              src={purchaseForm.invoice_url}
+                              alt="Factura"
+                              style={{ width: '28px', height: '28px', objectFit: 'cover', borderRadius: '4px' }}
+                            />
+                            <span style={{ fontSize: '12px', color: '#10B981', fontWeight: '700' }}>Foto Adjunta</span>
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setViewInvoicePurchase({
+                            id: 'Nueva',
+                            supplier: purchaseForm.supplier,
+                            inventory_title: selectedPurchaseInsumo?.name || 'Insumo',
+                            invoice_url: purchaseForm.invoice_url
+                          })}
+                          className="ds-btn ds-btn-ghost ds-btn-sm"
+                          style={{ padding: '0 6px', height: '26px', fontSize: '11px', color: 'var(--ds-primary)' }}
+                          title="Ver factura"
+                        >
+                          <Eye size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPurchaseForm(prev => ({ ...prev, invoice_url: '' }))}
+                          style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '2px', display: 'flex' }}
+                          title="Eliminar archivo adjunto"
+                        >
+                          <X size={15} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -2474,6 +2621,7 @@ export default function AdminInventario() {
                     <th>Ingreso a Stock Base</th>
                     <th>Costo Total</th>
                     <th>Proveedor</th>
+                    <th style={{ textAlign: 'center' }}>Factura</th>
                     <th>Notas / Observaciones</th>
                     <th style={{ textAlign: 'center' }}>Acciones</th>
                   </tr>
@@ -2504,6 +2652,32 @@ export default function AdminInventario() {
                       <td>
                         <span className="ds-badge ds-badge-neutral">{typeof p.supplier === 'object' ? (p.supplier?.name || 'General') : (p.supplier || 'General')}</span>
                       </td>
+                      <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        {p.invoice_url ? (
+                          <button
+                            type="button"
+                            onClick={() => setViewInvoicePurchase(p)}
+                            className="ds-btn ds-btn-sm"
+                            style={{
+                              fontSize: '11px',
+                              padding: '3px 8px',
+                              height: '28px',
+                              gap: '4px',
+                              background: p.invoice_url.startsWith('data:application/pdf') ? 'rgba(239, 68, 68, 0.12)' : 'rgba(59, 130, 246, 0.12)',
+                              color: p.invoice_url.startsWith('data:application/pdf') ? '#EF4444' : '#3B82F6',
+                              border: `1px solid ${p.invoice_url.startsWith('data:application/pdf') ? 'rgba(239, 68, 68, 0.35)' : 'rgba(59, 130, 246, 0.35)'}`
+                            }}
+                            title="Ver factura o comprobante adjunto"
+                          >
+                            {p.invoice_url.startsWith('data:application/pdf') ? <FileText size={13} /> : <Eye size={13} />}
+                            <span>{p.invoice_url.startsWith('data:application/pdf') ? 'Ver PDF' : 'Ver Foto'}</span>
+                          </button>
+                        ) : (
+                          <span style={{ fontSize: '11px', color: 'var(--ds-text-muted)', fontStyle: 'italic' }}>
+                            Sin factura
+                          </span>
+                        )}
+                      </td>
                       <td style={{ maxWidth: '240px', fontSize: '12px' }}>
                         {p.notes ? (
                           <span style={{ color: 'var(--ds-text-primary)' }}>{p.notes}</span>
@@ -2524,7 +2698,7 @@ export default function AdminInventario() {
                   ))}
                   {!filteredPurchases.length && (
                     <tr>
-                      <td colSpan={8} className="ds-empty-state" style={{ textAlign: 'center', padding: '36px' }}>
+                      <td colSpan={9} className="ds-empty-state" style={{ textAlign: 'center', padding: '36px' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
                           <ShoppingCart size={32} color="var(--ds-text-muted)" style={{ opacity: 0.6 }} />
                           <strong style={{ fontSize: '14px' }}>
@@ -4657,6 +4831,79 @@ export default function AdminInventario() {
                 />
               </div>
 
+              {/* Factura / Comprobante Adjunto en Edición */}
+              <div className="ds-form-group">
+                <label className="ds-form-label" style={{ fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Paperclip size={14} color="var(--ds-primary)" />
+                  <span>Factura / Comprobante (PDF o Foto)</span>
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minHeight: '38px', flexWrap: 'wrap' }}>
+                  <label
+                    className="ds-btn ds-btn-secondary ds-btn-sm"
+                    style={{ cursor: 'pointer', height: '36px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <Camera size={14} />
+                    <span>{editPurchaseForm.invoice_url ? 'Cambiar Factura' : 'Adjuntar Factura'}</span>
+                    <input
+                      type="file"
+                      accept="image/*,application/pdf"
+                      onChange={(e) => handleInvoiceFileUpload(e, true)}
+                      style={{ display: 'none' }}
+                    />
+                  </label>
+
+                  {editPurchaseForm.invoice_url && (
+                    <div style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      background: 'rgba(16, 185, 129, 0.12)',
+                      border: '1px solid rgba(16, 185, 129, 0.35)',
+                      borderRadius: '8px',
+                      padding: '4px 10px',
+                      height: '36px'
+                    }}>
+                      {editPurchaseForm.invoice_url.startsWith('data:application/pdf') ? (
+                        <span style={{ fontSize: '12px', color: '#10B981', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <FileText size={15} /> PDF Adjunto
+                        </span>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <img
+                            src={editPurchaseForm.invoice_url}
+                            alt="Factura"
+                            style={{ width: '26px', height: '26px', objectFit: 'cover', borderRadius: '4px' }}
+                          />
+                          <span style={{ fontSize: '12px', color: '#10B981', fontWeight: '700' }}>Foto Adjunta</span>
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setViewInvoicePurchase({
+                          id: editPurchaseForm.id,
+                          supplier: editPurchaseForm.supplier,
+                          inventory_title: editPurchaseForm.inventory_title,
+                          invoice_url: editPurchaseForm.invoice_url
+                        })}
+                        className="ds-btn ds-btn-ghost ds-btn-sm"
+                        style={{ padding: '0 6px', height: '24px', fontSize: '11px', color: 'var(--ds-primary)' }}
+                        title="Ver factura"
+                      >
+                        <Eye size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditPurchaseForm(prev => ({ ...prev, invoice_url: '' }))}
+                        style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '2px', display: 'flex' }}
+                        title="Eliminar factura"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Previsualización del Impacto en Kardex / Inventario */}
               {editPurchaseConversionInfo && (
                 <div style={{
@@ -5726,6 +5973,109 @@ export default function AdminInventario() {
 
             <div className="ds-modal-footer">
               <button type="button" onClick={() => setAuditDetailModal(false)} className="ds-btn ds-btn-secondary">
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PARA VISUALIZAR FACTURA O COMPROBANTE DE COMPRA */}
+      {viewInvoicePurchase && (
+        <div
+          className="ds-modal-overlay"
+          onMouseDown={(e) => e.target === e.currentTarget && setViewInvoicePurchase(null)}
+          style={{ zIndex: 99999 }}
+        >
+          <div className="ds-modal" style={{ maxWidth: '780px', width: '95%', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
+            <div className="ds-modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid var(--ds-border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '8px',
+                  background: viewInvoicePurchase.invoice_url?.startsWith('data:application/pdf') ? 'rgba(239, 68, 68, 0.12)' : 'rgba(59, 130, 246, 0.12)',
+                  color: viewInvoicePurchase.invoice_url?.startsWith('data:application/pdf') ? '#EF4444' : '#3B82F6',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  {viewInvoicePurchase.invoice_url?.startsWith('data:application/pdf') ? <FileText size={20} /> : <Camera size={20} />}
+                </div>
+                <div>
+                  <h3 className="ds-modal-title" style={{ margin: 0, fontSize: '16px' }}>
+                    Factura de Compra {viewInvoicePurchase.id && viewInvoicePurchase.id !== 'Nueva' ? `#${viewInvoicePurchase.id}` : ''}
+                  </h3>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: 'var(--ds-text-secondary)' }}>
+                    {viewInvoicePurchase.supplier ? `Proveedor: ${typeof viewInvoicePurchase.supplier === 'object' ? (viewInvoicePurchase.supplier?.name || '') : viewInvoicePurchase.supplier}` : 'Proveedor General'}
+                    {viewInvoicePurchase.inventory_title ? ` · Insumo: ${viewInvoicePurchase.inventory_title}` : ''}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="ds-modal-close"
+                onClick={() => setViewInvoicePurchase(null)}
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--ds-text-muted)' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="ds-modal-body" style={{ padding: '20px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '340px' }}>
+              {viewInvoicePurchase.invoice_url ? (
+                viewInvoicePurchase.invoice_url.startsWith('data:application/pdf') ? (
+                  <div style={{ width: '100%', height: '520px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <embed
+                      src={viewInvoicePurchase.invoice_url}
+                      type="application/pdf"
+                      width="100%"
+                      height="100%"
+                      style={{ borderRadius: '8px', border: '1px solid var(--ds-border)', background: '#fff' }}
+                    />
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: '8px', border: '1px solid var(--ds-border)' }}>
+                    <img
+                      src={viewInvoicePurchase.invoice_url}
+                      alt="Factura"
+                      style={{ maxWidth: '100%', maxHeight: '520px', objectFit: 'contain', borderRadius: '6px' }}
+                    />
+                  </div>
+                )
+              ) : (
+                <div className="ds-empty-state" style={{ padding: '40px 20px', textAlign: 'center' }}>
+                  <FileText size={36} color="var(--ds-text-muted)" style={{ opacity: 0.5, marginBottom: '8px' }} />
+                  <p style={{ color: 'var(--ds-text-muted)' }}>Esta compra no cuenta con un archivo o comprobante adjunto.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="ds-modal-footer" style={{ padding: '14px 20px', borderTop: '1px solid var(--ds-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              {viewInvoicePurchase.invoice_url ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const w = window.open('');
+                    if (w) {
+                      if (viewInvoicePurchase.invoice_url.startsWith('data:application/pdf')) {
+                        w.document.write(`<iframe src="${viewInvoicePurchase.invoice_url}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
+                      } else {
+                        w.document.write(`<body style="margin:0; background:#0f172a; display:flex; justify-content:center; align-items:center; min-height:100vh;"><img src="${viewInvoicePurchase.invoice_url}" style="max-width:100%; max-height:100vh; object-fit:contain;" /></body>`);
+                      }
+                    }
+                  }}
+                  className="ds-btn ds-btn-secondary ds-btn-sm"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <ExternalLink size={14} /> Abrir en pantalla completa
+                </button>
+              ) : <div />}
+              <button
+                type="button"
+                onClick={() => setViewInvoicePurchase(null)}
+                className="ds-btn ds-btn-primary ds-btn-sm"
+              >
                 Cerrar
               </button>
             </div>

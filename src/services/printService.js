@@ -42,7 +42,7 @@ export const printTicket = (order, paperWidth = 58) => {
  */
 export const generateSingleComandaHTML = (order, paperWidth = 58) => {
   const is58 = paperWidth === 58;
-  const printableWidth = is58 ? '48mm' : '72mm';
+  const printableWidth = is58 ? '47mm' : '72mm';
   const items = Array.isArray(order.cart_json) ? order.cart_json : (order.cart || []);
 
   const orderDate = order.created_at ? new Date(order.created_at) : new Date();
@@ -131,7 +131,7 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
   <title>Comanda #${orderNumber}</title>
   <style>
     @page {
-      size: ${is58 ? '48mm auto' : '72mm auto'};
+      size: ${is58 ? '58mm auto' : '80mm auto'};
       margin: 0mm;
     }
     *, *::before, *::after {
@@ -142,15 +142,15 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
     html, body {
       width: 100% !important;
       max-width: ${printableWidth} !important;
-      margin: 0 auto !important;
+      margin: 0 !important;
       padding: 0 !important;
       height: auto !important;
       min-height: 0 !important;
       background: #fff;
       color: #000;
       font-family: Arial, Helvetica, sans-serif;
-      font-size: 12px;
-      line-height: 1.25;
+      font-size: 11px;
+      line-height: 1.2;
       letter-spacing: -0.2px;
       -webkit-print-color-adjust: exact;
       overflow-x: hidden !important;
@@ -167,9 +167,9 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
       .ticket-wrapper {
         width: 100% !important;
         max-width: ${printableWidth} !important;
-        margin: 0 auto !important;
-        padding-left: 2.5mm !important;
-        padding-right: 2.5mm !important;
+        margin: 0 !important;
+        padding-left: 1mm !important;
+        padding-right: 1.5mm !important;
         height: auto !important;
         box-sizing: border-box !important;
       }
@@ -178,21 +178,22 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
     .ticket-wrapper {
       width: 100%;
       max-width: ${printableWidth};
-      margin: 0 auto;
-      padding: 1px 2.5mm 0 2.5mm;
+      margin: 0;
+      padding: 1px 1.5mm 0 1mm;
       box-sizing: border-box;
+      overflow-x: hidden;
     }
 
     .dashed-divider {
       border-bottom: 1px dashed #000;
-      margin: 3px 0;
+      margin: 2.5px 0;
       width: 100%;
       height: 0;
     }
 
     /* TITULO PRINCIPAL CENTRADO */
     .title-header {
-      font-size: 15px;
+      font-size: 14.5px;
       font-weight: 900;
       text-align: center;
       letter-spacing: 0.5px;
@@ -204,7 +205,7 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
 
     /* SUBTITULO / DATOS DEL LOCAL */
     .store-subtitle {
-      font-size: 11px;
+      font-size: 10.5px;
       font-weight: 400;
       text-align: center;
       color: #000;
@@ -214,7 +215,7 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
 
     /* TITULO DE SECCION CENTRADO */
     .section-header {
-      font-size: 12px;
+      font-size: 11.5px;
       font-weight: 800;
       text-align: center;
       margin: 2px 0;
@@ -228,7 +229,7 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
       justify-content: space-between;
       align-items: baseline;
       flex-wrap: wrap;
-      font-size: 12px;
+      font-size: 11px;
       margin-bottom: 1.5px;
       color: #000;
       line-height: 1.2;
@@ -236,7 +237,7 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
     }
     .info-label {
       font-weight: 400;
-      font-size: 12px;
+      font-size: 11px;
       flex-shrink: 0;
       margin-right: 4px;
     }
@@ -245,24 +246,25 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
       text-align: right;
       word-break: break-word;
       overflow-wrap: break-word;
-      font-size: 12px;
+      font-size: 11px;
       flex: 1 1 auto;
       max-width: 100%;
     }
     .order-number {
       font-weight: 900;
-      font-size: 13px;
+      font-size: 12.5px;
     }
 
     /* FILAS APILADAS: Etiqueta arriba, Valor abajo */
     .info-stacked {
       margin-bottom: 2px;
-      font-size: 12px;
+      font-size: 11px;
+      width: 100%;
       line-height: 1.2;
     }
     .info-value-stacked {
       font-weight: 700;
-      font-size: 12px;
+      font-size: 11px;
       line-height: 1.2;
       word-break: break-word;
       overflow-wrap: break-word;
@@ -274,8 +276,9 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      margin-top: 2.5px;
-      font-size: 12px;
+      margin-top: 2px;
+      font-size: 11px;
+      width: 100%;
       line-height: 1.2;
     }
     .product-left {
@@ -289,14 +292,14 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
       font-weight: 800;
       min-width: 15px;
       flex-shrink: 0;
-      font-size: 12px;
+      font-size: 11px;
     }
     .product-name {
       font-weight: 800;
       line-height: 1.15;
       word-break: break-word;
       overflow-wrap: break-word;
-      font-size: 12px;
+      font-size: 11px;
     }
     .product-price {
       font-weight: 800;
@@ -304,13 +307,13 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
       margin-left: 3px;
       text-align: right;
       flex-shrink: 0;
-      font-size: 12px;
+      font-size: 11px;
     }
     .modifier-item {
-      margin-left: 16px;
+      margin-left: 12px;
       margin-top: 1px;
       margin-bottom: 2px;
-      font-size: 10.5px;
+      font-size: 9.5px;
       color: #222;
       font-weight: 400;
       line-height: 1.15;
@@ -328,7 +331,7 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
       justify-content: space-between;
       align-items: baseline;
       flex-wrap: wrap;
-      font-size: 12px;
+      font-size: 11px;
       margin-bottom: 1.5px;
       color: #000;
       line-height: 1.2;
@@ -336,35 +339,35 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
     }
     .total-label {
       font-weight: 400;
-      font-size: 12px;
+      font-size: 11px;
       flex-shrink: 0;
       margin-right: 4px;
     }
     .total-value {
       font-weight: 800;
       text-align: right;
-      font-size: 12px;
+      font-size: 11px;
       flex: 1 1 auto;
     }
     .grand-total {
-      font-size: 13.5px;
+      font-size: 12.5px;
       border-top: 1px dashed #000;
-      padding-top: 3px;
-      margin-top: 3px;
+      padding-top: 2.5px;
+      margin-top: 2.5px;
       line-height: 1.2;
     }
     .grand-total .total-label {
       font-weight: 400;
-      font-size: 13.5px;
+      font-size: 12.5px;
     }
     .grand-total .total-value {
       font-weight: 900;
-      font-size: 14px;
+      font-size: 13px;
     }
 
     /* OBSERVACIONES */
     .obs-text {
-      font-size: 11.5px;
+      font-size: 11px;
       font-weight: 700;
       line-height: 1.2;
       white-space: pre-line;
@@ -376,7 +379,7 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
     /* PIE DE PAGINA / COPYRIGHT */
     .ticket-footer {
       text-align: center;
-      font-size: 10px;
+      font-size: 9.5px;
       font-weight: 400;
       line-height: 1.2;
       color: #000;
@@ -435,10 +438,12 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
     </div>
 
     <!-- OBSERVACIONES -->
-    <div class="info-row" style="margin-top: 2px;">
-      <span class="info-label">Observaciones :</span>
-      <span class="info-value">${order.notes || ''}</span>
+    ${order.notes ? `
+    <div class="info-stacked" style="margin-top: 2px;">
+      <div class="info-label">Observaciones :</div>
+      <div class="obs-text">${order.notes}</div>
     </div>
+    ` : ''}
 
     <div class="dashed-divider"></div>
 
@@ -473,7 +478,7 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
       <div class="info-value-stacked">${formattedDateTime}</div>
     </div>
     <div class="info-row">
-      <span class="info-label">Costo del domicilio:</span>
+      <span class="info-label">Costo domicilio:</span>
       <span class="info-value">${formatter.format(deliveryFee)}</span>
     </div>
     <div class="info-stacked">
@@ -481,9 +486,9 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
       <div class="info-value-stacked">${address || 'N/A'}</div>
     </div>
     ${barrio ? `
-    <div class="info-row">
-      <span class="info-label">Barrio:</span>
-      <span class="info-value">${barrio}</span>
+    <div class="info-stacked">
+      <div class="info-label">Barrio :</div>
+      <div class="info-value-stacked">${barrio}</div>
     </div>
     ` : ''}
     ${apartment ? `
@@ -522,7 +527,7 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
       </div>
       ${isDelivery ? `
       <div class="total-row" style="margin-top: 2px;">
-        <span class="total-label">Costo del domicilio:</span>
+        <span class="total-label">Costo domicilio:</span>
         <span class="total-value">${formatter.format(deliveryFee)}</span>
       </div>
       ` : ''}

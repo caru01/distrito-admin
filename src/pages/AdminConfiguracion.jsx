@@ -34,9 +34,9 @@ export default function AdminConfiguracion() {
     welcome_message: '',
     currency: 'COP', timezone: 'America/Bogota', language: 'es', date_format: 'DD/MM/YYYY', time_format: '12h',
     nequi_number: '', bancolombia_number: '',
-    web_primary_color: '#B30401', web_background_color: '#0D0D0D', web_surface_color: '#171717', web_text_color: '#FFFFFF',
-    admin_primary_color: '#B30401', admin_background_color: '#0D0D0D', admin_surface_color: '#151515', admin_text_color: '#FFFFFF',
-    delivery_primary_color: '#B30401', delivery_background_color: '#090909', delivery_surface_color: '#151515', delivery_text_color: '#FFFFFF',
+    web_primary_color: '#B30401', web_background_color: '#F1F2F6', web_surface_color: '#FFFFFF', web_text_color: '#2F3542',
+    admin_primary_color: '#B30401', admin_background_color: '#F1F2F6', admin_surface_color: '#FFFFFF', admin_text_color: '#0F172A',
+    delivery_primary_color: '#B30401', delivery_background_color: '#F8FAFC', delivery_surface_color: '#FFFFFF', delivery_text_color: '#0F172A',
     web_logo: '', web_page_title: 'Distrito BG', web_hero_title: 'Más que comida, una experiencia', web_hero_subtitle: 'Pedidos preparados al momento.', web_font_family: 'modern', web_card_style: 'rounded',
     admin_logo: '', admin_page_title: 'Distrito BG Admin', admin_sidebar_title: 'Distrito BG', admin_font_family: 'modern', admin_density: 'comfortable',
     delivery_logo: '', delivery_page_title: 'Distrito BG Delivery', delivery_heading: 'Pedidos disponibles', delivery_subtitle: 'Acepta, recoge y entrega desde un solo lugar.', delivery_font_family: 'modern', delivery_card_style: 'rounded',
@@ -362,11 +362,11 @@ export default function AdminConfiguracion() {
       {/* Header */}
       <div className="ds-page-header">
         <div>
-          <div style={{ color: '#BDBDBD', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
-            Dashboard <span style={{ margin: '0 8px' }}>/</span> <span style={{ color: '#FFFFFF' }}>Configuración</span>
+          <div style={{ color: 'var(--ds-text-secondary, #64748B)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
+            Dashboard <span style={{ margin: '0 8px' }}>/</span> <span style={{ color: 'var(--ds-text-primary, #0F172A)', fontWeight: '600' }}>Configuración</span>
           </div>
           <h1 className="ds-page-title">Configuración</h1>
-          <p style={{ color: '#BDBDBD', fontSize: '16px', margin: 0 }}>Administra todas las configuraciones generales del restaurante de forma centralizada.</p>
+          <p style={{ color: 'var(--ds-text-secondary, #64748B)', fontSize: '16px', margin: 0 }}>Administra todas las configuraciones generales del restaurante de forma centralizada.</p>
         </div>
         <div className="ds-page-actions">
           {saveMessage && <span style={{ color: saveMessage.includes('✅') ? '#22C55E' : '#EF4444', fontWeight: '600' }}>{saveMessage}</span>}
@@ -560,18 +560,106 @@ export default function AdminConfiguracion() {
             </div>
 
             <div className="ds-card">
-              <div className="ds-card-header"><h2 className="ds-card-title">Tipografía y diseño</h2></div>
+              <div className="ds-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                <div>
+                  <h2 className="ds-card-title">Tipografía y diseño</h2>
+                  <p className="ds-text-muted" style={{ margin: '4px 0 0 0', fontSize: '13px' }}>Personaliza las fuentes tipográficas y el acabado visual de cada aplicación</p>
+                </div>
+                <button
+                  type="button"
+                  className="ds-btn ds-btn-secondary ds-btn-sm"
+                  title="Restablecer colores y fuentes oficiales de la marca"
+                  onClick={() => {
+                    setSettings(prev => ({
+                      ...prev,
+                      web_primary_color: '#B30401',
+                      web_background_color: '#F1F2F6',
+                      web_surface_color: '#FFFFFF',
+                      web_text_color: '#2F3542',
+                      admin_primary_color: '#B30401',
+                      admin_background_color: '#F1F2F6',
+                      admin_surface_color: '#FFFFFF',
+                      admin_text_color: '#0F172A',
+                      delivery_primary_color: '#B30401',
+                      delivery_background_color: '#F8FAFC',
+                      delivery_surface_color: '#FFFFFF',
+                      delivery_text_color: '#0F172A',
+                      web_font_family: 'modern',
+                      admin_font_family: 'modern',
+                      delivery_font_family: 'modern',
+                      web_card_style: 'rounded',
+                      delivery_card_style: 'rounded',
+                      admin_density: 'comfortable'
+                    }));
+                    setSaveMessage('ℹ️ Valores restablecidos al diseño oficial de la marca. Haz clic en Guardar para aplicar.');
+                    setTimeout(() => setSaveMessage(''), 4500);
+                  }}
+                >
+                  <RefreshCw size={14} /> Restaurar valores oficiales
+                </button>
+              </div>
               <div className="ds-card-body ds-form-grid">
-                {['web', 'admin', 'delivery'].map(prefix => <label className="ds-form-group" key={`${prefix}-font`}><span className="ds-form-label">Letra · {prefix === 'web' ? 'Tienda' : prefix === 'admin' ? 'Admin' : 'Delivery'}</span><select className="ds-select" value={settings[`${prefix}_font_family`]} onChange={e => handleChange(`${prefix}_font_family`, e.target.value)}><option value="modern">Moderna</option><option value="friendly">Amigable</option><option value="classic">Clásica</option><option value="system">Del dispositivo</option></select></label>)}
-                <label className="ds-form-group"><span className="ds-form-label">Tarjetas de la tienda</span><select className="ds-select" value={settings.web_card_style} onChange={e => handleChange('web_card_style', e.target.value)}><option value="rounded">Redondeadas</option><option value="compact">Compactas</option><option value="outlined">Contorno destacado</option></select></label>
-                <label className="ds-form-group"><span className="ds-form-label">Tarjetas de Delivery</span><select className="ds-select" value={settings.delivery_card_style} onChange={e => handleChange('delivery_card_style', e.target.value)}><option value="rounded">Redondeadas</option><option value="compact">Compactas</option><option value="outlined">Contorno destacado</option></select></label>
-                <label className="ds-form-group"><span className="ds-form-label">Densidad del panel</span><select className="ds-select" value={settings.admin_density} onChange={e => handleChange('admin_density', e.target.value)}><option value="comfortable">Cómoda</option><option value="compact">Compacta</option></select></label>
+                {['web', 'admin', 'delivery'].map(prefix => (
+                  <label className="ds-form-group" key={`${prefix}-font`}>
+                    <span className="ds-form-label">
+                      Tipografía · {prefix === 'web' ? 'Tienda Virtual' : prefix === 'admin' ? 'Panel Admin' : 'Delivery App'}
+                    </span>
+                    <select
+                      className="ds-select"
+                      value={settings[`${prefix}_font_family`] || 'modern'}
+                      onChange={e => handleChange(`${prefix}_font_family`, e.target.value)}
+                    >
+                      <option value="modern">Oficial Distrito (MAGNUZ / Inter / Montserrat)</option>
+                      <option value="friendly">Moderna & Amigable (Poppins / Nunito)</option>
+                      <option value="classic">Clásica Editorial (Playfair / Georgia)</option>
+                      <option value="system">Sistema Nativo (San Francisco / Segoe UI)</option>
+                    </select>
+                  </label>
+                ))}
+                <label className="ds-form-group">
+                  <span className="ds-form-label">Tarjetas de la tienda</span>
+                  <select
+                    className="ds-select"
+                    value={settings.web_card_style || 'rounded'}
+                    onChange={e => handleChange('web_card_style', e.target.value)}
+                  >
+                    <option value="rounded">Redondeadas (Oficial Distrito)</option>
+                    <option value="compact">Compactas</option>
+                    <option value="outlined">Contorno destacado</option>
+                  </select>
+                </label>
+                <label className="ds-form-group">
+                  <span className="ds-form-label">Tarjetas de Delivery</span>
+                  <select
+                    className="ds-select"
+                    value={settings.delivery_card_style || 'rounded'}
+                    onChange={e => handleChange('delivery_card_style', e.target.value)}
+                  >
+                    <option value="rounded">Redondeadas (Oficial)</option>
+                    <option value="compact">Compactas</option>
+                    <option value="outlined">Contorno destacado</option>
+                  </select>
+                </label>
+                <label className="ds-form-group">
+                  <span className="ds-form-label">Densidad del panel</span>
+                  <select
+                    className="ds-select"
+                    value={settings.admin_density || 'comfortable'}
+                    onChange={e => handleChange('admin_density', e.target.value)}
+                  >
+                    <option value="comfortable">Cómoda (Espaciado amplio)</option>
+                    <option value="compact">Compacta (Alta densidad)</option>
+                  </select>
+                </label>
               </div>
             </div>
 
             <div className="ds-card settings-theme-preview">
               <div className="ds-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                <h2 className="ds-card-title"><Palette size={22} color="var(--ds-primary)" /> Vista previa en vivo</h2>
+                <div>
+                  <h2 className="ds-card-title"><Palette size={22} color="var(--ds-primary)" /> Vista previa en vivo</h2>
+                  <p className="ds-text-muted" style={{ margin: '4px 0 0 0', fontSize: '13px' }}>Comprueba en tiempo real cómo lucen los colores, tipografía e identidad elegidos</p>
+                </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button
                     type="button"
@@ -592,7 +680,7 @@ export default function AdminConfiguracion() {
                     className={`ds-btn ds-btn-sm ${previewSurface === 'delivery' ? 'ds-btn-primary' : 'ds-btn-secondary'}`}
                     onClick={() => setPreviewSurface('delivery')}
                   >
-                    Delivery
+                    Delivery App
                   </button>
                 </div>
               </div>
@@ -601,66 +689,89 @@ export default function AdminConfiguracion() {
                   <div
                     className="theme-preview"
                     style={{
-                      background: settings.web_background_color || '#0D0D0D',
-                      color: settings.web_text_color || '#FFFFFF',
-                      fontFamily: settings.web_font_family === 'friendly' ? "'Poppins', 'Nunito', sans-serif" : settings.web_font_family === 'classic' ? "Georgia, serif" : settings.web_font_family === 'system' ? "system-ui, sans-serif" : "'Montserrat', 'Inter', sans-serif",
+                      background: settings.web_background_color || '#F1F2F6',
+                      color: settings.web_text_color || '#2F3542',
+                      fontFamily: settings.web_font_family === 'friendly' ? "'Poppins', 'Nunito', sans-serif" : settings.web_font_family === 'classic' ? "Georgia, serif" : settings.web_font_family === 'system' ? "system-ui, sans-serif" : "'Inter', 'Montserrat', sans-serif",
                       padding: '24px',
                       borderRadius: '16px',
-                      border: '1px solid rgba(255,255,255,0.08)'
+                      border: '1px solid rgba(0,0,0,0.08)',
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.04)'
                     }}
                   >
                     {/* Header tienda */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', paddingBottom: '14px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', paddingBottom: '14px', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         {(settings.web_logo || settings.logo) ? (
-                          <img src={settings.web_logo || settings.logo} alt="Logo" style={{ width: '36px', height: '36px', objectFit: 'contain', borderRadius: '8px' }} />
+                          <img src={settings.web_logo || settings.logo} alt="Logo" style={{ width: '40px', height: '40px', objectFit: 'contain', borderRadius: '10px' }} />
                         ) : (
-                          <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: settings.web_primary_color || '#B30401', display: 'grid', placeItems: 'center', color: '#000', fontWeight: 'bold' }}>D</div>
+                          <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: settings.web_primary_color || '#B30401', display: 'grid', placeItems: 'center', color: '#FFFFFF', fontWeight: 'bold', fontSize: '18px' }}>D</div>
                         )}
-                        <strong style={{ fontSize: '17px' }}>{settings.web_page_title || settings.restaurant_name || 'Distrito BG'}</strong>
+                        <div>
+                          <strong style={{ fontSize: '17px', color: settings.web_text_color || '#111827', display: 'block' }}>
+                            {settings.web_page_title || settings.restaurant_name || 'Distrito BG'}
+                          </strong>
+                          <span style={{ fontSize: '12px', color: '#6B7280' }}>Tienda en línea</span>
+                        </div>
                       </div>
-                      <span style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '999px', background: `${settings.web_primary_color}22`, color: settings.web_primary_color || '#B30401', fontWeight: '600' }}>Abierto ahora</span>
+                      <span style={{ fontSize: '12px', padding: '4px 12px', borderRadius: '999px', background: `${settings.web_primary_color || '#B30401'}15`, color: settings.web_primary_color || '#B30401', fontWeight: '700' }}>
+                        Abierto ahora
+                      </span>
                     </div>
 
-                    {/* Hero */}
+                    {/* Hero / Presentación */}
                     <div style={{ marginBottom: '20px' }}>
-                      <h3 style={{ margin: '0 0 6px 0', fontSize: '20px', fontWeight: '800' }}>{settings.web_hero_title || 'Más que comida, una experiencia'}</h3>
-                      <p style={{ margin: 0, opacity: 0.8, fontSize: '14px' }}>{settings.web_hero_subtitle || 'Pedidos preparados al momento.'}</p>
+                      <h3 style={{ margin: '0 0 6px 0', fontSize: '20px', fontWeight: '800', color: settings.web_text_color || '#111827', letterSpacing: '-0.02em' }}>
+                        {settings.web_hero_title || 'Más que comida, una experiencia'}
+                      </h3>
+                      <p style={{ margin: 0, color: '#6B7280', fontSize: '14px' }}>
+                        {settings.web_hero_subtitle || 'Pedidos preparados al momento.'}
+                      </p>
                     </div>
 
-                    {/* Muestra de tarjeta de producto con el estilo seleccionado */}
+                    {/* Muestra de tarjeta de producto con estilo oficial de la tienda */}
                     <div
                       style={{
-                        background: settings.web_surface_color || '#171717',
+                        background: settings.web_surface_color || '#FFFFFF',
                         borderRadius: settings.web_card_style === 'rounded' ? '18px' : settings.web_card_style === 'compact' ? '8px' : '14px',
-                        border: settings.web_card_style === 'outlined' ? `2px solid ${settings.web_primary_color || '#B30401'}` : '1px solid rgba(255,255,255,0.08)',
-                        padding: settings.web_card_style === 'compact' ? '12px' : '18px',
+                        border: settings.web_card_style === 'outlined' ? `2px solid ${settings.web_primary_color || '#B30401'}` : '1px solid #EAEAEA',
+                        boxShadow: '0 4px 14px rgba(0,0,0,0.04)',
+                        padding: settings.web_card_style === 'compact' ? '14px' : '20px',
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
-                        gap: '16px'
+                        gap: '20px'
                       }}
                     >
-                      <div>
-                        <div style={{ fontWeight: '700', fontSize: '15px', marginBottom: '4px' }}>Distric Burger Especial</div>
-                        <div style={{ opacity: 0.75, fontSize: '13px', marginBottom: '8px' }}>Carne artesanal, queso cheddar, tocineta crocante y salsa de la casa.</div>
-                        <div style={{ fontSize: '16px', fontWeight: '800', color: settings.web_primary_color || '#B30401' }}>$ 28.000</div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: '800', fontSize: '16px', marginBottom: '4px', color: settings.web_text_color || '#111827' }}>
+                          Distric Burger Especial
+                        </div>
+                        <div style={{ color: '#6B7280', fontSize: '13px', marginBottom: '10px', lineHeight: '1.4' }}>
+                          Carne artesanal, queso cheddar, tocineta crocante y salsa de la casa.
+                        </div>
+                        <div style={{ fontSize: '18px', fontWeight: '900', color: settings.web_primary_color || '#B30401' }}>
+                          $ 28.000
+                        </div>
                       </div>
                       <button
                         type="button"
                         style={{
                           background: settings.web_primary_color || '#B30401',
-                          color: '#000',
+                          color: '#FFFFFF',
                           border: 'none',
-                          padding: '10px 18px',
-                          borderRadius: settings.web_card_style === 'compact' ? '6px' : '10px',
-                          fontWeight: '700',
+                          padding: '10px 20px',
+                          borderRadius: settings.web_card_style === 'compact' ? '8px' : '24px',
+                          fontWeight: '800',
                           fontSize: '13px',
                           cursor: 'pointer',
-                          whiteSpace: 'nowrap'
+                          whiteSpace: 'nowrap',
+                          boxShadow: `0 4px 12px ${settings.web_primary_color || '#B30401'}40`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
                         }}
                       >
-                        + Agregar
+                        + AGREGAR
                       </button>
                     </div>
                   </div>
@@ -670,39 +781,57 @@ export default function AdminConfiguracion() {
                   <div
                     className="theme-preview"
                     style={{
-                      background: settings.admin_background_color || '#0D0D0D',
-                      color: settings.admin_text_color || '#FFFFFF',
+                      background: settings.admin_background_color || '#F1F2F6',
+                      color: settings.admin_text_color || '#0F172A',
                       fontFamily: settings.admin_font_family === 'friendly' ? "'Poppins', 'Nunito', sans-serif" : settings.admin_font_family === 'classic' ? "Georgia, serif" : settings.admin_font_family === 'system' ? "system-ui, sans-serif" : "'Inter', 'Montserrat', sans-serif",
                       padding: '24px',
                       borderRadius: '16px',
-                      border: '1px solid rgba(255,255,255,0.08)'
+                      border: '1px solid rgba(0,0,0,0.08)',
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.04)'
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+                    {/* Barra superior / lateral simulada del panel */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '18px', paddingBottom: '14px', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
                       {(settings.admin_logo || settings.logo) ? (
-                        <img src={settings.admin_logo || settings.logo} alt="Logo" style={{ width: '32px', height: '32px', objectFit: 'contain', borderRadius: '6px' }} />
+                        <img src={settings.admin_logo || settings.logo} alt="Logo" style={{ width: '36px', height: '36px', objectFit: 'contain', borderRadius: '8px' }} />
                       ) : (
-                        <div style={{ width: '32px', height: '32px', borderRadius: '6px', background: settings.admin_primary_color || '#B30401', display: 'grid', placeItems: 'center', color: '#000', fontWeight: 'bold' }}>A</div>
+                        <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: settings.admin_primary_color || '#B30401', display: 'grid', placeItems: 'center', color: '#FFFFFF', fontWeight: 'bold' }}>A</div>
                       )}
-                      <strong>{settings.admin_sidebar_title || settings.admin_page_title || 'Distrito Admin'}</strong>
-                      <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.1)', marginLeft: 'auto' }}>Densidad: {settings.admin_density === 'compact' ? 'Compacta' : 'Cómoda'}</span>
+                      <div>
+                        <strong style={{ fontSize: '16px', color: settings.admin_text_color || '#0F172A', display: 'block' }}>
+                          {settings.admin_sidebar_title || settings.admin_page_title || 'Distrito Admin'}
+                        </strong>
+                        <span style={{ fontSize: '11px', color: '#6B7280' }}>Panel de Control y Operaciones</span>
+                      </div>
+                      <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '999px', background: '#FFFFFF', border: '1px solid #E2E8F0', color: '#475569', marginLeft: 'auto', fontWeight: '600' }}>
+                        Densidad: {settings.admin_density === 'compact' ? 'Compacta' : 'Cómoda'}
+                      </span>
                     </div>
+
+                    {/* Muestra de tarjeta de métrica KPI oficial */}
                     <div
                       style={{
-                        background: settings.admin_surface_color || '#151515',
-                        borderRadius: '12px',
-                        padding: settings.admin_density === 'compact' ? '12px' : '20px',
-                        border: '1px solid rgba(255,255,255,0.08)',
+                        background: settings.admin_surface_color || '#FFFFFF',
+                        borderRadius: '14px',
+                        padding: settings.admin_density === 'compact' ? '14px' : '20px',
+                        border: '1px solid #E2E8F0',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center'
                       }}
                     >
                       <div>
-                        <div style={{ fontSize: '13px', opacity: 0.7, marginBottom: '4px' }}>Ventas confirmadas hoy</div>
-                        <div style={{ fontSize: '24px', fontWeight: '800', color: settings.admin_primary_color || '#B30401' }}>$ 380.000</div>
+                        <div style={{ fontSize: '13px', color: '#64748B', fontWeight: '600', marginBottom: '4px' }}>
+                          Ventas confirmadas hoy
+                        </div>
+                        <div style={{ fontSize: '26px', fontWeight: '900', color: settings.admin_primary_color || '#B30401', letterSpacing: '-0.02em' }}>
+                          $ 380.000
+                        </div>
                       </div>
-                      <span style={{ padding: '6px 12px', borderRadius: '8px', background: `${settings.admin_primary_color}22`, color: settings.admin_primary_color || '#B30401', fontSize: '12px', fontWeight: '700' }}>14 pedidos</span>
+                      <span style={{ padding: '6px 14px', borderRadius: '10px', background: `${settings.admin_primary_color || '#B30401'}15`, color: settings.admin_primary_color || '#B30401', fontSize: '13px', fontWeight: '800' }}>
+                        14 pedidos
+                      </span>
                     </div>
                   </div>
                 )}
@@ -711,28 +840,39 @@ export default function AdminConfiguracion() {
                   <div
                     className="theme-preview"
                     style={{
-                      background: settings.delivery_background_color || '#090909',
-                      color: settings.delivery_text_color || '#FFFFFF',
-                      fontFamily: settings.delivery_font_family === 'friendly' ? "'Poppins', 'Nunito', sans-serif" : settings.delivery_font_family === 'classic' ? "Georgia, serif" : settings.delivery_font_family === 'system' ? "system-ui, sans-serif" : "'Montserrat', 'Inter', sans-serif",
+                      background: settings.delivery_background_color || '#F8FAFC',
+                      color: settings.delivery_text_color || '#0F172A',
+                      fontFamily: settings.delivery_font_family === 'friendly' ? "'Poppins', 'Nunito', sans-serif" : settings.delivery_font_family === 'classic' ? "Georgia, serif" : settings.delivery_font_family === 'system' ? "system-ui, sans-serif" : "'Inter', 'Montserrat', sans-serif",
                       padding: '24px',
                       borderRadius: '16px',
-                      border: '1px solid rgba(255,255,255,0.08)'
+                      border: '1px solid rgba(0,0,0,0.08)',
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.04)'
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
                       {(settings.delivery_logo || settings.logo) ? (
-                        <img src={settings.delivery_logo || settings.logo} alt="Logo" style={{ width: '32px', height: '32px', objectFit: 'contain', borderRadius: '6px' }} />
+                        <img src={settings.delivery_logo || settings.logo} alt="Logo" style={{ width: '36px', height: '36px', objectFit: 'contain', borderRadius: '8px' }} />
                       ) : (
-                        <div style={{ width: '32px', height: '32px', borderRadius: '6px', background: settings.delivery_primary_color || '#B30401', display: 'grid', placeItems: 'center', color: '#000', fontWeight: 'bold' }}>🛵</div>
+                        <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: settings.delivery_primary_color || '#B30401', display: 'grid', placeItems: 'center', color: '#FFFFFF', fontWeight: 'bold', fontSize: '16px' }}>🛵</div>
                       )}
-                      <strong>{settings.delivery_heading || 'Pedidos disponibles'}</strong>
+                      <div>
+                        <strong style={{ fontSize: '16px', color: settings.delivery_text_color || '#0F172A', display: 'block' }}>
+                          {settings.delivery_heading || 'Pedidos disponibles'}
+                        </strong>
+                        <span style={{ fontSize: '12px', color: '#64748B' }}>
+                          {settings.delivery_page_title || 'Distrito Delivery'}
+                        </span>
+                      </div>
                     </div>
-                    <p style={{ margin: '0 0 16px 0', opacity: 0.8, fontSize: '13px' }}>{settings.delivery_subtitle || 'Acepta, recoge y entrega desde un solo lugar.'}</p>
+                    <p style={{ margin: '0 0 16px 0', color: '#64748B', fontSize: '13px' }}>
+                      {settings.delivery_subtitle || 'Acepta, recoge y entrega desde un solo lugar.'}
+                    </p>
                     <div
                       style={{
-                        background: settings.delivery_surface_color || '#151515',
-                        borderRadius: settings.delivery_card_style === 'rounded' ? '18px' : settings.delivery_card_style === 'compact' ? '8px' : '14px',
-                        border: settings.delivery_card_style === 'outlined' ? `2px solid ${settings.delivery_primary_color || '#B30401'}` : '1px solid rgba(255,255,255,0.08)',
+                        background: settings.delivery_surface_color || '#FFFFFF',
+                        borderRadius: settings.delivery_card_style === 'rounded' ? '16px' : settings.delivery_card_style === 'compact' ? '8px' : '12px',
+                        border: settings.delivery_card_style === 'outlined' ? `2px solid ${settings.delivery_primary_color || '#B30401'}` : '1px solid #E2E8F0',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
                         padding: settings.delivery_card_style === 'compact' ? '12px' : '16px',
                         display: 'flex',
                         justifyContent: 'space-between',
@@ -740,19 +880,25 @@ export default function AdminConfiguracion() {
                       }}
                     >
                       <div>
-                        <strong style={{ fontSize: '15px' }}>Pedido #0045 · Domicilio</strong>
-                        <div style={{ fontSize: '13px', opacity: 0.7, marginTop: '2px' }}>Carrera 15 # 85-30 · El Poblado</div>
+                        <strong style={{ fontSize: '15px', color: settings.delivery_text_color || '#0F172A', display: 'block' }}>
+                          Pedido #0045 · Domicilio
+                        </strong>
+                        <div style={{ fontSize: '13px', color: '#64748B', marginTop: '2px' }}>
+                          Carrera 15 # 85-30 · El Poblado
+                        </div>
                       </div>
                       <button
                         type="button"
                         style={{
                           background: settings.delivery_primary_color || '#B30401',
-                          color: '#000',
+                          color: '#FFFFFF',
                           border: 'none',
-                          padding: '8px 14px',
-                          borderRadius: '8px',
-                          fontWeight: '700',
-                          fontSize: '12px'
+                          padding: '8px 16px',
+                          borderRadius: '10px',
+                          fontWeight: '800',
+                          fontSize: '12px',
+                          boxShadow: `0 3px 10px ${settings.delivery_primary_color || '#B30401'}40`,
+                          cursor: 'pointer'
                         }}
                       >
                         Aceptar

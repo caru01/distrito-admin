@@ -2502,3 +2502,23 @@ canvas,
   background: #F8FAFC;
   position: relative;
 }
+
+@keyframes slideInUpNotification {
+  from {
+    transform: translateY(30px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 767px) {
+  .admin-inventory-stock-alert {
+    right: 16px !important;
+    bottom: 16px !important;
+    width: calc(100vw - 32px) !important;
+  }
+}
+

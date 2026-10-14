@@ -1246,7 +1246,7 @@ export default function TomarPedido() {
                         setCustomer(c => ({ ...c, cashAmount: val ? Number(val) : undefined }));
                       }} 
                       className="ds-input" 
-                      style={{ height: '42px', fontSize: '13px', border: '1.5px solid #10B981', backgroundColor: 'rgba(16, 185, 129, 0.1)', color: '#fff' }} 
+                      style={{ height: '42px', fontSize: '13px', border: '1.5px solid #10B981', backgroundColor: 'rgba(16, 185, 129, 0.08)', color: 'var(--ds-text-primary, #0F172A)' }} 
                     />
                     {customer.cashAmount !== undefined && Number(customer.cashAmount) > 0 && Number(customer.cashAmount) < total && (
                       <span style={{ fontSize: '11px', color: '#EF4444', display: 'block', marginTop: '4px' }}>
@@ -1262,7 +1262,7 @@ export default function TomarPedido() {
                 )}
                 {(customer.paymentMethod === 'transferencia' || customer.paymentMethod === 'compartido') && (
                   <div style={{ marginTop: '10px' }}>
-                    <span style={{ fontWeight: 700, fontSize: '12px', color: '#A78BFA', display: 'block', marginBottom: '4px' }}>
+                    <span style={{ fontWeight: 700, fontSize: '12px', color: '#7C3AED', display: 'block', marginBottom: '4px' }}>
                       🧾 Número de Comprobante / Referencia
                     </span>
                     <input 
@@ -1271,14 +1271,14 @@ export default function TomarPedido() {
                       value={customer.voucher_reference || ''} 
                       onChange={e => setCustomer(c => ({ ...c, voucher_reference: e.target.value }))} 
                       className="ds-input" 
-                      style={{ height: '42px', fontSize: '13px', border: '1.5px solid #8B5CF6', backgroundColor: 'rgba(139, 92, 246, 0.1)', color: '#fff' }} 
+                      style={{ height: '42px', fontSize: '13px', border: '1.5px solid #8B5CF6', backgroundColor: 'rgba(139, 92, 246, 0.08)', color: 'var(--ds-text-primary, #0F172A)' }} 
                     />
                   </div>
                 )}
                 {customer.paymentMethod === 'compartido' && (
                   <div style={{ marginTop: '10px', display: 'flex', gap: '8px' }}>
                     <div style={{ flex: 1 }}>
-                      <span style={{ fontWeight: 700, fontSize: '12px', color: '#10B981', display: 'block', marginBottom: '4px' }}>💵 Efectivo</span>
+                      <span style={{ fontWeight: 700, fontSize: '12px', color: '#059669', display: 'block', marginBottom: '4px' }}>💵 Efectivo</span>
                       <input 
                         type="number" 
                         min="0"
@@ -1287,11 +1287,11 @@ export default function TomarPedido() {
                         value={customer.cash_split || ''} 
                         onChange={e => setCustomer(c => ({ ...c, cash_split: e.target.value }))} 
                         className="ds-input" 
-                        style={{ height: '42px', fontSize: '13px', border: '1.5px solid #10B981', backgroundColor: 'rgba(16, 185, 129, 0.1)', color: '#fff' }} 
+                        style={{ height: '42px', fontSize: '13px', border: '1.5px solid #10B981', backgroundColor: 'rgba(16, 185, 129, 0.08)', color: 'var(--ds-text-primary, #0F172A)' }} 
                       />
                     </div>
                     <div style={{ flex: 1 }}>
-                      <span style={{ fontWeight: 700, fontSize: '12px', color: '#8B5CF6', display: 'block', marginBottom: '4px' }}>💳 Transferencia</span>
+                      <span style={{ fontWeight: 700, fontSize: '12px', color: '#7C3AED', display: 'block', marginBottom: '4px' }}>💳 Transferencia</span>
                       <input 
                         type="number" 
                         min="0"
@@ -1300,7 +1300,7 @@ export default function TomarPedido() {
                         value={customer.transfer_split || ''} 
                         onChange={e => setCustomer(c => ({ ...c, transfer_split: e.target.value }))} 
                         className="ds-input" 
-                        style={{ height: '42px', fontSize: '13px', border: '1.5px solid #8B5CF6', backgroundColor: 'rgba(139, 92, 246, 0.1)', color: '#fff' }} 
+                        style={{ height: '42px', fontSize: '13px', border: '1.5px solid #8B5CF6', backgroundColor: 'rgba(139, 92, 246, 0.08)', color: 'var(--ds-text-primary, #0F172A)' }} 
                       />
                     </div>
                   </div>

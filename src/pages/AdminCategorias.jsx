@@ -196,8 +196,8 @@ export default function AdminCategorias() {
         <div className="ds-card">
           <div className="ds-card-body" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <div style={{ fontSize: '32px', fontWeight: '700', color: '#FFFFFF', marginBottom: '4px' }}>{categories.length}</div>
-              <div style={{ color: '#BDBDBD', fontSize: '14px', fontWeight: '500' }}>Total de categorías</div>
+              <div style={{ fontSize: '32px', fontWeight: '700', color: 'var(--ds-text-primary, #0F172A)', marginBottom: '4px' }}>{categories.length}</div>
+              <div style={{ color: 'var(--ds-text-muted, #64748B)', fontSize: '14px', fontWeight: '500' }}>Total de categorías</div>
             </div>
             <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: 'rgba(179, 4, 1, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#B30401' }}>
               <Package size={28} />
@@ -208,8 +208,8 @@ export default function AdminCategorias() {
         <div className="ds-card">
           <div className="ds-card-body" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <div style={{ fontSize: '32px', fontWeight: '700', color: '#FFFFFF', marginBottom: '4px' }}>{activeCategories}</div>
-              <div style={{ color: '#BDBDBD', fontSize: '14px', fontWeight: '500' }}>Categorías activas</div>
+              <div style={{ fontSize: '32px', fontWeight: '700', color: 'var(--ds-text-primary, #0F172A)', marginBottom: '4px' }}>{activeCategories}</div>
+              <div style={{ color: 'var(--ds-text-muted, #64748B)', fontSize: '14px', fontWeight: '500' }}>Categorías activas</div>
             </div>
             <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: 'rgba(34, 197, 94, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#22C55E' }}>
               <BadgeCheck size={28} />
@@ -224,7 +224,7 @@ export default function AdminCategorias() {
           <ArrowUpDown size={18} />
           <span>Orden en Tienda Web: Arrastra las filas o usa las flechas ⬆️ ⬇️ para definir el orden en que tus clientes verán las categorías.</span>
         </div>
-        {reordering && <span style={{ fontSize: '13px', color: '#FFFFFF', opacity: 0.8 }}>Guardando orden…</span>}
+        {reordering && <span style={{ fontSize: '13px', color: 'var(--ds-primary, #B30401)', fontWeight: '600' }}>Guardando orden…</span>}
       </div>
 
       <div className="ds-form" style={{ marginBottom: '24px' }}>

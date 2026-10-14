@@ -66,8 +66,26 @@ export default function AdminCierreContable() {
   };
   const exportCsv = () => {
     if (!data) return;
-    const rows = [['Concepto','Valor'],['Ventas',data.totalVentas],['Pedidos',data.totalPedidos],['Cancelados',data.pedidosCancelados],['Costo de productos',data.totalCostoProduccion],['Gastos',data.totalGastos],['Utilidad neta',data.utilidadNeta],['Efectivo esperado',expectedCash],['Efectivo contado',counted],['Diferencia',difference]];
-    const url = URL.createObjectURL(new Blob([`\uFEFF${rows.map((row) => row.join(',')).join('\n')}`], { type: 'text/csv' })); const link = document.createElement('a'); link.href = url; link.download = `cierre-${period.start}-${period.end}.csv`; link.click(); URL.revokeObjectURL(url);
+    const totalInv = data.totalInventarioValorizado || (data.inventarioSnapshot || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
+    const rows = [
+      ['Concepto', 'Valor'],
+      ['Ventas', data.totalVentas],
+      ['Pedidos', data.totalPedidos],
+      ['Cancelados', data.pedidosCancelados],
+      ['Costo de productos', data.totalCostoProduccion],
+      ['Gastos', data.totalGastos],
+      ['Utilidad neta', data.utilidadNeta],
+      ['Efectivo esperado', expectedCash],
+      ['Efectivo contado', counted],
+      ['Diferencia', difference],
+      ['Inventario valorizado', totalInv]
+    ];
+    const url = URL.createObjectURL(new Blob([`\uFEFF${rows.map((row) => row.join(',')).join('\n')}`], { type: 'text/csv' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `cierre-${period.start}-${period.end}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   return <div className="ds-page closure-page">
@@ -80,7 +98,44 @@ export default function AdminCierreContable() {
         <section className="ds-card"><div className="ds-card-header"><h2 className="ds-card-title">Resumen financiero</h2></div><div className="ds-card-body closure-equation"><div><span>Ventas</span><strong>{formatCurrency(data.totalVentas)}</strong></div><div><span>− Costos de productos</span><strong>{formatCurrency(data.totalCostoProduccion)}</strong></div><div><span>− Gastos operativos</span><strong>{formatCurrency(data.totalGastos)}</strong></div><div className="total"><span>= Utilidad neta</span><strong>{formatCurrency(data.utilidadNeta)}</strong></div><small>Margen bruto: {Number(data.margenBruto || 0).toFixed(1)}% · Cancelados: {data.pedidosCancelados || 0}</small></div></section>
       </div>
       <div className="closure-breakdowns"><Breakdown title="Métodos de pago" rows={data.metodosPago} /><Breakdown title="Ventas por categoría" rows={data.categoriasVentas} /><Breakdown title="Costo por producto" rows={data.desgloseCostos} /><Breakdown title="Gastos por categoría" rows={data.desgloseGastos} /></div>
-      <section className="ds-card"><div className="ds-card-header"><h2 className="ds-card-title"><Package size={19} /> Inventario valorizado al momento del cálculo</h2></div><div className="ds-table-container"><table className="ds-table"><thead><tr><th>Producto</th><th>Unidad</th><th>Existencias</th><th>Valor</th></tr></thead><tbody>{(data.inventarioSnapshot || []).map((item) => <tr key={item.name}><td>{item.name}</td><td>{item.unit}</td><td>{item.quantity}</td><td>{formatCurrency(item.value)}</td></tr>)}</tbody></table></div></section>
+      <section className="ds-card">
+        <div className="ds-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+          <h2 className="ds-card-title"><Package size={19} /> Inventario valorizado al momento del cálculo</h2>
+          <span className="ds-badge ds-badge-success" style={{ fontWeight: '700', fontSize: '13px' }}>
+            Total valorizado: {formatCurrency(data.totalInventarioValorizado || (data.inventarioSnapshot || []).reduce((sum, i) => sum + Number(i.value || 0), 0))}
+          </span>
+        </div>
+        <div className="ds-table-container">
+          <table className="ds-table">
+            <thead>
+              <tr>
+                <th>Producto / Insumo</th>
+                <th>Unidad</th>
+                <th>Existencias</th>
+                <th>Valor total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(data.inventarioSnapshot || []).length > 0 ? (
+                (data.inventarioSnapshot || []).map((item) => (
+                  <tr key={item.name}>
+                    <td><strong>{item.name}</strong></td>
+                    <td>{item.unit}</td>
+                    <td>{Number(item.quantity).toLocaleString('es-CO')}</td>
+                    <td>{formatCurrency(item.value)}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="4" style={{ textAlign: 'center', padding: '24px', color: 'var(--ds-text-muted)' }}>
+                    No hay existencias registradas en el inventario.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </>}
     <section className="ds-card closure-history no-print"><div className="ds-card-header"><h2 className="ds-card-title">Historial de cierres</h2></div>{history.length ? <div className="closure-history-list">{history.map((item) => <article key={item.id}><div><strong>#{item.id} · {item.start_date.slice(0, 10)} a {item.end_date.slice(0, 10)}</strong><span className={`ds-badge ds-badge-${item.status === 'Cerrado' ? 'danger' : 'warning'}`}>{item.status}</span></div><dl><div><dt>Ventas</dt><dd>{formatCurrency(item.total_sales)}</dd></div><div><dt>Pedidos</dt><dd>{item.orders_count || 0}</dd></div><div><dt>Diferencia caja</dt><dd>{formatCurrency(item.cash_difference)}</dd></div><div><dt>Cerrado</dt><dd>{formatDateTime(item.closed_at)}</dd></div></dl>{item.status === 'Cerrado' ? <button className="ds-btn ds-btn-ghost ds-btn-sm" onClick={() => reopen(item)}><RotateCcw size={16} /> Reabrir con motivo</button> : <small>Reabierto: {item.reopen_reason || 'Sin detalle'}</small>}</article>)}</div> : <div className="ds-empty-state">No hay cierres registrados.</div>}</section>
   </div>;

@@ -1168,7 +1168,7 @@ export default function AdminPedidos() {
                     <div>
                       <strong style={{ color: '#FF441F', fontSize: '14px' }}>Pedido de Rappi Orders API</strong>
                       <div style={{ color: 'var(--ds-text-secondary)', fontSize: '12px', marginTop: '2px' }}>
-                        Referencia Rappi: <strong style={{ color: '#FFFFFF' }}>#{selectedOrder.external_provider_reference || selectedOrder.id}</strong>
+                        Referencia Rappi: <strong style={{ color: 'var(--ds-text-primary, #0F172A)' }}>#{selectedOrder.external_provider_reference || selectedOrder.id}</strong>
                       </div>
                     </div>
                   </div>

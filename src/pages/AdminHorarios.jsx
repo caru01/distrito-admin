@@ -104,11 +104,11 @@ export default function AdminHorarios() {
     <div className="ds-page">
       <div className="ds-page-header">
         <div>
-          <div style={{ color: '#BDBDBD', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
-            Dashboard <span style={{ margin: '0 8px' }}>/</span> Configuración <span style={{ margin: '0 8px' }}>/</span> <span style={{ color: '#FFFFFF' }}>Horarios</span>
+          <div style={{ color: 'var(--ds-text-secondary, #64748B)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
+            Dashboard <span style={{ margin: '0 8px' }}>/</span> Configuración <span style={{ margin: '0 8px' }}>/</span> <span style={{ color: 'var(--ds-text-primary, #0F172A)', fontWeight: '600' }}>Horarios</span>
           </div>
           <h1 className="ds-page-title">Horarios de Atención</h1>
-          <p style={{ color: '#BDBDBD', margin: 0, fontSize: '14px' }}>Administra los horarios de atención del restaurante y controla cuándo los clientes pueden realizar pedidos.</p>
+          <p style={{ color: 'var(--ds-text-secondary, #64748B)', margin: 0, fontSize: '14px' }}>Administra los horarios de atención del restaurante y controla cuándo los clientes pueden realizar pedidos.</p>
         </div>
       </div>
 
@@ -152,8 +152,8 @@ export default function AdminHorarios() {
             
             <div className="ds-card-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {horarios.map((h, i) => (
-                <div key={h.id} className="admin-schedule-row" style={{ display: 'grid', gridTemplateColumns: '100px 90px 1fr 1fr', alignItems: 'center', gap: '8px', paddingBottom: '16px', borderBottom: '1px solid #222' }}>
-                  <div style={{ color: '#FFF', fontWeight: '600' }}>{h.day_of_week}</div>
+                <div key={h.id} className="admin-schedule-row" style={{ display: 'grid', gridTemplateColumns: '110px 90px 1fr 1fr', alignItems: 'center', gap: '8px', paddingBottom: '16px', borderBottom: '1px solid var(--ds-border, #E2E8F0)' }}>
+                  <div style={{ color: 'var(--ds-text-primary, #0F172A)', fontWeight: '600', fontSize: '14px' }}>{h.day_of_week}</div>
                   <div>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '8px', color: h.is_active ? '#22C55E' : '#6B7280', cursor: 'pointer', fontSize: '13px' }}>
                       <input type="checkbox" checked={h.is_active} onChange={e => {
@@ -169,14 +169,14 @@ export default function AdminHorarios() {
                         const newH = [...horarios];
                         newH[i].open_time = e.target.value;
                         setHorarios(newH);
-                      }} style={{ padding: '8px', opacity: h.is_active ? 1 : 0.5, colorScheme: 'dark' }} />
+                      }} style={{ padding: '8px', opacity: h.is_active ? 1 : 0.5 }} />
                   </div>
                   <div>
                     <input type="time" className="ds-input" value={h.close_time} disabled={!h.is_active} onChange={e => {
                         const newH = [...horarios];
                         newH[i].close_time = e.target.value;
                         setHorarios(newH);
-                      }} style={{ padding: '8px', opacity: h.is_active ? 1 : 0.5, colorScheme: 'dark' }} />
+                      }} style={{ padding: '8px', opacity: h.is_active ? 1 : 0.5 }} />
                   </div>
                 </div>
               ))}
@@ -328,11 +328,11 @@ export default function AdminHorarios() {
                 <div className="ds-form-grid">
                   <div className="ds-form-group">
                     <label className="ds-form-label">Apertura</label>
-                    <input type="time" className="ds-input" value={newException.open_time} onChange={e => setNewException({...newException, open_time: e.target.value})} style={{ colorScheme: 'dark' }} />
+                    <input type="time" className="ds-input" value={newException.open_time} onChange={e => setNewException({...newException, open_time: e.target.value})} style={{ colorScheme: 'light' }} />
                   </div>
                   <div className="ds-form-group">
                     <label className="ds-form-label">Cierre</label>
-                    <input type="time" className="ds-input" value={newException.close_time} onChange={e => setNewException({...newException, close_time: e.target.value})} style={{ colorScheme: 'dark' }} />
+                    <input type="time" className="ds-input" value={newException.close_time} onChange={e => setNewException({...newException, close_time: e.target.value})} style={{ colorScheme: 'light' }} />
                   </div>
                 </div>
               )}

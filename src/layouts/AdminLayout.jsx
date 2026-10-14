@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState, useContext } from 'react';
 import { Outlet, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ShoppingBag, Package, List, Users, Archive, BarChart3, Settings, LogOut, Megaphone, Menu, X, DollarSign, FileSpreadsheet, Clock, Zap, MapPin, BellRing, Building2, Contact } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Package, List, Users, Archive, BarChart3, Settings, LogOut, Megaphone, Menu, X, DollarSign, FileSpreadsheet, Clock, Zap, MapPin, BellRing, Building2, Contact, AlertTriangle, ChevronRight } from 'lucide-react';
 import { API_URL } from '../config/api';
 import { AuthContext } from '../context/AuthContext';
 import { playAttentionAlert, speakNotification, unlockNotificationAudio } from '@distrito/shared-ui';
@@ -16,8 +16,12 @@ export default function AdminLayout() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [newOrderAlert, setNewOrderAlert] = useState(null);
+  const [inventoryAlertsData, setInventoryAlertsData] = useState(null);
+  const [showInventoryAlert, setShowInventoryAlert] = useState(false);
   const mainContentRef = useRef(null);
   const alertTimer = useRef(null);
+  const inventoryAlertTimer = useRef(null);
+  const inventoryPollInterval = useRef(null);
 
   const announceNewOrder = useCallback((data = {}) => {
     playAttentionAlert({ cycles: 5 });
@@ -115,6 +119,54 @@ export default function AdminLayout() {
       window.removeEventListener('pointerdown', unlock);
     };
   }, [announceNewOrder, isAuthenticated, token]);
+
+  // Consultar alertas de insumos periódicamente (cada 10 minutos)
+  const checkInventoryAlerts = useCallback(async () => {
+    const adminToken = sessionStorage.getItem('distrito_admin_token');
+    if (!adminToken) return;
+    try {
+      const res = await fetch(`${API_URL}/admin/inventory/alerts`, {
+        headers: { Authorization: `Bearer ${adminToken}` }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.hasAlerts && data.count > 0) {
+        setInventoryAlertsData(data);
+        setShowInventoryAlert(true);
+        // Auto-dismiss tras 35 segundos para no invadir permanentemente
+        window.clearTimeout(inventoryAlertTimer.current);
+        inventoryAlertTimer.current = window.setTimeout(() => {
+          setShowInventoryAlert(false);
+        }, 35_000);
+      } else {
+        setShowInventoryAlert(false);
+        setInventoryAlertsData(null);
+      }
+    } catch (err) {
+      // Ignorar errores de red silenciosamente
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated || !token) return undefined;
+
+    // Chequeo inicial a los 2.5 segundos de cargar el panel
+    const initialTimer = window.setTimeout(() => {
+      checkInventoryAlerts();
+    }, 2500);
+
+    // Repetir exactamente cada 10 minutos (10 * 60 * 1000 = 600.000 ms)
+    const TEN_MINUTES_MS = 10 * 60 * 1000;
+    inventoryPollInterval.current = window.setInterval(() => {
+      checkInventoryAlerts();
+    }, TEN_MINUTES_MS);
+
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.clearInterval(inventoryPollInterval.current);
+      window.clearTimeout(inventoryAlertTimer.current);
+    };
+  }, [checkInventoryAlerts, isAuthenticated, token]);
 
   if (loading) {
     return <div className="admin-route-loading">Verificando sesión…</div>;
@@ -273,6 +325,165 @@ export default function AdminLayout() {
           <div><strong>Nuevo Pedido</strong><small>{newOrderAlert.id ? `Pedido #${newOrderAlert.id} · ${newOrderAlert.source}` : 'Revisa la cola de pedidos'}</small></div>
           <Link to="/admin/pedidos" onClick={() => setNewOrderAlert(null)}>Ver pedido</Link>
         </div>
+      )}
+
+      {/* NOTIFICACIÓN FLOTANTE INFERIOR DERECHA: ALERTAS DE INSUMOS (CADA 10 MINUTOS) */}
+      {showInventoryAlert && inventoryAlertsData && (
+        <aside
+          className="admin-inventory-stock-alert"
+          role="status"
+          aria-live="polite"
+          style={{
+            position: 'fixed',
+            right: '24px',
+            bottom: newOrderAlert ? '120px' : '24px',
+            zIndex: 145,
+            display: 'flex',
+            flexDirection: 'column',
+            width: 'min(390px, calc(100vw - 32px))',
+            padding: '16px',
+            borderRadius: '16px',
+            background: 'var(--ds-bg-surface, #FFFFFF)',
+            color: 'var(--ds-text-primary, #0F172A)',
+            border: (inventoryAlertsData.summary?.criticos > 0 || inventoryAlertsData.summary?.agotados > 0)
+              ? '1px solid #FCA5A5'
+              : '1px solid #FDE68A',
+            boxShadow: '0 12px 30px rgba(0, 0, 0, 0.15), 0 4px 10px rgba(0, 0, 0, 0.05)',
+            transition: 'bottom 0.3s ease, opacity 0.3s ease',
+            animation: 'slideInUpNotification 0.35s cubic-bezier(0.16, 1, 0.3, 1)'
+          }}
+          onMouseEnter={() => {
+            window.clearTimeout(inventoryAlertTimer.current);
+          }}
+          onMouseLeave={() => {
+            inventoryAlertTimer.current = window.setTimeout(() => {
+              setShowInventoryAlert(false);
+            }, 12_000);
+          }}
+        >
+          {/* Header con icono, título, badge y botón cerrar */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '10px',
+                display: 'grid',
+                placeItems: 'center',
+                background: (inventoryAlertsData.summary?.criticos > 0 || inventoryAlertsData.summary?.agotados > 0)
+                  ? '#FEE2E2'
+                  : '#FEF3C7',
+                color: (inventoryAlertsData.summary?.criticos > 0 || inventoryAlertsData.summary?.agotados > 0)
+                  ? '#DC2626'
+                  : '#D97706',
+                flexShrink: 0
+              }}>
+                <AlertTriangle size={20} />
+              </span>
+              <div>
+                <strong style={{ fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--ds-text-primary, #0F172A)' }}>
+                  Alerta de Insumos
+                  <span style={{
+                    fontSize: '11px',
+                    fontWeight: '700',
+                    padding: '2px 8px',
+                    borderRadius: '999px',
+                    background: (inventoryAlertsData.summary?.criticos > 0 || inventoryAlertsData.summary?.agotados > 0) ? '#DC2626' : '#D97706',
+                    color: '#FFFFFF'
+                  }}>
+                    {inventoryAlertsData.count} {inventoryAlertsData.count === 1 ? 'insumo' : 'insumos'}
+                  </span>
+                </strong>
+                <small style={{ color: 'var(--ds-text-secondary, #64748B)', fontSize: '11px', display: 'block', marginTop: '2px' }}>
+                  {inventoryAlertsData.summary?.criticos > 0
+                    ? `${inventoryAlertsData.summary.criticos} en nivel crítico`
+                    : 'Stock próximo a agotarse'} · Aviso cada 10 min
+                </small>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowInventoryAlert(false)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--ds-text-muted, #64748B)',
+                cursor: 'pointer',
+                padding: '4px',
+                display: 'flex',
+                borderRadius: '6px'
+              }}
+              title="Cerrar notificación"
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          {/* Lista de insumos con alerta */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', margin: '12px 0 14px 0' }}>
+            {inventoryAlertsData.alerts.slice(0, 3).map((item) => {
+              const isCrit = item.alert_level === 'agotado' || item.alert_level === 'critico';
+              return (
+                <div
+                  key={item.id}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    background: 'var(--ds-bg-elevated, #F8FAFC)',
+                    border: '1px solid var(--ds-border, #E2E8F0)',
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    borderLeft: `4px solid ${isCrit ? '#DC2626' : '#D97706'}`
+                  }}
+                >
+                  <span style={{ color: 'var(--ds-text-primary, #0F172A)', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '210px' }} title={item.name}>
+                    {item.name}
+                  </span>
+                  <span style={{
+                    color: isCrit ? '#DC2626' : '#D97706',
+                    fontWeight: '700',
+                    fontSize: '11.5px',
+                    whiteSpace: 'nowrap',
+                    marginLeft: '8px'
+                  }}>
+                    {Number(item.stock).toLocaleString('es-CO')} {item.unit}
+                  </span>
+                </div>
+              );
+            })}
+            {inventoryAlertsData.count > 3 && (
+              <span style={{ fontSize: '11px', color: 'var(--ds-text-muted, #64748B)', textAlign: 'center', marginTop: '2px' }}>
+                +{inventoryAlertsData.count - 3} insumo{inventoryAlertsData.count - 3 !== 1 ? 's' : ''} más por revisar
+              </span>
+            )}
+          </div>
+
+          {/* Footer acción */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '11px', color: 'var(--ds-text-muted, #64748B)' }}>
+              Revisa o registra compras
+            </span>
+            <Link
+              to="/admin/inventario?tab=alertas"
+              onClick={() => setShowInventoryAlert(false)}
+              className="ds-btn ds-btn-primary ds-btn-sm"
+              style={{
+                height: '32px',
+                fontSize: '12px',
+                padding: '0 12px',
+                fontWeight: '700',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px'
+              }}
+            >
+              <span>Ver en Inventario</span>
+              <ChevronRight size={14} />
+            </Link>
+          </div>
+        </aside>
       )}
 
     </div>

@@ -5,7 +5,7 @@ import {
   Package, RefreshCw, ShoppingCart, TrendingDown, TrendingUp, Users,
   Wallet, X, Truck, Building2, Phone, Search, Filter, Clock, CheckCircle2,
   UserCheck, Shield, ChevronRight, Award, Sparkles, DollarSign, Percent,
-  Layers, Coins, LayoutGrid, Crown, Heart, ExternalLink
+  Layers, Coins, LayoutGrid, Crown, Heart, ExternalLink, Banknote
 } from 'lucide-react';
 
 import { API_URL } from '../config/api';
@@ -993,6 +993,40 @@ export default function AdminReportes() {
             />
 
             <ReportModernCard
+              label="Plata Real en Mano"
+              value={formatCurrency(report.kpis.flujoCajaReal || 0)}
+              icon={Banknote}
+              accentColor="#10b981"
+              glowColor="rgba(16, 185, 129, 0.3)"
+              iconBg="rgba(16, 185, 129, 0.15)"
+              iconColor="#10b981"
+              badgeText="Caja Real"
+              badgeType="success"
+              subtitle={
+                <span>
+                  Solo comida: <strong>{formatCurrency(report.kpis.gananciaNetaComida || 0)}</strong>
+                </span>
+              }
+            />
+
+            <ReportModernCard
+              label="Utilidad Bruta (Recetas)"
+              value={formatCurrency(report.kpis.utilidadBruta || 0)}
+              icon={TrendingUp}
+              accentColor="#8b5cf6"
+              glowColor="rgba(139, 92, 246, 0.25)"
+              iconBg="rgba(139, 92, 246, 0.12)"
+              iconColor="#8b5cf6"
+              badgeText="Teórica"
+              badgeType="neutral"
+              subtitle={
+                <span>
+                  Margen: <strong style={{ color: '#8b5cf6' }}>{formatNumber(report.kpis.margenUtilidad || 0)}%</strong> recetas
+                </span>
+              }
+            />
+
+            <ReportModernCard
               label="Pedidos Recibidos"
               value={formatNumber(report.kpis.pedidosRealizados || 0)}
               icon={ShoppingCart}
@@ -1005,23 +1039,6 @@ export default function AdminReportes() {
               subtitle={
                 <span>
                   vs. anterior <TrendBadge value={report.trends.pedidosRealizados} />
-                </span>
-              }
-            />
-
-            <ReportModernCard
-              label="Clientes Atendidos"
-              value={formatNumber(report.kpis.clientesAtendidos || 0)}
-              icon={Users}
-              accentColor="#8b5cf6"
-              glowColor="rgba(139, 92, 246, 0.25)"
-              iconBg="rgba(139, 92, 246, 0.12)"
-              iconColor="#8b5cf6"
-              badgeText="Fidelización"
-              badgeType="neutral"
-              subtitle={
-                <span>
-                  vs. anterior <TrendBadge value={report.trends.clientesAtendidos} />
                 </span>
               }
             />
@@ -1044,18 +1061,18 @@ export default function AdminReportes() {
             />
 
             <ReportModernCard
-              label="Utilidad Bruta Estimada"
-              value={formatCurrency(report.kpis.utilidadBruta || 0)}
-              icon={TrendingUp}
-              accentColor="#10b981"
-              glowColor="rgba(16, 185, 129, 0.25)"
-              iconBg="rgba(16, 185, 129, 0.12)"
-              iconColor="#10b981"
-              badgeText="Ganancia"
-              badgeType="success"
+              label="Clientes Atendidos"
+              value={formatNumber(report.kpis.clientesAtendidos || 0)}
+              icon={Users}
+              accentColor="#f59e0b"
+              glowColor="rgba(245, 158, 11, 0.25)"
+              iconBg="rgba(245, 158, 11, 0.12)"
+              iconColor="#f59e0b"
+              badgeText="Fidelización"
+              badgeType="warning"
               subtitle={
                 <span>
-                  Margen: <strong style={{ color: '#10b981' }}>{formatNumber(report.kpis.margenUtilidad || 0)}%</strong> sobre ventas
+                  vs. anterior <TrendBadge value={report.trends.clientesAtendidos} />
                 </span>
               }
             />
@@ -1164,28 +1181,48 @@ export default function AdminReportes() {
 
       {activeTab === 'Resumen' && (resumenSubTab === 'todos' || resumenSubTab === 'operaciones' || resumenSubTab === 'ventas') && (
         <div className="report-summary-grid">
-          {/* SALUD FINANCIERA */}
+          {/* SALUD FINANCIERA & CAJA REAL */}
           <article className="ds-card" style={{ borderTop: '3px solid #10b981' }}>
             <div className="ds-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <span className="ds-page-kicker" style={{ color: '#10b981' }}>Balance del Periodo</span>
-                <h2 className="ds-card-title">Salud Financiera</h2>
+                <h2 className="ds-card-title">Caja Real & Rentabilidad</h2>
               </div>
               <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(16,185,129,0.12)', color: '#10b981', display: 'grid', placeItems: 'center' }}>
-                <Wallet size={20} />
+                <Banknote size={20} />
               </div>
             </div>
             <div className="ds-card-body report-finance-list">
-              <div><span>Ventas Facturadas</span><strong style={{ color: 'var(--ds-text-primary)' }}>{formatCurrency(report.kpis.totalVentas)}</strong></div>
-              <div><span>Insumos / Compras</span><strong className="negative">− {formatCurrency(report.kpis.totalCompras)}</strong></div>
-              <div><span>Fletes Operadores</span><strong className="negative">− {formatCurrency(report.kpis.costoDomiciliosExternos)}</strong></div>
-              <div className="total" style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '10px' }}>
-                <span style={{ fontWeight: 'bold' }}>Utilidad Estimada</span>
-                <strong style={{ color: '#10b981', fontSize: '1.25rem' }}>{formatCurrency(report.kpis.utilidadBruta)}</strong>
+              <div style={{ paddingBottom: '4px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <span style={{ color: '#10b981', fontSize: '11.5px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Flujo de Caja Real (Plata en Mano)
+                </span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>Margen sobre Ventas</span>
-                <span className="ds-badge ds-badge-success">{formatNumber(report.kpis.margenUtilidad)}%</span>
+              <div><span>(+) Total Ventas Cobradas</span><strong style={{ color: 'var(--ds-text-primary)' }}>{formatCurrency(report.kpis.totalVentas)}</strong></div>
+              <div><span>(−) Compras Nuevas Insumos</span><strong className="negative">− {formatCurrency(report.kpis.totalCompras)}</strong></div>
+              <div><span>(−) Gastos Operativos</span><strong className="negative">− {formatCurrency(report.kpis.totalGastos)}</strong></div>
+              <div><span>(−) Fletes Mensajería Pagados</span><strong className="negative">− {formatCurrency(report.kpis.costoDomiciliosExternos)}</strong></div>
+              <div className="total" style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '10px' }}>
+                <span style={{ fontWeight: 'bold' }}>Plata Real en Mano / Bancos</span>
+                <strong style={{ color: '#10b981', fontSize: '1.3rem' }}>{formatCurrency(report.kpis.flujoCajaReal)}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: 'var(--ds-text-secondary)', paddingBottom: '8px' }}>
+                <span>Solo venta comida (sin envíos):</span>
+                <strong style={{ color: '#F1F5F9' }}>{formatCurrency(report.kpis.gananciaNetaComida)}</strong>
+              </div>
+
+              <div style={{ marginTop: '8px', paddingTop: '10px', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
+                <span style={{ color: 'var(--ds-text-muted)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: '6px' }}>
+                  Cálculo Teórico por Receta (COGS)
+                </span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                  <span style={{ color: 'var(--ds-text-secondary)' }}>Insumos teóricos consumidos:</span>
+                  <strong>{formatCurrency(report.kpis.costoMercanciaVendida)}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginTop: '4px' }}>
+                  <span style={{ color: 'var(--ds-text-secondary)' }}>Margen bruto recetas:</span>
+                  <span className="ds-badge ds-badge-success">{formatNumber(report.kpis.margenUtilidad)}%</span>
+                </div>
               </div>
             </div>
           </article>
@@ -1311,36 +1348,87 @@ export default function AdminReportes() {
           {/* CUADROS KPI MODERNOS DE RENTABILIDAD */}
           <div className="report-modern-grid">
             <ReportModernCard
-              label="Utilidad Bruta Total"
-              value={formatCurrency(report.kpis.utilidadBruta || 0)}
-              icon={DollarSign}
+              label="Plata Real en Mano"
+              value={formatCurrency(report.kpis.flujoCajaReal || 0)}
+              icon={Banknote}
               accentColor="#10b981"
-              glowColor="rgba(16, 185, 129, 0.25)"
-              iconBg="rgba(16, 185, 129, 0.12)"
+              glowColor="rgba(16, 185, 129, 0.3)"
+              iconBg="rgba(16, 185, 129, 0.15)"
               iconColor="#10b981"
-              badgeText="Rentabilidad"
+              badgeText="Caja Real"
               badgeType="success"
               subtitle={
                 <span>
-                  Margen promedio:{' '}
-                  <strong style={{ color: '#10b981' }}>{formatNumber(report.kpis.margenUtilidad || 0)}%</strong> sobre ventas
+                  Solo comida: <strong>{formatCurrency(report.kpis.gananciaNetaComida || 0)}</strong>
                 </span>
               }
             />
 
             <ReportModernCard
-              label="Costo Mercancía (COGS)"
-              value={formatCurrency(report.kpis.costoMercanciaVendida || 0)}
-              icon={Layers}
+              label="Utilidad Bruta (Recetas)"
+              value={formatCurrency(report.kpis.utilidadBruta || 0)}
+              icon={DollarSign}
+              accentColor="#8b5cf6"
+              glowColor="rgba(139, 92, 246, 0.25)"
+              iconBg="rgba(139, 92, 246, 0.12)"
+              iconColor="#8b5cf6"
+              badgeText="Por Recetas"
+              badgeType="neutral"
+              subtitle={
+                <span>
+                  Margen recetas:{' '}
+                  <strong style={{ color: '#8b5cf6' }}>{formatNumber(report.kpis.margenUtilidad || 0)}%</strong> sobre ventas
+                </span>
+              }
+            />
+
+            <ReportModernCard
+              label="Cartera Pendiente de Cobro"
+              value={formatCurrency(report.kpis.carteraPendienteCobro || 0)}
+              icon={Clock}
               accentColor="#f59e0b"
               glowColor="rgba(245, 158, 11, 0.25)"
               iconBg="rgba(245, 158, 11, 0.12)"
               iconColor="#f59e0b"
-              badgeText="Insumos"
+              badgeText="Por Cobrar"
               badgeType="warning"
               subtitle={
                 <span>
-                  Compras registradas: <strong>{formatCurrency(report.kpis.totalCompras || 0)}</strong>
+                  {report.kpis.pedidosPendientesPago || 0} pedidos pendientes · No sumado a totales ni caja
+                </span>
+              }
+            />
+
+            <ReportModernCard
+              label="Compras de Insumos Pagadas"
+              value={formatCurrency(report.kpis.totalCompras || 0)}
+              icon={Package}
+              accentColor="#ea580c"
+              glowColor="rgba(234, 88, 12, 0.25)"
+              iconBg="rgba(234, 88, 12, 0.12)"
+              iconColor="#ea580c"
+              badgeText="Egreso Real"
+              badgeType="warning"
+              subtitle={
+                <span>
+                  Facturas pagadas a proveedores · Salida real de caja
+                </span>
+              }
+            />
+
+            <ReportModernCard
+              label="Insumos por Receta (COGS)"
+              value={formatCurrency(report.kpis.costoMercanciaVendida || 0)}
+              icon={Layers}
+              accentColor="#3b82f6"
+              glowColor="rgba(59, 130, 246, 0.25)"
+              iconBg="rgba(59, 130, 246, 0.12)"
+              iconColor="#3b82f6"
+              badgeText="Teórico"
+              badgeType="neutral"
+              subtitle={
+                <span>
+                  Solo valor gastado en recetas · Sin sumar compras pagadas
                 </span>
               }
             />
