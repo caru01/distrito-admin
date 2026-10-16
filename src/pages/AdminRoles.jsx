@@ -3,7 +3,7 @@ import {
   Edit3, Lock as LockKeyhole, Plus, Search, ShieldCheck, Trash2, Users, X,
   LayoutDashboard, ShoppingBag, MapPin, Building2, Package, List, Archive,
   DollarSign, FileSpreadsheet, Contact, BarChart3, Megaphone, Clock,
-  Settings, User, CheckSquare, Square, Check, Filter
+  Settings, User, CheckSquare, Square, Check, Filter, Banknote
 } from 'lucide-react';
 import { API_URL } from '../config/api';
 
@@ -16,6 +16,7 @@ const MODULE_CATEGORIES = {
   'Categorias': 'Menú y Carta',
   'Inventario': 'Inventario y Compras',
   'Gastos': 'Finanzas y Caja',
+  'Nomina': 'Finanzas y Caja',
   'Cierre Contable': 'Finanzas y Caja',
   'Clientes': 'Clientes y CRM',
   'CRM': 'Clientes y CRM',
@@ -50,6 +51,7 @@ const MODULE_ICONS = {
   'Categorias': <List size={17} />,
   'Inventario': <Archive size={17} />,
   'Gastos': <DollarSign size={17} />,
+  'Nomina': <Banknote size={17} />,
   'Cierre Contable': <FileSpreadsheet size={17} />,
   'Clientes': <Users size={17} />,
   'CRM': <Contact size={17} />,

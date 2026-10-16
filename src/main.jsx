@@ -29,28 +29,12 @@ const AdminDeliveryMap = lazy(() => import('./pages/AdminDeliveryMap.jsx'))
 const AdminClientes = lazy(() => import('./pages/AdminClientes.jsx'))
 const AdminDeliveryCompanies = lazy(() => import('./pages/AdminDeliveryCompanies.jsx'))
 const AdminCRM = lazy(() => import('./pages/AdminCRM.jsx'))
+const AdminNomina = lazy(() => import('./pages/AdminNomina.jsx'))
 
-// Redireccionar al Dashboard principal (/admin) si el usuario recarga la página
+// Limpieza de banderas de sesión previas si existieran
 try {
-  const navEntries = window.performance?.getEntriesByType?.('navigation');
-  const isPerfReload = navEntries?.[0]?.type === 'reload';
-  const isLegacyReload = window.performance?.navigation?.type === 1;
-  const isSessionReload = sessionStorage.getItem('distrito_page_reloaded') === 'true';
   sessionStorage.removeItem('distrito_page_reloaded');
-
-  const currentPath = window.location.pathname;
-  if ((isPerfReload || isLegacyReload || isSessionReload) &&
-      currentPath.startsWith('/admin') &&
-      currentPath !== '/admin' &&
-      currentPath !== '/admin/login' &&
-      currentPath !== '/admin/reset-password') {
-    window.history.replaceState(null, '', '/admin');
-  }
 } catch (e) {}
-
-window.addEventListener('beforeunload', () => {
-  try { sessionStorage.setItem('distrito_page_reloaded', 'true'); } catch (e) {}
-});
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
@@ -76,6 +60,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="inventario" element={<AdminInventario />} />
             <Route path="reportes" element={<AdminReportes />} />
             <Route path="gastos" element={<AdminGastos />} />
+            <Route path="nomina" element={<AdminNomina />} />
             <Route path="cierre-contable" element={<AdminCierreContable />} />
             <Route path="anuncios" element={<AdminAnuncios />} />
             <Route path="configuracion" element={<AdminConfiguracion />} />

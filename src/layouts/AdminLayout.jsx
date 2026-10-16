@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState, useContext } from 'react';
 import { Outlet, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ShoppingBag, Package, List, Users, Archive, BarChart3, Settings, LogOut, Megaphone, Menu, X, DollarSign, FileSpreadsheet, Clock, Zap, MapPin, BellRing, Building2, Contact, AlertTriangle, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Package, List, Users, Archive, BarChart3, Settings, LogOut, Megaphone, Menu, X, DollarSign, FileSpreadsheet, Clock, Zap, MapPin, BellRing, Building2, Contact, AlertTriangle, ChevronRight, Banknote } from 'lucide-react';
 import { API_URL } from '../config/api';
 import { AuthContext } from '../context/AuthContext';
 import { playAttentionAlert, speakNotification, unlockNotificationAudio } from '@distrito/shared-ui';
@@ -57,19 +57,6 @@ export default function AdminLayout() {
       navigate('/admin/perfil?force_password_change=true');
     }
   }, [location.pathname, navigate]);
-
-  useEffect(() => {
-    if (loading) return;
-    const navEntries = window.performance?.getEntriesByType?.('navigation');
-    const isPerfReload = navEntries?.[0]?.type === 'reload';
-    const isLegacyReload = window.performance?.navigation?.type === 1;
-    const isSessionReload = sessionStorage.getItem('distrito_page_reloaded') === 'true';
-
-    if ((isPerfReload || isLegacyReload || isSessionReload) && location.pathname !== '/admin') {
-      try { sessionStorage.removeItem('distrito_page_reloaded'); } catch (e) {}
-      navigate('/admin', { replace: true });
-    }
-  }, [loading, location.pathname, navigate]);
 
   useEffect(() => {
     mainContentRef.current?.scrollTo({ top: 0, behavior: 'auto' });
@@ -188,6 +175,7 @@ export default function AdminLayout() {
     { name: 'CRM', path: '/admin/crm', icon: <Contact size={20} />, module: 'CRM' },
     { name: 'Inventario', path: '/admin/inventario', icon: <Archive size={20} />, module: 'Inventario' },
     { name: 'Gastos', path: '/admin/gastos', icon: <DollarSign size={20} />, module: 'Gastos' },
+    { name: 'Nómina', path: '/admin/nomina', icon: <Banknote size={20} />, module: 'Nomina' },
     { name: 'Cierre Contable', path: '/admin/cierre-contable', icon: <FileSpreadsheet size={20} />, module: 'Cierre Contable' },
     { name: 'Reportes', path: '/admin/reportes', icon: <BarChart3 size={20} />, module: 'Reportes' },
     { name: 'Anuncios', path: '/admin/anuncios', icon: <Megaphone size={20} />, module: 'Anuncios', fallbackModule: 'Configuracion' },
