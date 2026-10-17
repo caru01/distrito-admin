@@ -112,6 +112,11 @@ export default function TomarPedido() {
   const [isMobile, setIsMobile]             = useState(window.innerWidth < 768);
   const [isCompactLayout, setIsCompactLayout] = useState(window.innerWidth < 1600);
   const [showMobileCart, setShowMobileCart] = useState(false);
+  const [printOnDevice, setPrintOnDevice]   = useState(() => {
+    const saved = localStorage.getItem('distrito_print_on_device');
+    if (saved !== null) return saved === 'true';
+    return window.innerWidth >= 768;
+  });
 
   const isSendingRef = useRef(false);
   const cartRef = useRef(cart);
@@ -608,8 +613,17 @@ export default function TomarPedido() {
           created_at: data.order?.created_at || customer.created_at || new Date().toISOString()
         };
 
-        // 🖨️ Generar e imprimir comanda de cocina automáticamente
-        printTicket(printOrder, 58);
+        // 🖨️ Generar e imprimir comanda de cocina automáticamente si está habilitado en este dispositivo
+        if (printOnDevice) {
+          printTicket(printOrder, 58);
+        }
+
+        // Registrar en caché de sesión para evitar que la PC del local duplique la impresión si está en esta misma sesión
+        try {
+          const printed = JSON.parse(sessionStorage.getItem('distrito_printed_orders') || '[]');
+          printed.push(Number(orderIdToPrint));
+          sessionStorage.setItem('distrito_printed_orders', JSON.stringify(printed));
+        } catch (e) {}
 
         try { sessionStorage.removeItem('distrito_admin_orders_cache'); } catch (e) {}
         showToast(editId ? '✓ Pedido actualizado' : (sendToKitchen ? '📦 Pedido enviado a cocina' : '✓ Pedido guardado'));
@@ -1310,6 +1324,22 @@ export default function TomarPedido() {
 
             {/* BOTÓN ENVIAR A COCINA / ACTUALIZAR PEDIDO */}
             <div style={{ padding: '14px 16px', borderTop: '1px solid var(--ds-border)', backgroundColor: 'var(--ds-bg-elevated)', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, color: 'var(--ds-text-secondary)', userSelect: 'none' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={printOnDevice} 
+                    onChange={e => {
+                      const next = e.target.checked;
+                      setPrintOnDevice(next);
+                      localStorage.setItem('distrito_print_on_device', String(next));
+                    }}
+                    style={{ accentColor: '#10B981', width: '15px', height: '15px', cursor: 'pointer' }}
+                  />
+                  <span>🖨️ Imprimir ticket en este dispositivo al guardar</span>
+                </label>
+              </div>
+
               <button 
                 onClick={() => handleSubmit(true)} 
                 disabled={sending || cart.length === 0} 

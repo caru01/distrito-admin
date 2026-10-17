@@ -122,6 +122,18 @@ export default function AdminPedidos() {
   const [soundEnabled, setSoundEnabled] = useState(() => {
     return localStorage.getItem('distrito_admin_order_sound') !== 'false';
   });
+  const [autoPrintEnabled, setAutoPrintEnabled] = useState(() => {
+    return localStorage.getItem('distrito_admin_auto_print') === 'true';
+  });
+  const autoPrintedOrderIdsRef = useRef(new Set(
+    (() => {
+      try {
+        return JSON.parse(sessionStorage.getItem('distrito_printed_orders') || '[]');
+      } catch (e) {
+        return [];
+      }
+    })()
+  ));
   const [refreshInterval, setRefreshInterval] = useState(() => {
     const saved = localStorage.getItem('distrito_admin_orders_refresh_interval');
     return saved !== null ? Number(saved) : 10;
@@ -146,12 +158,28 @@ export default function AdminPedidos() {
 
       // Detectar si entraron pedidos nuevos después de la carga inicial
       if (!isFirstLoadRef.current && knownOrderIdsRef.current.size > 0) {
-        const hasNewIncomingOrder = data.orders.some(o => 
+        const incomingOrders = data.orders.filter(o => 
           !knownOrderIdsRef.current.has(Number(o.id)) && 
           ['Nuevo', 'En preparación', 'Por preparar'].includes(o.status)
         );
-        if (hasNewIncomingOrder && soundEnabled) {
-          playNewOrderChime();
+        if (incomingOrders.length > 0) {
+          if (soundEnabled) {
+            playNewOrderChime();
+          }
+          if (autoPrintEnabled) {
+            incomingOrders.forEach((newOrder, idx) => {
+              const orderId = Number(newOrder.id);
+              if (!autoPrintedOrderIdsRef.current.has(orderId)) {
+                autoPrintedOrderIdsRef.current.add(orderId);
+                try {
+                  sessionStorage.setItem('distrito_printed_orders', JSON.stringify([...autoPrintedOrderIdsRef.current]));
+                } catch (e) {}
+                setTimeout(() => {
+                  printTicket(newOrder, 58);
+                }, idx * 750);
+              }
+            });
+          }
         }
       }
 
@@ -173,7 +201,7 @@ export default function AdminPedidos() {
       setIsFetching(false);
       setLoading(false);
     }
-  }, [soundEnabled]);
+  }, [soundEnabled, autoPrintEnabled]);
 
   useEffect(() => {
     fetchOrders();
@@ -327,6 +355,12 @@ export default function AdminPedidos() {
   };
 
   const handlePrintOrder = (order) => {
+    if (order?.id) {
+      autoPrintedOrderIdsRef.current.add(Number(order.id));
+      try {
+        sessionStorage.setItem('distrito_printed_orders', JSON.stringify([...autoPrintedOrderIdsRef.current]));
+      } catch (e) {}
+    }
     printTicket(order, 58);
   };
 
@@ -765,6 +799,29 @@ export default function AdminPedidos() {
               aria-label={soundEnabled ? 'Silenciar campana' : 'Activar campana'}
             >
               {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+            </button>
+
+            <div className="pedidos-live-divider" />
+
+            {/* Botón de Auto-Impresión */}
+            <button
+              type="button"
+              onClick={() => {
+                const next = !autoPrintEnabled;
+                setAutoPrintEnabled(next);
+                localStorage.setItem('distrito_admin_auto_print', String(next));
+              }}
+              className={`pedidos-live-btn ${autoPrintEnabled ? 'active' : ''}`}
+              style={autoPrintEnabled ? { color: '#10B981', borderColor: '#10B981', background: 'rgba(16, 185, 129, 0.12)' } : {}}
+              title={autoPrintEnabled 
+                ? '🖨️ Auto-impresión ACTIVADA: cada nuevo pedido se imprimirá automáticamente en la impresora térmica' 
+                : '🖨️ Auto-impresión desactivada (clic para activar en esta PC)'}
+              aria-label={autoPrintEnabled ? 'Desactivar auto-impresión' : 'Activar auto-impresión'}
+            >
+              <Printer size={16} />
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, marginLeft: '4px', display: isMobile ? 'none' : 'inline' }}>
+                {autoPrintEnabled ? 'Auto-Print ON' : 'Auto-Print'}
+              </span>
             </button>
 
             <div className="pedidos-live-divider" />

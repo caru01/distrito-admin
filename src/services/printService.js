@@ -15,18 +15,56 @@ const formatter = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 
 export const printTicket = (order, paperWidth = 58) => {
   if (!order) return;
 
+  const htmlContent = generateSingleComandaHTML(order, paperWidth);
+
+  // Intentar imprimir mediante iframe oculto (100% silencioso con --kiosk-printing y sin popups emergentes)
+  try {
+    const iframeId = 'distrito-silent-print-frame';
+    let iframe = document.getElementById(iframeId);
+    if (iframe) {
+      iframe.remove();
+    }
+
+    iframe = document.createElement('iframe');
+    iframe.id = iframeId;
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.style.visibility = 'hidden';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(htmlContent);
+    doc.close();
+
+    setTimeout(() => {
+      try {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      } catch (err) {
+        console.warn('Iframe print error, usando fallback a ventana emergente:', err);
+        fallbackWindowPrint(htmlContent);
+      }
+    }, 200);
+  } catch (e) {
+    console.warn('Fallo al inicializar iframe de impresión:', e);
+    fallbackWindowPrint(htmlContent);
+  }
+};
+
+const fallbackWindowPrint = (htmlContent) => {
   const printWindow = window.open('', '_blank', 'width=320,height=550');
   if (!printWindow) {
     alert('Por favor habilite las ventanas emergentes (popups) para imprimir los tickets.');
     return;
   }
-
-  const htmlContent = generateSingleComandaHTML(order, paperWidth);
-
   printWindow.document.write(htmlContent);
   printWindow.document.close();
   printWindow.focus();
-
   setTimeout(() => {
     printWindow.print();
     printWindow.close();
