@@ -8,7 +8,7 @@ import {
   Copy, ClipboardCheck, Building2, Phone, Mail, ChefHat, Scale, Download,
   MessageSquare, PieChart, CheckSquare, BarChart3, Truck,
   LayoutGrid, List, ArrowUpDown, SlidersHorizontal, PackageX,
-  Camera, Paperclip, ExternalLink
+  Camera, Paperclip, ExternalLink, Target, Calculator, RotateCcw, Printer
 } from 'lucide-react';
 import { API_URL } from '../config/api';
 import { formatCurrency, formatDateTime, formatDateOnly } from '../utils/formatters';
@@ -36,7 +36,7 @@ export default function AdminInventario() {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const tabParam = params.get('tab');
-    if (tabParam && ['estado_stock', 'alertas', 'insumos', 'compras', 'recetas', 'kardex', 'rentabilidad'].includes(tabParam)) {
+    if (tabParam && ['estado_stock', 'alertas', 'insumos', 'compras', 'recetas', 'plan_produccion', 'produccion', 'modificadores', 'conteo_fisico', 'proveedores', 'kardex', 'valoracion', 'rentabilidad'].includes(tabParam)) {
       setActiveTab(tabParam);
     }
   }, [location.search]);
@@ -216,6 +216,9 @@ export default function AdminInventario() {
   const [auditAuditedBy, setAuditAuditedBy] = useState('Administrador');
   const [auditDetailModal, setAuditDetailModal] = useState(false);
   const [selectedAuditDetail, setSelectedAuditDetail] = useState(null);
+  const [auditSearch, setAuditSearch] = useState('');
+  const [auditCategoryFilter, setAuditCategoryFilter] = useState('ALL');
+  const [auditIncludeSystemStock, setAuditIncludeSystemStock] = useState(true);
 
   // Directorio de Proveedores
   const [supplierModal, setSupplierModal] = useState(false);
@@ -285,6 +288,488 @@ export default function AdminInventario() {
     link.click();
     document.body.removeChild(link);
   }, []);
+
+  // ==========================================
+  // ESTADO Y LÓGICA: PLAN DE PRODUCCIÓN & REQUERIMIENTOS (MRP)
+  // ==========================================
+  const [productionPlan, setProductionPlan] = useState(() => {
+    try {
+      const saved = localStorage.getItem('distrito_production_plan');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const [planSearch, setPlanSearch] = useState('');
+  const [planCategoryFilter, setPlanCategoryFilter] = useState('ALL');
+  const [planOnlyActiveTargets, setPlanOnlyActiveTargets] = useState(false);
+  const [planInsumoFilter, setPlanInsumoFilter] = useState('DEFICIT'); // 'DEFICIT' | 'ALL' | 'SUFFICIENT'
+  const [planInsumoSearch, setPlanInsumoSearch] = useState('');
+  const [expandSubrecipesInPlan, setExpandSubrecipesInPlan] = useState(true);
+
+  // Actualizar meta de un producto
+  const handleUpdateProductTarget = useCallback((productId, value) => {
+    const num = Math.max(0, parseInt(value, 10) || 0);
+    setProductionPlan((prev) => {
+      const updated = { ...prev, [productId]: num };
+      if (num === 0) {
+        delete updated[productId];
+      }
+      try {
+        localStorage.setItem('distrito_production_plan', JSON.stringify(updated));
+      } catch (e) {
+        console.error(e);
+      }
+      return updated;
+    });
+  }, []);
+
+  const handleIncrementProductTarget = useCallback((productId, delta) => {
+    setProductionPlan((prev) => {
+      const current = prev[productId] || 0;
+      const nextVal = Math.max(0, current + delta);
+      const updated = { ...prev, [productId]: nextVal };
+      if (nextVal === 0) {
+        delete updated[productId];
+      }
+      try {
+        localStorage.setItem('distrito_production_plan', JSON.stringify(updated));
+      } catch (e) {
+        console.error(e);
+      }
+      return updated;
+    });
+  }, []);
+
+  const handleClearProductionPlan = useCallback(() => {
+    if (window.confirm('¿Deseas reiniciar todas las metas de producción a 0?')) {
+      setProductionPlan({});
+      try {
+        localStorage.removeItem('distrito_production_plan');
+      } catch (e) {}
+      showToast('Plan de producción reiniciado a 0');
+    }
+  }, [showToast]);
+
+  const handleSetCommonPreset = useCallback((qty) => {
+    const updated = {};
+    products.forEach((p) => {
+      const hasRecipe = recipes.some((r) => String(r.product_id) === String(p.id));
+      if (hasRecipe) {
+        updated[p.id] = qty;
+      }
+    });
+    setProductionPlan(updated);
+    try {
+      localStorage.setItem('distrito_production_plan', JSON.stringify(updated));
+    } catch (e) {}
+    showToast(`Meta de ${qty} unidades aplicada a los productos con receta`);
+  }, [products, recipes, showToast]);
+
+  // Mapa de sub-recetas: target_inventory_id -> lista de ingredientes
+  const subrecipesMap = useMemo(() => {
+    const map = {};
+    if (Array.isArray(subrecipes)) {
+      subrecipes.forEach((sr) => {
+        const key = String(sr.target_inventory_id);
+        if (!map[key]) map[key] = [];
+        map[key].push(sr);
+      });
+    }
+    return map;
+  }, [subrecipes]);
+
+  // Mapa de recetas: product_id -> lista de ingredientes
+  const productRecipesMap = useMemo(() => {
+    const map = {};
+    if (Array.isArray(recipes)) {
+      recipes.forEach((r) => {
+        const key = String(r.product_id);
+        if (!map[key]) map[key] = [];
+        map[key].push(r);
+      });
+    }
+    return map;
+  }, [recipes]);
+
+  // Mapa rápido de insumos por id
+  const insumosMap = useMemo(() => {
+    const map = {};
+    if (Array.isArray(insumos)) {
+      insumos.forEach((i) => {
+        map[String(i.id)] = i;
+      });
+    }
+    return map;
+  }, [insumos]);
+
+  const planProductCategories = useMemo(() => {
+    const cats = new Set();
+    products.forEach((p) => {
+      if (p.category) cats.add(p.category);
+    });
+    return Array.from(cats).sort();
+  }, [products]);
+
+  // Análisis MRP Completo
+  const planAnalysis = useMemo(() => {
+    const activeProducts = [];
+    let totalPlannedUnits = 0;
+    const requirementsMap = {}; // inventory_id -> { insumo, requiredQty, usedIn: [] }
+
+    products.forEach((prod) => {
+      const target = Number(productionPlan[prod.id]) || 0;
+      const prodRecipes = productRecipesMap[String(prod.id)] || [];
+      const hasRecipe = prodRecipes.length > 0;
+
+      let maxPossibleWithStock = null;
+      let bottleneckInsumo = null;
+
+      if (hasRecipe) {
+        prodRecipes.forEach((rcp) => {
+          const qtyNeeded = Number(rcp.quantity) || 0;
+          if (qtyNeeded > 0) {
+            const ins = insumosMap[String(rcp.inventory_id)];
+            const currentStock = ins ? Math.max(0, Number(ins.stock) || 0) : 0;
+            const canMake = Math.floor(currentStock / qtyNeeded);
+            if (maxPossibleWithStock === null || canMake < maxPossibleWithStock) {
+              maxPossibleWithStock = canMake;
+              bottleneckInsumo = ins ? ins.name : rcp.inventory_title;
+            }
+          }
+        });
+      }
+
+      if (target > 0) {
+        totalPlannedUnits += target;
+        activeProducts.push({
+          product: prod,
+          target,
+          hasRecipe,
+          recipesCount: prodRecipes.length,
+          maxPossibleWithStock: maxPossibleWithStock !== null ? maxPossibleWithStock : 0,
+          bottleneckInsumo
+        });
+
+        prodRecipes.forEach((rcp) => {
+          const unitQty = Number(rcp.quantity) || 0;
+          if (unitQty <= 0) return;
+
+          const invId = String(rcp.inventory_id);
+          const ins = insumosMap[invId];
+          const subList = (expandSubrecipesInPlan && subrecipesMap[invId]) || [];
+
+          if (subList.length > 0) {
+            subList.forEach((sub) => {
+              const subInvId = String(sub.ingredient_inventory_id);
+              const subIns = insumosMap[subInvId];
+              const subUnitQty = Number(sub.quantity) || 0;
+              const totalConsumed = unitQty * subUnitQty * target;
+
+              if (!requirementsMap[subInvId]) {
+                requirementsMap[subInvId] = {
+                  insumo: subIns || {
+                    id: subInvId,
+                    name: sub.ingredient_name || 'Insumo base',
+                    unit: sub.ingredient_unit || 'unidad',
+                    stock: sub.ingredient_stock || 0,
+                    average_cost: sub.ingredient_cost || 0
+                  },
+                  requiredQty: 0,
+                  usedIn: [],
+                  isFromSubrecipe: true,
+                  parentName: ins ? ins.name : rcp.inventory_title
+                };
+              }
+
+              requirementsMap[subInvId].requiredQty += totalConsumed;
+              requirementsMap[subInvId].usedIn.push({
+                productTitle: `${prod.title || prod.name} (vía ${ins ? ins.name : 'preparado'})`,
+                target,
+                unitQty: unitQty * subUnitQty,
+                totalConsumed
+              });
+            });
+          } else {
+            const totalConsumed = unitQty * target;
+            if (!requirementsMap[invId]) {
+              requirementsMap[invId] = {
+                insumo: ins || {
+                  id: invId,
+                  name: rcp.inventory_title || 'Insumo',
+                  unit: rcp.inventory_unit || 'unidad',
+                  stock: 0,
+                  average_cost: rcp.inventory_average_cost || 0
+                },
+                requiredQty: 0,
+                usedIn: [],
+                isFromSubrecipe: false
+              };
+            }
+
+            requirementsMap[invId].requiredQty += totalConsumed;
+            requirementsMap[invId].usedIn.push({
+              productTitle: prod.title || prod.name,
+              target,
+              unitQty,
+              totalConsumed
+            });
+          }
+        });
+      }
+    });
+
+    const insumosList = Object.values(requirementsMap).map((item) => {
+      const stock = Number(item.insumo.stock) || 0;
+      const required = item.requiredQty;
+      const balance = stock - required;
+      const deficit = balance < 0 ? Math.abs(balance) : 0;
+      const isDeficit = balance < 0;
+      const unitCost = Number(item.insumo.average_cost) || Number(item.insumo.unit_cost) || 0;
+      const estimatedCost = deficit * unitCost;
+
+      let purchaseSuggested = null;
+      const conv = Number(item.insumo.conversion_factor) || 1;
+      const pUnit = item.insumo.purchase_unit;
+      if (pUnit && conv > 1 && deficit > 0) {
+        const pUnitsCount = Math.ceil(deficit / conv);
+        purchaseSuggested = `${pUnitsCount} ${pUnit} (${(pUnitsCount * conv).toLocaleString('es-CO')} ${item.insumo.unit})`;
+      }
+
+      return {
+        ...item,
+        currentStock: stock,
+        requiredQty: required,
+        balance,
+        deficit,
+        isDeficit,
+        unitCost,
+        estimatedCost,
+        purchaseSuggested
+      };
+    });
+
+    insumosList.sort((a, b) => {
+      if (a.isDeficit && !b.isDeficit) return -1;
+      if (!a.isDeficit && b.isDeficit) return 1;
+      return b.estimatedCost - a.estimatedCost;
+    });
+
+    const deficitItems = insumosList.filter((i) => i.isDeficit);
+    const sufficientItems = insumosList.filter((i) => !i.isDeficit);
+    const totalEstimatedCost = deficitItems.reduce((acc, curr) => acc + curr.estimatedCost, 0);
+    const coveragePct = insumosList.length > 0
+      ? Math.round((sufficientItems.length / insumosList.length) * 100)
+      : 100;
+
+    return {
+      activeProducts,
+      totalPlannedUnits,
+      insumosList,
+      deficitItems,
+      sufficientItems,
+      totalEstimatedCost,
+      coveragePct,
+      missingRecipesCount: activeProducts.filter((p) => !p.hasRecipe).length
+    };
+  }, [products, productionPlan, productRecipesMap, insumosMap, expandSubrecipesInPlan, subrecipesMap]);
+
+  const filteredPlanProducts = useMemo(() => {
+    return products.filter((p) => {
+      const title = (p.title || p.product_title || p.name || '').toLowerCase();
+      const matchesSearch = !planSearch.trim() || title.includes(planSearch.trim().toLowerCase());
+      const matchesCat = planCategoryFilter === 'ALL' || p.category === planCategoryFilter;
+      const target = Number(productionPlan[p.id]) || 0;
+      const matchesActive = !planOnlyActiveTargets || target > 0;
+      return matchesSearch && matchesCat && matchesActive;
+    });
+  }, [products, planSearch, planCategoryFilter, planOnlyActiveTargets, productionPlan]);
+
+  const filteredPlanInsumos = useMemo(() => {
+    return planAnalysis.insumosList.filter((it) => {
+      if (planInsumoFilter === 'DEFICIT' && !it.isDeficit) return false;
+      if (planInsumoFilter === 'SUFFICIENT' && it.isDeficit) return false;
+      if (planInsumoSearch.trim()) {
+        const q = planInsumoSearch.trim().toLowerCase();
+        const name = (it.insumo.name || '').toLowerCase();
+        const cat = (it.insumo.category || '').toLowerCase();
+        return name.includes(q) || cat.includes(q);
+      }
+      return true;
+    });
+  }, [planAnalysis.insumosList, planInsumoFilter, planInsumoSearch]);
+
+  const handleCopyPlanWhatsApp = useCallback(() => {
+    if (planAnalysis.deficitItems.length === 0) {
+      showToast('¡No hay insumos faltantes! Tu inventario actual cubre el 100% de la meta.');
+      return;
+    }
+
+    const dateStr = new Date().toLocaleDateString('es-CO');
+    let text = `🛒 *LISTA DE COMPRAS SUGERIDA - DISTRIC HOUSE*\n`;
+    text += `📅 *Fecha:* ${dateStr}\n\n`;
+    text += `🎯 *METAS DE PRODUCCIÓN:*\n`;
+    planAnalysis.activeProducts.forEach((p) => {
+      text += `• ${p.target}x ${p.product.title || p.product.name}\n`;
+    });
+    text += `\n🚨 *INSUMOS A COMPRAR (${planAnalysis.deficitItems.length}):*\n`;
+    planAnalysis.deficitItems.forEach((it, idx) => {
+      const qtyFormatted = it.deficit % 1 === 0 ? it.deficit : it.deficit.toFixed(2);
+      const stockFormatted = it.currentStock % 1 === 0 ? it.currentStock : it.currentStock.toFixed(2);
+      const reqFormatted = it.requiredQty % 1 === 0 ? it.requiredQty : it.requiredQty.toFixed(2);
+      text += `${idx + 1}. *${it.insumo.name}*: Comprar *${qtyFormatted} ${it.insumo.unit}*`;
+      if (it.purchaseSuggested) {
+        text += ` [${it.purchaseSuggested}]`;
+      }
+      text += ` (Stock: ${stockFormatted} | Requerido: ${reqFormatted}) ~ ${formatCurrency(it.estimatedCost)}\n`;
+    });
+
+    text += `\n💰 *PRESUPUESTO TOTAL ESTIMADO:* ${formatCurrency(planAnalysis.totalEstimatedCost)}\n`;
+    text += `\n_Generado automáticamente desde el Panel de Inventario de Distric House._`;
+
+    navigator.clipboard.writeText(text);
+    showToast('✓ Lista de compras copiada al portapapeles para WhatsApp');
+  }, [planAnalysis, showToast]);
+
+  const handlePrintPlanShoppingList = useCallback(() => {
+    if (planAnalysis.insumosList.length === 0) {
+      showToast('Configura primero las metas de producción para imprimir', 'error');
+      return;
+    }
+
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      alert('Por favor habilite las ventanas emergentes (pop-ups) para imprimir.');
+      return;
+    }
+
+    const dateStr = new Date().toLocaleDateString('es-CO', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+
+    const productsRows = planAnalysis.activeProducts.map((p) => `
+      <tr>
+        <td style="padding: 6px 10px; border-bottom: 1px solid #e5e7eb; font-weight: bold;">${p.product.title || p.product.name}</td>
+        <td style="padding: 6px 10px; border-bottom: 1px solid #e5e7eb; text-align: center;">${p.product.category || '-'}</td>
+        <td style="padding: 6px 10px; border-bottom: 1px solid #e5e7eb; text-align: right; font-weight: bold; color: #4338ca;">${p.target} uds</td>
+        <td style="padding: 6px 10px; border-bottom: 1px solid #e5e7eb; text-align: right;">${p.maxPossibleWithStock} uds</td>
+      </tr>
+    `).join('');
+
+    const deficitRows = planAnalysis.deficitItems.map((it) => {
+      const deficitFmt = it.deficit % 1 === 0 ? it.deficit : it.deficit.toFixed(2);
+      const stockFmt = it.currentStock % 1 === 0 ? it.currentStock : it.currentStock.toFixed(2);
+      const reqFmt = it.requiredQty % 1 === 0 ? it.requiredQty : it.requiredQty.toFixed(2);
+      return `
+        <tr>
+          <td style="padding: 8px 10px; border-bottom: 1px solid #e5e7eb; text-align: center;">
+            <div style="width: 16px; height: 16px; border: 1.5px solid #374151; border-radius: 3px; margin: 0 auto;"></div>
+          </td>
+          <td style="padding: 8px 10px; border-bottom: 1px solid #e5e7eb; font-weight: bold;">
+            ${it.insumo.name}
+            ${it.purchaseSuggested ? `<div style="font-size: 11px; color: #4b5563;">Empaque sugerido: <b>${it.purchaseSuggested}</b></div>` : ''}
+          </td>
+          <td style="padding: 8px 10px; border-bottom: 1px solid #e5e7eb; text-align: center;">${it.insumo.category || 'General'}</td>
+          <td style="padding: 8px 10px; border-bottom: 1px solid #e5e7eb; text-align: right;">${stockFmt} ${it.insumo.unit}</td>
+          <td style="padding: 8px 10px; border-bottom: 1px solid #e5e7eb; text-align: right;">${reqFmt} ${it.insumo.unit}</td>
+          <td style="padding: 8px 10px; border-bottom: 1px solid #e5e7eb; text-align: right; font-weight: bold; color: #dc2626; font-size: 13px;">${deficitFmt} ${it.insumo.unit}</td>
+          <td style="padding: 8px 10px; border-bottom: 1px solid #e5e7eb; text-align: right; font-weight: bold;">${formatCurrency(it.estimatedCost)}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Lista de Compras para Producción - Distric House</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; padding: 24px; color: #111827; }
+          .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #111827; padding-bottom: 14px; }
+          .logo { max-height: 60px; margin-bottom: 6px; }
+          .title { font-size: 20px; font-weight: 800; text-transform: uppercase; margin: 0; }
+          .subtitle { font-size: 13px; color: #4b5563; margin-top: 4px; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
+          th { background: #f3f4f6; padding: 8px 10px; text-align: left; border-bottom: 1.5px solid #d1d5db; font-size: 11px; text-transform: uppercase; }
+          .footer { margin-top: 30px; display: flex; justify-content: space-between; font-size: 12px; }
+          .sign-box { border-top: 1px solid #374151; width: 220px; text-align: center; padding-top: 6px; margin-top: 40px; }
+          @media print {
+            body { padding: 0; }
+            button { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <img src="${window.location.origin}/logo.png" class="logo" onerror="this.style.display='none'" alt="Logo" />
+          <h1 class="title">DISTRIC HOUSE</h1>
+          <div style="font-weight: bold; font-size: 14px; margin-top: 2px;">REQUERIMIENTOS DE COMPRA PARA PLAN DE PRODUCCIÓN</div>
+          <div class="subtitle">Fecha de generación: ${dateStr}</div>
+        </div>
+
+        <h3 style="font-size: 13px; text-transform: uppercase; margin-bottom: 6px; color: #374151;">1. Metas de Producción Configurada</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Producto de Carta</th>
+              <th style="text-align: center;">Categoría</th>
+              <th style="text-align: right;">Meta Programada</th>
+              <th style="text-align: right;">Capacidad Actual con Stock</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${productsRows}
+          </tbody>
+        </table>
+
+        <h3 style="font-size: 13px; text-transform: uppercase; margin-bottom: 6px; color: #dc2626;">
+          2. Insumos Faltantes a Comprar (${planAnalysis.deficitItems.length} ítems en déficit)
+        </h3>
+        <table>
+          <thead>
+            <tr>
+              <th style="text-align: center; width: 30px;">[✓]</th>
+              <th>Insumo / Detalle</th>
+              <th style="text-align: center;">Categoría</th>
+              <th style="text-align: right;">Stock Actual</th>
+              <th style="text-align: right;">Requerido</th>
+              <th style="text-align: right;">Cantidad a Comprar</th>
+              <th style="text-align: right;">Costo Aprox.</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${deficitRows || '<tr><td colspan="7" style="padding: 16px; text-align: center;">¡No hay insumos faltantes! Tu stock actual cubre el 100% de la producción.</td></tr>'}
+          </tbody>
+          <tfoot>
+            <tr style="background: #f9fafb; font-weight: bold; font-size: 13px;">
+              <td colspan="6" style="padding: 10px; text-align: right;">PRESUPUESTO TOTAL ESTIMADO EN COMPRAS:</td>
+              <td style="padding: 10px; text-align: right; color: #059669; font-size: 14px;">${formatCurrency(planAnalysis.totalEstimatedCost)}</td>
+            </tr>
+          </tfoot>
+        </table>
+
+        <div class="footer">
+          <div class="sign-box">Responsable de Producción / Cocina</div>
+          <div class="sign-box">Encargado de Compras / Proveedores</div>
+        </div>
+
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+            }, 500);
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWin.document.open();
+    printWin.document.write(html);
+    printWin.document.close();
+  }, [planAnalysis, showToast]);
 
   // ==========================================
   // DATA LOADERS
@@ -1023,6 +1508,293 @@ export default function AdminInventario() {
     }
   };
 
+  const auditCategories = useMemo(() => {
+    const cats = new Set();
+    insumos.forEach((i) => {
+      if (i.category) cats.add(i.category);
+    });
+    return Array.from(cats).sort();
+  }, [insumos]);
+
+  const filteredAuditInsumos = useMemo(() => {
+    return insumos.filter((item) => {
+      const name = (item.name || '').toLowerCase();
+      const sku = (item.sku || '').toLowerCase();
+      const matchesSearch = !auditSearch.trim() || name.includes(auditSearch.trim().toLowerCase()) || sku.includes(auditSearch.trim().toLowerCase());
+      const matchesCat = auditCategoryFilter === 'ALL' || item.category === auditCategoryFilter;
+      return matchesSearch && matchesCat;
+    });
+  }, [insumos, auditSearch, auditCategoryFilter]);
+
+  const handlePrintAuditSheet = useCallback(() => {
+    if (!insumos || insumos.length === 0) {
+      showToast('No hay insumos en el inventario para generar la planilla', 'error');
+      return;
+    }
+
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      alert('Por favor habilita las ventanas emergentes (pop-ups) en tu navegador para imprimir la planilla.');
+      return;
+    }
+
+    const itemsToPrint = filteredAuditInsumos.length > 0 ? filteredAuditInsumos : insumos;
+
+    const dateStr = new Date().toLocaleDateString('es-CO', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+
+    const rowsHtml = itemsToPrint.map((item, idx) => {
+      const systemStock = Number(item.stock) || 0;
+      const stockDisplay = auditIncludeSystemStock
+        ? `${systemStock % 1 === 0 ? systemStock : systemStock.toFixed(2)} ${item.unit}`
+        : '—';
+
+      return `
+        <tr>
+          <td style="padding: 7px 8px; border-bottom: 1px solid #d1d5db; text-align: center; color: #6b7280; font-size: 11px;">${idx + 1}</td>
+          <td style="padding: 7px 8px; border-bottom: 1px solid #d1d5db;">
+            <div style="font-weight: 700; color: #111827; font-size: 12.5px;">${item.name}</div>
+            ${item.sku ? `<div style="font-size: 10px; color: #6b7280;">SKU: ${item.sku}</div>` : ''}
+            ${item.is_prepared ? `<span style="font-size: 9.5px; background: #e0e7ff; color: #3730a3; padding: 1px 4px; border-radius: 3px; font-weight: 600;">Elaboración Cocina</span>` : ''}
+          </td>
+          <td style="padding: 7px 8px; border-bottom: 1px solid #d1d5db; text-align: center; color: #4b5563; font-size: 11px;">${item.category || 'General'}</td>
+          <td style="padding: 7px 8px; border-bottom: 1px solid #d1d5db; text-align: center; font-weight: 700; color: #1f2937; font-size: 11.5px;">${item.unit}</td>
+          <td style="padding: 7px 8px; border-bottom: 1px solid #d1d5db; text-align: right; font-family: monospace; font-size: 12px; color: #374151;">
+            ${stockDisplay}
+          </td>
+          <td style="padding: 5px 8px; border-bottom: 1px solid #d1d5db; background: #fafafa; border-left: 2px dashed #9ca3af; border-right: 2px dashed #9ca3af; text-align: center;">
+            <div style="min-height: 24px; border-bottom: 1px dotted #6b7280; margin: 4px 6px;"></div>
+          </td>
+          <td style="padding: 5px 8px; border-bottom: 1px solid #d1d5db;">
+            <div style="min-height: 24px; border-bottom: 1px dotted #e5e7eb; margin: 4px 0;"></div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Planilla de Toma de Inventario Físico - Distric House</title>
+        <style>
+          @page {
+            size: letter portrait;
+            margin: 12mm 10mm;
+          }
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            color: #111827;
+            margin: 0;
+            padding: 10px;
+            font-size: 11.5px;
+            background: #fff;
+          }
+          .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 2px solid #111827;
+            padding-bottom: 10px;
+            margin-bottom: 12px;
+          }
+          .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+          }
+          .logo {
+            max-height: 48px;
+            max-width: 48px;
+            object-fit: contain;
+          }
+          .title-area h1 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            color: #111827;
+            text-transform: uppercase;
+          }
+          .title-area h2 {
+            margin: 2px 0 0 0;
+            font-size: 13px;
+            font-weight: 700;
+            color: #4b5563;
+            text-transform: uppercase;
+          }
+          .meta-box {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 8px 12px;
+            margin-bottom: 12px;
+            font-size: 11px;
+          }
+          .meta-item label {
+            display: block;
+            font-size: 9.5px;
+            text-transform: uppercase;
+            font-weight: 700;
+            color: #6b7280;
+            margin-bottom: 2px;
+          }
+          .meta-item .val {
+            font-weight: 600;
+            color: #111827;
+          }
+          .instructions {
+            background: #fef3c7;
+            border: 1px solid #fde68a;
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 10.5px;
+            color: #92400e;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 16px;
+          }
+          th {
+            background: #f3f4f6;
+            color: #374151;
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            padding: 7px 8px;
+            border-bottom: 1.5px solid #9ca3af;
+            border-top: 1px solid #d1d5db;
+          }
+          tr {
+            page-break-inside: avoid;
+          }
+          .signatures {
+            margin-top: 28px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 30px;
+            page-break-inside: avoid;
+          }
+          .sign-col {
+            text-align: center;
+          }
+          .sign-line {
+            border-top: 1px solid #374151;
+            margin-top: 36px;
+            padding-top: 4px;
+            font-size: 10.5px;
+            font-weight: 700;
+            color: #1f2937;
+          }
+          .sign-role {
+            font-size: 9.5px;
+            color: #6b7280;
+            margin-top: 1px;
+          }
+          @media print {
+            body { padding: 0; }
+            button { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="brand">
+            <img src="${window.location.origin}/logo.png" class="logo" onerror="this.style.display='none'" alt="Logo" />
+            <div class="title-area">
+              <h1>DISTRIC HOUSE</h1>
+              <h2>Planilla de Toma de Inventario Físico</h2>
+            </div>
+          </div>
+          <div style="text-align: right; font-size: 10.5px; color: #4b5563;">
+            <div><b>Fecha de Emisión:</b> ${dateStr}</div>
+            <div><b>Total Insumos a Contar:</b> ${itemsToPrint.length}</div>
+            ${auditCategoryFilter !== 'ALL' ? `<div><b>Filtro Categoría:</b> ${auditCategoryFilter}</div>` : ''}
+          </div>
+        </div>
+
+        <div class="meta-box">
+          <div class="meta-item">
+            <label>Auditor / Responsable</label>
+            <div class="val">${auditAuditedBy || '________________________'}</div>
+          </div>
+          <div class="meta-item">
+            <label>Área / Ubicación</label>
+            <div class="val">Cocina / Bodega Principal</div>
+          </div>
+          <div class="meta-item">
+            <label>Fecha de Ejecución</label>
+            <div class="val">____ / ____ / ________</div>
+          </div>
+          <div class="meta-item">
+            <label>Notas / Turno</label>
+            <div class="val">${auditNotes || '________________________'}</div>
+          </div>
+        </div>
+
+        <div class="instructions">
+          <span>✍️</span>
+          <span><strong>Instrucciones para el encargado:</strong> Cuente detalladamente en físico las existencias según la <strong>Unidad de Medida</strong>. Anote el valor exacto en la columna <strong>"Conteo Físico Real"</strong> y cualquier novedad (daños, caducidad) en <strong>"Observaciones"</strong>. Al finalizar, firme y devuelva esta hoja para digitación en el sistema.</span>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 28px; text-align: center;">#</th>
+              <th style="text-align: left;">Insumo / Materia Prima</th>
+              <th style="width: 100px; text-align: center;">Categoría</th>
+              <th style="width: 70px; text-align: center;">Unidad</th>
+              <th style="width: 90px; text-align: right;">Stock Sistema</th>
+              <th style="width: 130px; text-align: center; background: #e5e7eb; color: #111827;">CONTEO FÍSICO REAL</th>
+              <th style="width: 160px; text-align: left;">Observaciones / Novedades</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+
+        <div class="signatures">
+          <div class="sign-col">
+            <div class="sign-line">Encargado del Conteo Físico</div>
+            <div class="sign-role">Nombre, firma y cédula</div>
+          </div>
+          <div class="sign-col">
+            <div class="sign-line">Administrador / Digitador</div>
+            <div class="sign-role">Revisado e ingresado al sistema</div>
+          </div>
+          <div class="sign-col">
+            <div class="sign-line">Gerencia / Auditoría</div>
+            <div class="sign-role">Visto bueno conciliación Kardex</div>
+          </div>
+        </div>
+
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+            }, 450);
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWin.document.open();
+    printWin.document.write(html);
+    printWin.document.close();
+  }, [insumos, filteredAuditInsumos, auditIncludeSystemStock, auditAuditedBy, auditNotes, auditCategoryFilter, showToast]);
+
   const handleOpenAuditDetail = async (auditId) => {
     setBusy(true);
     try {
@@ -1740,6 +2512,14 @@ export default function AdminInventario() {
         </button>
         <button className={`ds-btn ds-btn-sm ${activeTab === 'recetas' ? 'ds-btn-primary' : 'ds-btn-secondary'}`} onClick={() => setActiveTab('recetas')}>
           <Utensils size={15} /> Recetas ({products.length})
+        </button>
+        <button
+          className={`ds-btn ds-btn-sm ${activeTab === 'plan_produccion' ? 'ds-btn-primary' : 'ds-btn-secondary'}`}
+          onClick={() => setActiveTab('plan_produccion')}
+          style={activeTab === 'plan_produccion' ? { background: '#7c3aed', borderColor: '#7c3aed', color: '#fff', fontWeight: 'bold' } : {}}
+          title="Planificar requerimientos de compras según metas de producción (ej: 100 salchipapas, 100 hamburguesas, 50 perros)"
+        >
+          <Target size={15} /> Plan de Producción {planAnalysis.totalPlannedUnits > 0 ? `(${planAnalysis.totalPlannedUnits} uds)` : ''}
         </button>
         <button className={`ds-btn ds-btn-sm ${activeTab === 'produccion' ? 'ds-btn-primary' : 'ds-btn-secondary'}`} onClick={() => setActiveTab('produccion')}>
           <ChefHat size={15} /> Producción ({subrecipesGrouped.length})
@@ -3751,6 +4531,634 @@ export default function AdminInventario() {
       )}
 
       {/* ========================================================================= */}
+      {/* PESTAÑA: PLANIFICADOR DE PRODUCCIÓN & REQUERIMIENTOS DE COMPRAS (MRP) 🎯 */}
+      {/* ========================================================================= */}
+      {activeTab === 'plan_produccion' && (
+        <div className="space-y-6">
+          {/* TOOLBAR SUPERIOR */}
+          <div className="inventory-toolbar" style={{ flexWrap: 'wrap', gap: '16px' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '20px' }}>🎯</span>
+                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: 'var(--ds-text-primary)' }}>
+                  Planificador de Producción & Requerimientos de Insumos
+                </h3>
+              </div>
+              <p style={{ margin: '6px 0 0 0', fontSize: '13px', color: 'var(--ds-text-secondary)', maxWidth: '850px' }}>
+                Configura cuánta producción deseas mantener lista (ej: 100 salchipapas, 100 hamburguesas, 50 perros). El sistema analiza las recetas técnicas y tu inventario actual en tiempo real para decirte con precisión quirúrgica qué insumos debes comprar, las cantidades faltantes y el presupuesto estimado.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  loadInsumos();
+                  loadRecipes();
+                  loadSubrecipes();
+                  showToast('Stock y recetas actualizados');
+                }}
+                className="ds-btn ds-btn-secondary ds-btn-sm"
+                title="Sincronizar stock actual con la base de datos"
+              >
+                <RefreshCw size={14} /> Recargar Stock
+              </button>
+
+              <button
+                type="button"
+                onClick={handlePrintPlanShoppingList}
+                disabled={planAnalysis.insumosList.length === 0}
+                className="ds-btn ds-btn-secondary ds-btn-sm"
+                title="Imprimir u obtener PDF de la lista de compras"
+              >
+                <Printer size={14} /> Imprimir / PDF
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCopyPlanWhatsApp}
+                disabled={planAnalysis.insumosList.length === 0}
+                className="ds-btn ds-btn-primary ds-btn-sm"
+                style={{ background: '#16a34a', borderColor: '#16a34a', color: '#fff', fontWeight: '700' }}
+                title="Copiar lista de compras formateada para WhatsApp"
+              >
+                <MessageSquare size={14} /> Copiar para WhatsApp
+              </button>
+
+              {planAnalysis.totalPlannedUnits > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearProductionPlan}
+                  className="ds-btn ds-btn-ghost ds-btn-sm"
+                  style={{ color: '#ef4444' }}
+                  title="Reiniciar todas las metas a 0"
+                >
+                  <RotateCcw size={14} /> Reiniciar
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* TARJETAS KPI DE RESUMEN EJECUTIVO */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '14px' }}>
+            {/* Meta Total */}
+            <div className="ds-card" style={{ padding: '16px', borderLeft: '4px solid #7c3aed' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase', color: 'var(--ds-text-secondary)' }}>
+                  Meta de Producción
+                </span>
+                <Target size={18} color="#7c3aed" />
+              </div>
+              <div style={{ fontSize: '24px', fontWeight: '900', color: 'var(--ds-text-primary)' }}>
+                {planAnalysis.totalPlannedUnits.toLocaleString('es-CO')} <span style={{ fontSize: '13px', fontWeight: '500' }}>unidades</span>
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--ds-text-muted)', marginTop: '4px' }}>
+                Distribuido en {planAnalysis.activeProducts.length} {planAnalysis.activeProducts.length === 1 ? 'producto' : 'productos'}
+              </div>
+            </div>
+
+            {/* Insumos Involucrados */}
+            <div className="ds-card" style={{ padding: '16px', borderLeft: '4px solid #3b82f6' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase', color: 'var(--ds-text-secondary)' }}>
+                  Insumos Necesarios
+                </span>
+                <Boxes size={18} color="#3b82f6" />
+              </div>
+              <div style={{ fontSize: '24px', fontWeight: '900', color: 'var(--ds-text-primary)' }}>
+                {planAnalysis.insumosList.length} <span style={{ fontSize: '13px', fontWeight: '500' }}>materias primas</span>
+              </div>
+              <div style={{ fontSize: '12px', color: '#10b981', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <CheckCircle2 size={13} /> {planAnalysis.sufficientItems.length} con stock suficiente ({planAnalysis.coveragePct}%)
+              </div>
+            </div>
+
+            {/* Insumos Faltantes (Déficit) */}
+            <div className="ds-card" style={{
+              padding: '16px',
+              borderLeft: planAnalysis.deficitItems.length > 0 ? '4px solid #ef4444' : '4px solid #10b981',
+              background: planAnalysis.deficitItems.length > 0 ? 'rgba(239, 68, 68, 0.04)' : undefined
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase', color: 'var(--ds-text-secondary)' }}>
+                  Insumos a Comprar
+                </span>
+                <AlertTriangle size={18} color={planAnalysis.deficitItems.length > 0 ? '#ef4444' : '#10b981'} />
+              </div>
+              <div style={{ fontSize: '24px', fontWeight: '900', color: planAnalysis.deficitItems.length > 0 ? '#ef4444' : '#10b981' }}>
+                {planAnalysis.deficitItems.length} <span style={{ fontSize: '13px', fontWeight: '500' }}>ítems en déficit</span>
+              </div>
+              <div style={{ fontSize: '12px', color: planAnalysis.deficitItems.length > 0 ? '#ef4444' : '#10b981', marginTop: '4px' }}>
+                {planAnalysis.deficitItems.length > 0 ? 'Requieren compra para cumplir meta' : '✓ Stock 100% garantizado'}
+              </div>
+            </div>
+
+            {/* Presupuesto de Compras */}
+            <div className="ds-card" style={{ padding: '16px', borderLeft: '4px solid #10b981' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase', color: 'var(--ds-text-secondary)' }}>
+                  Inversión en Compras
+                </span>
+                <DollarSign size={18} color="#10b981" />
+              </div>
+              <div style={{ fontSize: '24px', fontWeight: '900', color: '#10b981' }}>
+                {formatCurrency(planAnalysis.totalEstimatedCost)}
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--ds-text-muted)', marginTop: '4px' }}>
+                Presupuesto estimado de reposición
+              </div>
+            </div>
+          </div>
+
+          {/* ALERTA DE PRODUCTOS SIN RECETA SI LOS HAY */}
+          {planAnalysis.missingRecipesCount > 0 && (
+            <div style={{
+              background: 'rgba(245, 158, 11, 0.1)',
+              border: '1px solid rgba(245, 158, 11, 0.4)',
+              borderRadius: '10px',
+              padding: '12px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+              fontSize: '13px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <AlertCircle size={20} color="#f59e0b" />
+                <div>
+                  <strong style={{ color: '#d97706' }}>Atención:</strong> Tienes <strong>{planAnalysis.missingRecipesCount}</strong> producto(s) en la meta sin receta técnica configurada.
+                  <span style={{ color: 'var(--ds-text-secondary)', marginLeft: '6px' }}>
+                    Para que el sistema sepa qué insumos consumen, debes definir sus ingredientes en la pestaña Recetas.
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('recetas')}
+                className="ds-btn ds-btn-sm ds-btn-secondary"
+                style={{ borderColor: '#f59e0b', color: '#b45309' }}
+              >
+                <Utensils size={14} /> Ir a Recetas
+              </button>
+            </div>
+          )}
+
+          {/* CONTENEDOR EN 2 COLUMNAS */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(330px, 420px) 1fr', gap: '20px', alignItems: 'start' }}>
+            
+            {/* COLUMNA IZQUIERDA: CONFIGURADOR DE METAS */}
+            <div className="ds-card" style={{ padding: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
+                <h4 style={{ margin: 0, fontSize: '15px', fontWeight: '800', color: 'var(--ds-text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <ChefHat size={16} color="var(--ds-primary)" /> 1. Metas por Producto
+                </h4>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  <button
+                    type="button"
+                    onClick={() => handleSetCommonPreset(50)}
+                    className="ds-btn ds-btn-ghost ds-btn-sm"
+                    style={{ fontSize: '11px', padding: '3px 6px' }}
+                    title="Poner meta de 50 a productos con receta"
+                  >
+                    +50 a c/u
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSetCommonPreset(100)}
+                    className="ds-btn ds-btn-ghost ds-btn-sm"
+                    style={{ fontSize: '11px', padding: '3px 6px' }}
+                    title="Poner meta de 100 a productos con receta"
+                  >
+                    +100 a c/u
+                  </button>
+                </div>
+              </div>
+
+              {/* Filtros de Productos */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '14px' }}>
+                <div style={{ position: 'relative' }}>
+                  <Search size={15} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--ds-text-muted)' }} />
+                  <input
+                    type="text"
+                    className="ds-input ds-input-sm"
+                    style={{ paddingLeft: '32px' }}
+                    placeholder="Buscar producto (ej: salchipapa, burguer)..."
+                    value={planSearch}
+                    onChange={(e) => setPlanSearch(e.target.value)}
+                  />
+                  {planSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setPlanSearch('')}
+                      style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ds-text-muted)' }}
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <select
+                    className="ds-select ds-select-sm"
+                    value={planCategoryFilter}
+                    onChange={(e) => setPlanCategoryFilter(e.target.value)}
+                    style={{ flex: 1 }}
+                  >
+                    <option value="ALL">Todas las categorías ({products.length})</option>
+                    {planProductCategories.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', cursor: 'pointer', color: 'var(--ds-text-secondary)', userSelect: 'none', whiteSpace: 'nowrap' }}>
+                    <input
+                      type="checkbox"
+                      checked={planOnlyActiveTargets}
+                      onChange={(e) => setPlanOnlyActiveTargets(e.target.checked)}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    Solo activos ({planAnalysis.activeProducts.length})
+                  </label>
+                </div>
+              </div>
+
+              {/* Lista de Productos con inputs */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '680px', overflowY: 'auto', paddingRight: '4px' }}>
+                {filteredPlanProducts.length === 0 ? (
+                  <div style={{ padding: '24px', textAlign: 'center', color: 'var(--ds-text-muted)', fontSize: '13px' }}>
+                    No se encontraron productos con los filtros aplicados.
+                  </div>
+                ) : (
+                  filteredPlanProducts.map((p) => {
+                    const target = Number(productionPlan[p.id]) || 0;
+                    const prodRecipes = productRecipesMap[String(p.id)] || [];
+                    const hasRecipe = prodRecipes.length > 0;
+                    const isConfigured = target > 0;
+
+                    // Cuánto alcanza con stock actual
+                    let maxWithStock = 0;
+                    let bottleNeck = null;
+                    if (hasRecipe) {
+                      let minVal = null;
+                      prodRecipes.forEach((r) => {
+                        const q = Number(r.quantity) || 0;
+                        if (q > 0) {
+                          const ins = insumosMap[String(r.inventory_id)];
+                          const stk = ins ? Math.max(0, Number(ins.stock) || 0) : 0;
+                          const possible = Math.floor(stk / q);
+                          if (minVal === null || possible < minVal) {
+                            minVal = possible;
+                            bottleNeck = ins ? ins.name : r.inventory_title;
+                          }
+                        }
+                      });
+                      maxWithStock = minVal !== null ? minVal : 0;
+                    }
+
+                    return (
+                      <div
+                        key={p.id}
+                        style={{
+                          border: isConfigured ? '1.5px solid #7c3aed' : '1px solid var(--ds-border-color)',
+                          borderRadius: '10px',
+                          padding: '12px',
+                          background: isConfigured ? 'rgba(124, 58, 237, 0.04)' : 'var(--ds-surface-secondary, rgba(255,255,255,0.02))',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                              <strong style={{ fontSize: '14px', color: 'var(--ds-text-primary)' }}>
+                                {p.title || p.name}
+                              </strong>
+                              {p.category && (
+                                <span style={{
+                                  fontSize: '10px',
+                                  padding: '1px 6px',
+                                  borderRadius: '6px',
+                                  background: 'var(--ds-surface-tertiary, rgba(255,255,255,0.08))',
+                                  color: 'var(--ds-text-secondary)',
+                                  fontWeight: '600'
+                                }}>
+                                  {p.category}
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: '12px', color: 'var(--ds-text-muted)', marginTop: '2px' }}>
+                              Precio venta: <span style={{ color: 'var(--ds-text-secondary)', fontWeight: '600' }}>{formatCurrency(p.price)}</span>
+                            </div>
+                          </div>
+
+                          {/* Badge de Receta */}
+                          {hasRecipe ? (
+                            <span style={{ fontSize: '11px', color: '#10b981', background: 'rgba(16, 185, 129, 0.1)', padding: '2px 6px', borderRadius: '4px', fontWeight: '600', whiteSpace: 'nowrap' }} title={`${prodRecipes.length} ingredientes en ficha técnica`}>
+                              ✓ {prodRecipes.length} ingr.
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedRecipeProduct(p.id);
+                                setActiveTab('recetas');
+                              }}
+                              className="ds-btn ds-btn-ghost ds-btn-sm"
+                              style={{ color: '#f59e0b', fontSize: '11px', padding: '2px 6px' }}
+                              title="Configurar ingredientes en Recetas"
+                            >
+                              ⚠️ Sin receta
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Capacidad con stock actual */}
+                        {hasRecipe && (
+                          <div style={{ fontSize: '11.5px', marginTop: '6px', color: maxWithStock >= (target || 1) ? '#10b981' : '#f59e0b', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span>Stock actual rinde para: <strong>{maxWithStock} uds</strong></span>
+                            {bottleNeck && maxWithStock < 100 && (
+                              <span style={{ color: 'var(--ds-text-muted)' }}> (Limitante: {bottleNeck})</span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Input y botones de Meta */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px', gap: '8px', flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: '12px', fontWeight: '700', color: isConfigured ? '#7c3aed' : 'var(--ds-text-secondary)' }}>
+                            Meta a producir:
+                          </span>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleIncrementProductTarget(p.id, -10)}
+                              className="ds-btn ds-btn-secondary ds-btn-sm"
+                              style={{ padding: '2px 6px', minWidth: '28px', height: '28px', fontSize: '11px' }}
+                              title="Restar 10"
+                            >
+                              -10
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleIncrementProductTarget(p.id, -1)}
+                              className="ds-btn ds-btn-secondary ds-btn-sm"
+                              style={{ padding: '2px 6px', minWidth: '26px', height: '28px' }}
+                              title="Restar 1"
+                            >
+                              -1
+                            </button>
+
+                            <input
+                              type="number"
+                              min="0"
+                              value={target === 0 ? '' : target}
+                              placeholder="0"
+                              onChange={(e) => handleUpdateProductTarget(p.id, e.target.value)}
+                              className="ds-input ds-input-sm"
+                              style={{ width: '64px', textAlign: 'center', fontWeight: '800', height: '28px', padding: '2px 4px' }}
+                            />
+
+                            <button
+                              type="button"
+                              onClick={() => handleIncrementProductTarget(p.id, 1)}
+                              className="ds-btn ds-btn-secondary ds-btn-sm"
+                              style={{ padding: '2px 6px', minWidth: '26px', height: '28px' }}
+                              title="Sumar 1"
+                            >
+                              +1
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleIncrementProductTarget(p.id, 10)}
+                              className="ds-btn ds-btn-secondary ds-btn-sm"
+                              style={{ padding: '2px 6px', minWidth: '28px', height: '28px', fontSize: '11px' }}
+                              title="Sumar 10"
+                            >
+                              +10
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateProductTarget(p.id, target === 100 ? 50 : 100)}
+                              className="ds-btn ds-btn-ghost ds-btn-sm"
+                              style={{ padding: '2px 6px', fontSize: '11px', height: '28px', fontWeight: '700', color: 'var(--ds-primary)' }}
+                              title="Meta rápida 100"
+                            >
+                              {target === 100 ? '50' : '100'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* COLUMNA DERECHA: RESULTADOS DEL PLAN Y LISTA DE COMPRAS */}
+            <div className="ds-card" style={{ padding: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '15px', fontWeight: '800', color: 'var(--ds-text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <ShoppingCart size={16} color="#10b981" /> 2. Insumos Requeridos & Lista de Compras
+                  </h4>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: 'var(--ds-text-muted)' }}>
+                    Explosión de materias primas según las recetas de los productos configurados.
+                  </p>
+                </div>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer', color: 'var(--ds-text-secondary)', userSelect: 'none' }} title="Si está activo, desglosa salsas y carnes preparadas en sus ingredientes crudos">
+                  <input
+                    type="checkbox"
+                    checked={expandSubrecipesInPlan}
+                    onChange={(e) => setExpandSubrecipesInPlan(e.target.checked)}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  <span>Desglosar sub-recetas (carnes/salsas)</span>
+                </label>
+              </div>
+
+              {/* Pestañas de Filtrado de Insumos & Buscador */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '14px' }}>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => setPlanInsumoFilter('DEFICIT')}
+                    className={`ds-btn ds-btn-sm ${planInsumoFilter === 'DEFICIT' ? 'ds-btn-primary' : 'ds-btn-secondary'}`}
+                    style={planInsumoFilter === 'DEFICIT' ? { background: '#ef4444', borderColor: '#ef4444', color: '#fff' } : {}}
+                  >
+                    <AlertTriangle size={13} /> Faltantes a Comprar ({planAnalysis.deficitItems.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPlanInsumoFilter('SUFFICIENT')}
+                    className={`ds-btn ds-btn-sm ${planInsumoFilter === 'SUFFICIENT' ? 'ds-btn-primary' : 'ds-btn-secondary'}`}
+                  >
+                    <CheckCircle2 size={13} /> Con Stock ({planAnalysis.sufficientItems.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPlanInsumoFilter('ALL')}
+                    className={`ds-btn ds-btn-sm ${planInsumoFilter === 'ALL' ? 'ds-btn-primary' : 'ds-btn-secondary'}`}
+                  >
+                    Todos ({planAnalysis.insumosList.length})
+                  </button>
+                </div>
+
+                <div style={{ position: 'relative', minWidth: '200px' }}>
+                  <Search size={14} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--ds-text-muted)' }} />
+                  <input
+                    type="text"
+                    className="ds-input ds-input-sm"
+                    style={{ paddingLeft: '28px' }}
+                    placeholder="Filtrar insumo..."
+                    value={planInsumoSearch}
+                    onChange={(e) => setPlanInsumoSearch(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Tabla de Insumos */}
+              {planAnalysis.insumosList.length === 0 ? (
+                <div style={{ padding: '48px 24px', textAlign: 'center', color: 'var(--ds-text-secondary)' }}>
+                  <Calculator size={42} style={{ margin: '0 auto 12px auto', opacity: 0.35 }} />
+                  <h5 style={{ margin: '0 0 6px 0', fontSize: '16px', fontWeight: '700', color: 'var(--ds-text-primary)' }}>
+                    Configura tu meta de producción a la izquierda
+                  </h5>
+                  <p style={{ margin: '0 auto', fontSize: '13px', color: 'var(--ds-text-muted)', maxWidth: '420px' }}>
+                    Ingresa cuántas hamburguesas, salchipapas o perros quieres tener listos (ej: 100, 100, 50). Aquí verás al instante la lista de compras exacta con cantidades y costos.
+                  </p>
+                </div>
+              ) : filteredPlanInsumos.length === 0 ? (
+                <div style={{ padding: '36px', textAlign: 'center', color: 'var(--ds-text-muted)', fontSize: '13px' }}>
+                  {planInsumoFilter === 'DEFICIT'
+                    ? '🎉 ¡Excelente! No tienes insumos en déficit en este filtro. Tu inventario actual cubre la producción requerida.'
+                    : 'No hay insumos que coincidan con la búsqueda.'}
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto', border: '1px solid var(--ds-border-color)', borderRadius: '8px' }}>
+                  <table className="ds-table" style={{ width: '100%', fontSize: '12.5px', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: 'var(--ds-surface-secondary, rgba(255,255,255,0.03))', borderBottom: '1px solid var(--ds-border-color)' }}>
+                        <th style={{ padding: '10px 12px', textAlign: 'left' }}>Insumo / Materia Prima</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'right' }}>Stock Actual</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'right' }}>Requerido</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'right' }}>Balance</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'right' }}>A Comprar</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'right' }}>Costo Est.</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredPlanInsumos.map((it) => {
+                        const stockFmt = it.currentStock % 1 === 0 ? it.currentStock : it.currentStock.toFixed(2);
+                        const reqFmt = it.requiredQty % 1 === 0 ? it.requiredQty : it.requiredQty.toFixed(2);
+                        const deficitFmt = it.deficit % 1 === 0 ? it.deficit : it.deficit.toFixed(2);
+
+                        return (
+                          <tr
+                            key={it.insumo.id || it.insumo.name}
+                            style={{
+                              borderBottom: '1px solid var(--ds-border-color)',
+                              background: it.isDeficit ? 'rgba(239, 68, 68, 0.03)' : undefined
+                            }}
+                          >
+                            <td style={{ padding: '10px 12px' }}>
+                              <div style={{ fontWeight: '700', color: 'var(--ds-text-primary)' }}>
+                                {it.insumo.name}
+                              </div>
+                              <div style={{ fontSize: '11px', color: 'var(--ds-text-muted)', marginTop: '2px' }}>
+                                {it.insumo.category || 'General'}
+                                {it.isFromSubrecipe && (
+                                  <span style={{ marginLeft: '6px', color: '#8b5cf6', fontWeight: '600' }}>
+                                    (de sub-receta: {it.parentName})
+                                  </span>
+                                )}
+                              </div>
+                              {/* Desglose de dónde se consume */}
+                              <div style={{ fontSize: '10.5px', color: 'var(--ds-text-secondary)', marginTop: '3px' }}>
+                                Usado en: {it.usedIn.map((u) => `${u.productTitle} (${u.totalConsumed.toFixed(1)} ${it.insumo.unit})`).join(', ')}
+                              </div>
+                            </td>
+
+                            <td style={{ padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                              <span style={{ fontWeight: '600', color: it.currentStock > 0 ? 'var(--ds-text-primary)' : '#ef4444' }}>
+                                {stockFmt} {it.insumo.unit}
+                              </span>
+                            </td>
+
+                            <td style={{ padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                              <span style={{ fontWeight: '700', color: 'var(--ds-text-primary)' }}>
+                                {reqFmt} {it.insumo.unit}
+                              </span>
+                            </td>
+
+                            <td style={{ padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                              {it.isDeficit ? (
+                                <span style={{ color: '#ef4444', fontWeight: '800', background: 'rgba(239, 68, 68, 0.1)', padding: '2px 6px', borderRadius: '4px' }}>
+                                  -{deficitFmt} {it.insumo.unit}
+                                </span>
+                              ) : (
+                                <span style={{ color: '#10b981', fontWeight: '600' }}>
+                                  +{((it.currentStock - it.requiredQty) % 1 === 0 ? (it.currentStock - it.requiredQty) : (it.currentStock - it.requiredQty).toFixed(2))} {it.insumo.unit}
+                                </span>
+                              )}
+                            </td>
+
+                            <td style={{ padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                              {it.isDeficit ? (
+                                <div>
+                                  <strong style={{ color: '#ef4444', fontSize: '13px' }}>
+                                    {deficitFmt} {it.insumo.unit}
+                                  </strong>
+                                  {it.purchaseSuggested && (
+                                    <div style={{ fontSize: '10.5px', color: 'var(--ds-text-secondary)', fontWeight: '600' }}>
+                                      📦 {it.purchaseSuggested}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span style={{ color: '#10b981', fontSize: '11.5px', fontWeight: '600' }}>
+                                  ✓ Suficiente
+                                </span>
+                              )}
+                            </td>
+
+                            <td style={{ padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                              {it.isDeficit ? (
+                                <div>
+                                  <strong style={{ color: 'var(--ds-text-primary)' }}>
+                                    {formatCurrency(it.estimatedCost)}
+                                  </strong>
+                                  <div style={{ fontSize: '10.5px', color: 'var(--ds-text-muted)' }}>
+                                    {formatCurrency(it.unitCost)} / {it.insumo.unit}
+                                  </div>
+                                </div>
+                              ) : (
+                                <span style={{ color: 'var(--ds-text-muted)' }}>$ 0</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ background: 'var(--ds-surface-secondary, rgba(255,255,255,0.05))', fontWeight: '800', borderTop: '2px solid var(--ds-border-color)' }}>
+                        <td colSpan={4} style={{ padding: '12px', textAlign: 'right', color: 'var(--ds-text-primary)' }}>
+                          TOTAL ESTIMADO EN COMPRAS FALTANTES:
+                        </td>
+                        <td colSpan={2} style={{ padding: '12px', textAlign: 'right', color: '#10b981', fontSize: '15px' }}>
+                          {formatCurrency(planAnalysis.totalEstimatedCost)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
       {/* PESTAÑA 9: RECETAS DE MODIFICADORES & ADICIONES 🥓 */}
       {/* ========================================================================= */}
       {activeTab === 'modificadores' && (
@@ -3864,6 +5272,15 @@ export default function AdminInventario() {
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               <button
                 type="button"
+                onClick={handlePrintAuditSheet}
+                className="ds-btn ds-btn-secondary"
+                title="Generar e imprimir planilla en blanco para que el encargado haga el conteo manual con lápiz"
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '700', borderColor: '#7c3aed', color: '#7c3aed' }}
+              >
+                <Printer size={16} /> Imprimir Planilla para Conteo (PDF)
+              </button>
+              <button
+                type="button"
                 onClick={() => setAuditCounts({})}
                 className="ds-btn ds-btn-secondary"
                 disabled={Object.keys(auditCounts).length === 0}
@@ -3917,6 +5334,58 @@ export default function AdminInventario() {
               </div>
             </div>
 
+            {/* Barra de Filtros y Búsqueda para Conteo Físico */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '14px', paddingBottom: '12px', borderBottom: '1px solid var(--ds-border-color)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', flex: 1 }}>
+                <div style={{ position: 'relative', minWidth: '220px', flex: 1, maxWidth: '340px' }}>
+                  <Search size={15} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--ds-text-muted)' }} />
+                  <input
+                    type="text"
+                    className="ds-input ds-input-sm"
+                    style={{ paddingLeft: '32px' }}
+                    placeholder="Buscar insumo por nombre o SKU..."
+                    value={auditSearch}
+                    onChange={(e) => setAuditSearch(e.target.value)}
+                  />
+                  {auditSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setAuditSearch('')}
+                      style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ds-text-muted)' }}
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+
+                <select
+                  className="ds-select ds-select-sm"
+                  style={{ width: '180px' }}
+                  value={auditCategoryFilter}
+                  onChange={(e) => setAuditCategoryFilter(e.target.value)}
+                >
+                  <option value="ALL">Todas las categorías ({insumos.length})</option>
+                  {auditCategories.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+
+                <span style={{ fontSize: '12px', color: 'var(--ds-text-muted)' }}>
+                  Mostrando {filteredAuditInsumos.length} de {insumos.length} insumos
+                </span>
+              </div>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer', color: 'var(--ds-text-secondary)', userSelect: 'none' }} title="Si se desmarca, la planilla impresa saldrá sin el stock del sistema para un conteo 100% a ciegas">
+                <input
+                  type="checkbox"
+                  checked={auditIncludeSystemStock}
+                  onChange={(e) => setAuditIncludeSystemStock(e.target.checked)}
+                  style={{ cursor: 'pointer' }}
+                />
+                <span>Incluir stock de sistema en la hoja impresa</span>
+              </label>
+            </div>
+
             <div className="overflow-x-auto">
               <table className="ds-table w-full text-left border-collapse">
                 <thead>
@@ -3931,7 +5400,14 @@ export default function AdminInventario() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-800 text-sm">
-                  {insumos.map((item) => {
+                  {filteredAuditInsumos.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} style={{ padding: '32px', textAlign: 'center', color: 'var(--ds-text-muted)', fontSize: '13px' }}>
+                        No se encontraron insumos con los filtros de búsqueda aplicados.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredAuditInsumos.map((item) => {
                     const systemStock = Number(item.stock) || 0;
                     const countVal = auditCounts[item.id];
                     const hasCount = countVal !== undefined && countVal !== '';
@@ -3989,7 +5465,8 @@ export default function AdminInventario() {
                         </td>
                       </tr>
                     );
-                  })}
+                  })
+                )}
                 </tbody>
               </table>
             </div>

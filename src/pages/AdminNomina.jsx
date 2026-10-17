@@ -4,7 +4,7 @@ import {
   AlertCircle, AlertTriangle, FileText, ChevronRight, Download, RefreshCw,
   Search, Filter, ShieldCheck, ArrowUpRight, ArrowDownRight, Coffee,
   CreditCard, Banknote, Briefcase, ChevronDown, Check, X, ShieldAlert,
-  Info, ExternalLink, Award, FileSpreadsheet, Send
+  Info, ExternalLink, Award, FileSpreadsheet, Send, Eye, Printer, Mail, MessageSquare, RotateCcw
 } from 'lucide-react';
 import { API_URL } from '../config/api';
 import { AuthContext } from '../context/AuthContext';
@@ -23,8 +23,312 @@ function generateIdempotencyKey(prefix = 'pay') {
   return `${prefix}_${rand}`;
 }
 
+function calculateAge(birthDate) {
+  if (!birthDate) return null;
+  const birth = new Date(birthDate);
+  if (isNaN(birth.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+    age--;
+  }
+  return age >= 0 ? age : null;
+}
+
+function generateWhatsAppText(item, period) {
+  const empName = `${item.first_name} ${item.last_name}`;
+  const periodName = period?.name || 'Periodo de Nómina';
+  const dates = period ? `${formatDateOnly(period.start_date)} al ${formatDateOnly(period.end_date)}` : '';
+  
+  const dailyRate = Number(item.daily_rate) > 0 
+    ? Number(item.daily_rate) 
+    : (Number(item.days_worked) > 0 ? Math.round(Number(item.base_salary_earned) / Number(item.days_worked)) : 0);
+  
+  const jornadaStatus = item.contract_type?.includes('Turno') || item.contract_type?.includes('Jornal') 
+    ? 'Por Jornal / Turno (Por Día)' 
+    : item.contract_type === 'Prestación de Servicios' 
+    ? 'Prestación de Servicios (Por Día)' 
+    : 'Jornada Laboral Ordinaria';
+
+  let msg = `*DISTRIC HOUSE - DESPRENDIBLE DE PAGO*\n`;
+  msg += `━━━━━━━━━━━━━━━━━━━━\n`;
+  msg += `👤 *Colaborador:* ${empName}\n`;
+  msg += `🪪 *Doc:* ${item.document_type || 'CC'} ${item.document_number}\n`;
+  msg += `💼 *Cargo:* ${item.position} (${item.contract_type})\n`;
+  msg += `⏱️ *Estado de Jornada:* ${jornadaStatus} (${item.hours_worked || 0} hrs)\n`;
+  msg += `📅 *Periodo:* ${periodName}\n`;
+  if (dates) msg += `🗓️ *Fechas:* ${dates}\n`;
+  msg += `🗓️ *Total Días Remunerados:* ${item.days_worked} días (${formatCurrency(dailyRate)}/día)\n`;
+  msg += `💵 *Valor Días Remunerados:* ${formatCurrency(item.base_salary_earned)}\n`;
+  if (Number(item.days_leave_paid) > 0) {
+    msg += `🎁 *Días de Permiso Remunerado:* ${item.days_leave_paid} días\n`;
+  }
+  if (Number(item.days_rest) > 0) {
+    msg += `🛌 *Días de Descanso Legal:* ${item.days_rest} días\n`;
+  }
+  if (Number(item.days_leave_unpaid) > 0) {
+    msg += `⚠️ *Días No Remunerados:* ${item.days_leave_unpaid} días (descontados)\n`;
+  }
+  msg += `\n💰 *TOTAL DEVENGADO:* ${formatCurrency(item.total_accrued)}\n`;
+  msg += `  • Días Remunerados (${item.days_worked} d): ${formatCurrency(item.base_salary_earned)}\n`;
+  msg += `  • Aux. Transporte: ${formatCurrency(item.transport_allowance_earned)}\n`;
+  msg += `  • Horas Extras/Recargos: ${formatCurrency(item.overtime_amount)}\n`;
+  if (Number(item.bonuses_earned) > 0) {
+    msg += `  • Bonificaciones: ${formatCurrency(item.bonuses_earned)}\n`;
+  }
+  msg += `\n🔻 *TOTAL DEDUCCIONES:* ${formatCurrency(item.total_deductions)}\n`;
+  msg += `  • Salud (4%): ${formatCurrency(item.health_deduction)}\n`;
+  msg += `  • Pensión (4%): ${formatCurrency(item.pension_deduction)}\n`;
+  if (Number(item.advances_deduction) > 0) {
+    msg += `  • Anticipos/Préstamos: ${formatCurrency(item.advances_deduction)}\n`;
+  }
+  if (Number(item.other_deductions) > 0) {
+    msg += `  • Otras Deducciones: ${formatCurrency(item.other_deductions)}\n`;
+  }
+  msg += `\n💵 *NETO A PAGAR: ${formatCurrency(item.net_payable)}*\n`;
+  msg += `💳 *Medio de Pago:* ${item.payment_method || 'Efectivo'}${item.bank_name ? ` (${item.bank_name})` : ''}\n`;
+  msg += `📌 *Estado:* ${item.payment_status || 'Pendiente'}\n`;
+  msg += `━━━━━━━━━━━━━━━━━━━━\n`;
+  msg += `_Nómina y Gestión del Talento - Distric House_`;
+  return msg;
+}
+
+function handlePrintReceipt(item, period, settings) {
+  const printWin = window.open('', '_blank', 'width=800,height=900');
+  if (!printWin) {
+    alert('Por favor habilita las ventanas emergentes (popups) para generar el PDF / impresión.');
+    return;
+  }
+  
+  const empName = `${item.first_name} ${item.last_name}`;
+  const periodName = period?.name || 'Periodo de Nómina';
+  const dates = period ? `${formatDateOnly(period.start_date)} al ${formatDateOnly(period.end_date)}` : '';
+  
+  const dailyRate = Number(item.daily_rate) > 0 
+    ? Number(item.daily_rate) 
+    : (Number(item.days_worked) > 0 ? Math.round(Number(item.base_salary_earned) / Number(item.days_worked)) : 0);
+  
+  const jornadaStatus = item.contract_type?.includes('Turno') || item.contract_type?.includes('Jornal') 
+    ? 'Por Jornal / Turno (Por Día)' 
+    : item.contract_type === 'Prestación de Servicios' 
+    ? 'Prestación de Servicios (Por Día)' 
+    : 'Jornada Laboral Ordinaria';
+
+  let logoSrc = settings?.admin_logo || settings?.logo || '/logo.png';
+  if (logoSrc && logoSrc.startsWith('/')) {
+    logoSrc = window.location.origin + logoSrc;
+  }
+  
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Desprendible de Nómina - ${empName}</title>
+  <style>
+    @page { size: portrait; margin: 12mm; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; color: #1f2937; margin: 0; padding: 20px; font-size: 13px; line-height: 1.4; }
+    .header { border-bottom: 2px solid #111827; padding-bottom: 12px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+    .header-left { display: flex; align-items: center; gap: 16px; }
+    .logo-img { height: 60px; max-width: 130px; object-fit: contain; }
+    .company-title { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; margin: 0; color: #111827; text-transform: uppercase; }
+    .doc-title { font-size: 13px; font-weight: 700; color: #4b5563; text-transform: uppercase; margin-top: 2px; }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 4px; font-weight: bold; font-size: 12px; background: #e5e7eb; }
+    .badge-paid { background: #dcfce7; color: #166534; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: #f9fafb; padding: 12px; border: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: 20px; }
+    .info-item { font-size: 12px; }
+    .info-item strong { color: #111827; }
+    .tables-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { text-align: left; padding: 6px 8px; background: #f3f4f6; border-bottom: 1px solid #d1d5db; font-weight: 700; font-size: 11px; text-transform: uppercase; }
+    td { padding: 6px 8px; border-bottom: 1px solid #f3f4f6; }
+    .num { text-align: right; }
+    .total-row { font-weight: 800; border-top: 2px solid #374151; border-bottom: 2px solid #374151; background: #f9fafb; }
+    .net-box { background: #f0fdf4; border: 2px solid #22c55e; border-radius: 6px; padding: 16px; text-align: center; margin-bottom: 24px; }
+    .net-title { font-size: 13px; font-weight: 700; color: #166534; text-transform: uppercase; }
+    .net-amount { font-size: 28px; font-weight: 900; color: #15803d; margin: 4px 0; }
+    .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; margin-top: 45px; padding-top: 20px; }
+    .sign-line { border-top: 1px solid #9ca3af; text-align: center; padding-top: 8px; font-size: 12px; }
+    @media print {
+      body { padding: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-left">
+      <img src="${logoSrc}" alt="Distric House" class="logo-img" onerror="this.style.display='none'" />
+      <div>
+        <h1 class="company-title">DISTRIC HOUSE</h1>
+        <div class="doc-title">Desprendible de Nómina Individual</div>
+        <div style="font-size: 12px; color: #4b5563; margin-top: 2px;">Periodo: <strong>${periodName}</strong> ${dates ? `(${dates})` : ''}</div>
+      </div>
+    </div>
+    <div style="text-align: right;">
+      <span class="badge ${item.payment_status === 'Pagado' ? 'badge-paid' : ''}">${item.payment_status || 'Pendiente'}</span>
+      <div style="font-size: 11px; color: #6b7280; margin-top: 6px;">Impreso el ${new Date().toLocaleDateString('es-CO')}</div>
+    </div>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-item"><strong>Colaborador:</strong> ${empName}</div>
+    <div class="info-item"><strong>Identificación:</strong> ${item.document_type || 'CC'} ${item.document_number}</div>
+    <div class="info-item"><strong>Cargo:</strong> ${item.position}</div>
+    <div class="info-item"><strong>Tipo Contrato:</strong> ${item.contract_type}</div>
+    <div class="info-item"><strong>Estado de Jornada:</strong> ${jornadaStatus} (${item.hours_worked || 0} hrs)</div>
+    <div class="info-item"><strong>Total Días Remunerados:</strong> <span style="color: #166534; font-weight: bold;">${item.days_worked} días</span> (${formatCurrency(dailyRate)}/día)</div>
+    <div class="info-item"><strong>Valor Días Remunerados:</strong> <strong style="color: #166534;">${formatCurrency(item.base_salary_earned)}</strong></div>
+    <div class="info-item"><strong>Medio de Pago:</strong> ${item.payment_method || 'Efectivo'}${item.bank_name ? ` - ${item.bank_name}` : ''}</div>
+  </div>
+
+  <div class="tables-grid">
+    <div>
+      <h4 style="margin: 0 0 6px 0; font-size: 12px; color: #166534; text-transform: uppercase;">1. Devengados (Ingresos)</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>Concepto</th>
+            <th class="num">Monto</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              Días Remunerados (${item.days_worked} días a ${formatCurrency(dailyRate)}/día)
+              ${Number(item.days_leave_paid) > 0 ? `<br><small style="color: #2563eb;">• Incluye ${item.days_leave_paid} días de permiso remunerado</small>` : ''}
+              ${Number(item.days_rest) > 0 ? `<br><small style="color: #4b5563;">• Incluye ${item.days_rest} días de descanso legal</small>` : ''}
+              ${Number(item.days_holiday) > 0 ? `<br><small style="color: #4b5563;">• Incluye ${item.days_holiday} días festivos</small>` : ''}
+            </td>
+            <td class="num" style="font-weight: 700; color: #166534;">${formatCurrency(item.base_salary_earned)}</td>
+          </tr>
+          ${Number(item.days_leave_unpaid) > 0 ? `
+          <tr>
+            <td style="color: #dc2626;">• Días No Remunerados (${item.days_leave_unpaid} d descontados)</td>
+            <td class="num" style="color: #dc2626;">-$ 0</td>
+          </tr>` : ''}
+          <tr>
+            <td>Auxilio de Transporte</td>
+            <td class="num">${formatCurrency(item.transport_allowance_earned)}</td>
+          </tr>
+          <tr>
+            <td>Horas Extras y Recargos</td>
+            <td class="num">${formatCurrency(item.overtime_amount)}</td>
+          </tr>
+          ${Number(item.bonuses_earned) > 0 ? `
+          <tr>
+            <td>Bonificaciones / Otros</td>
+            <td class="num">${formatCurrency(item.bonuses_earned)}</td>
+          </tr>` : ''}
+          <tr class="total-row">
+            <td>TOTAL DEVENGADO</td>
+            <td class="num">${formatCurrency(item.total_accrued)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div>
+      <h4 style="margin: 0 0 6px 0; font-size: 12px; color: #991b1b; text-transform: uppercase;">2. Deducciones</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>Concepto</th>
+            <th class="num">Monto</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Aporte Salud (4%)</td>
+            <td class="num">${formatCurrency(item.health_deduction)}</td>
+          </tr>
+          <tr>
+            <td>Aporte Pensión (4%)</td>
+            <td class="num">${formatCurrency(item.pension_deduction)}</td>
+          </tr>
+          ${Number(item.advances_deduction) > 0 ? `
+          <tr>
+            <td>Anticipos y Préstamos</td>
+            <td class="num">${formatCurrency(item.advances_deduction)}</td>
+          </tr>` : ''}
+          ${Number(item.other_deductions) > 0 ? `
+          <tr>
+            <td>Otras Deducciones</td>
+            <td class="num">${formatCurrency(item.other_deductions)}</td>
+          </tr>` : ''}
+          <tr class="total-row">
+            <td>TOTAL DEDUCCIONES</td>
+            <td class="num">${formatCurrency(item.total_deductions)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="net-box">
+    <div class="net-title">Total Neto a Pagar</div>
+    <div class="net-amount">${formatCurrency(item.net_payable)}</div>
+    <div style="font-size: 12px; color: #374151;">
+      Pagado a la fecha: <strong>${formatCurrency(item.total_paid || 0)}</strong> &bull; Saldo pendiente: <strong>${formatCurrency(item.pending_balance || 0)}</strong>
+    </div>
+  </div>
+
+  <div class="signatures">
+    <div class="sign-line">
+      <strong>POR DISTRIC HOUSE</strong><br>
+      Gestión de Talento Humano y Nómina
+    </div>
+    <div class="sign-line">
+      <strong>RECIBÍ CONFORME</strong><br>
+      ${empName}<br>
+      ${item.document_type || 'CC'}: ${item.document_number}
+    </div>
+  </div>
+
+  <script>
+    window.onload = function() {
+      setTimeout(function() {
+        window.print();
+      }, 250);
+    };
+  <\/script>
+</body>
+</html>`;
+
+  printWin.document.open();
+  printWin.document.write(html);
+  printWin.document.close();
+}
+
+function handleSendWhatsApp(item, period) {
+  let phone = item.phone ? String(item.phone).replace(/[^0-9]/g, '') : '';
+  if (!phone) {
+    const input = window.prompt(`Ingresa el número de WhatsApp para enviar el desprendible de ${item.first_name} ${item.last_name}:`, '');
+    if (!input) return;
+    phone = input.replace(/[^0-9]/g, '');
+  }
+  if (phone.length === 10 && phone.startsWith('3')) {
+    phone = `57${phone}`;
+  }
+  const msg = generateWhatsAppText(item, period);
+  const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+  window.open(url, '_blank');
+}
+
+function handleSendEmail(item, period) {
+  let email = item.email ? String(item.email).trim() : '';
+  if (!email) {
+    const input = window.prompt(`Ingresa el correo electrónico para enviar el desprendible de ${item.first_name} ${item.last_name}:`, '');
+    if (!input) return;
+    email = input.trim();
+  }
+  const periodName = period?.name || 'Periodo';
+  const subject = `Desprendible de Nómina - ${periodName} - ${item.first_name} ${item.last_name}`;
+  const body = generateWhatsAppText(item, period);
+  window.location.href = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
 export default function AdminNomina() {
-  const { hasPermission, user } = useContext(AuthContext);
+  const { hasPermission, user, settings } = useContext(AuthContext);
   const token = sessionStorage.getItem('distrito_admin_token');
 
   // Pestañas principales
@@ -54,6 +358,8 @@ export default function AdminNomina() {
   const [employeeFilterStatus, setEmployeeFilterStatus] = useState('Activo');
   const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
+  const [viewingEmployee, setViewingEmployee] = useState(null);
+  const [viewingReceipt, setViewingReceipt] = useState(null);
   const [employeeForm, setEmployeeForm] = useState({
     document_type: 'CC',
     document_number: '',
@@ -68,11 +374,17 @@ export default function AdminNomina() {
     daily_rate: '',
     hourly_rate: '',
     has_transport_allowance: true,
+    deduce_health: true,
+    deduce_pension: true,
     payment_method: 'Efectivo',
     bank_name: '',
     bank_account_type: 'Ahorros',
     bank_account_number: '',
     hire_date: getTodayBogota(),
+    birth_date: '',
+    marital_status: 'Soltero/a',
+    discharge_date: '',
+    discharge_reason: '',
     status: 'Activo',
     notes: ''
   });
@@ -119,6 +431,7 @@ export default function AdminNomina() {
   const [isMealModalOpen, setIsMealModalOpen] = useState(false);
   const [mealForm, setMealForm] = useState({
     employee_id: '',
+    delivery_date: getTodayBogota(),
     item_type: 'Menu', // 'Menu' | 'Insumo'
     product_id: '',
     inventory_id: '',
@@ -375,17 +688,23 @@ export default function AdminNomina() {
         phone: emp.phone || '',
         email: emp.email || '',
         address: emp.address || '',
+        marital_status: emp.marital_status || 'Soltero/a',
+        birth_date: emp.birth_date ? emp.birth_date.substring(0, 10) : '',
         position: emp.position || 'Cocina',
         contract_type: emp.contract_type || 'Laboral Fijo Quincenal',
         salary_base: emp.salary_base || '',
         daily_rate: emp.daily_rate || '',
         hourly_rate: emp.hourly_rate || '',
         has_transport_allowance: emp.has_transport_allowance ?? true,
+        deduce_health: emp.deduce_health ?? true,
+        deduce_pension: emp.deduce_pension ?? true,
         payment_method: emp.payment_method || 'Efectivo',
         bank_name: emp.bank_name || '',
         bank_account_type: emp.bank_account_type || 'Ahorros',
         bank_account_number: emp.bank_account_number || '',
         hire_date: emp.hire_date ? emp.hire_date.substring(0, 10) : getTodayBogota(),
+        discharge_date: emp.discharge_date ? emp.discharge_date.substring(0, 10) : '',
+        discharge_reason: emp.discharge_reason || '',
         status: emp.status || 'Activo',
         notes: emp.notes || ''
       });
@@ -399,17 +718,23 @@ export default function AdminNomina() {
         phone: '',
         email: '',
         address: '',
+        marital_status: 'Soltero/a',
+        birth_date: '',
         position: 'Cocina',
         contract_type: 'Laboral Fijo Quincenal',
         salary_base: '',
         daily_rate: '',
         hourly_rate: '',
         has_transport_allowance: true,
+        deduce_health: true,
+        deduce_pension: true,
         payment_method: 'Efectivo',
         bank_name: '',
         bank_account_type: 'Ahorros',
         bank_account_number: '',
         hire_date: getTodayBogota(),
+        discharge_date: '',
+        discharge_reason: '',
         status: 'Activo',
         notes: ''
       });
@@ -440,16 +765,23 @@ export default function AdminNomina() {
         phone: employeeForm.phone?.trim() || null,
         email: employeeForm.email?.trim() || null,
         address: employeeForm.address?.trim() || null,
+        marital_status: employeeForm.marital_status || 'Soltero/a',
+        birth_date: employeeForm.birth_date || null,
         position: employeeForm.position.trim(),
         contract_type: employeeForm.contract_type,
         salary_base: employeeForm.salary_base ? Number(employeeForm.salary_base) : 0,
         daily_rate: employeeForm.daily_rate ? Number(employeeForm.daily_rate) : 0,
         hourly_rate: employeeForm.hourly_rate ? Number(employeeForm.hourly_rate) : 0,
         has_transport_allowance: Boolean(employeeForm.has_transport_allowance),
+        deduce_health: Boolean(employeeForm.deduce_health),
+        deduce_pension: Boolean(employeeForm.deduce_pension),
+        payment_method: employeeForm.payment_method || 'Efectivo',
         bank_name: employeeForm.bank_name?.trim() || null,
         bank_account_type: employeeForm.bank_account_type,
         bank_account_number: employeeForm.bank_account_number?.trim() || null,
         hire_date: employeeForm.hire_date || null,
+        discharge_date: employeeForm.discharge_date || null,
+        discharge_reason: employeeForm.discharge_reason?.trim() || null,
         status: employeeForm.status,
         notes: employeeForm.notes?.trim() || null
       };
@@ -560,6 +892,30 @@ export default function AdminNomina() {
       }
     } catch (err) {
       showFeedback('error', 'Error al aprobar el periodo.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReopenPeriod = async () => {
+    if (!selectedPeriodId || !window.confirm('¿Deseas REABRIR este periodo para volverlo a estado "Calculado"? Podrás editar novedades, asistencia y recalcular la nómina.')) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/admin/nomina/periods/${selectedPeriodId}/status`, {
+        method: 'PATCH',
+        headers: authHeaders,
+        body: JSON.stringify({ status: 'Calculado' })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showFeedback('success', 'Periodo reabierto correctamente. Ya puedes recalcularlo.');
+        loadPeriodDetails(selectedPeriodId);
+        loadPeriods();
+      } else {
+        showFeedback('error', data.error || 'No fue posible reabrir el periodo.');
+      }
+    } catch (err) {
+      showFeedback('error', 'Error al reabrir el periodo.');
     } finally {
       setLoading(false);
     }
@@ -720,6 +1076,7 @@ export default function AdminNomina() {
     try {
       const payload = {
         employee_id: mealForm.employee_id,
+        delivery_date: mealForm.delivery_date || getTodayBogota(),
         item_type: mealForm.item_type,
         product_id: mealForm.item_type === 'Menu' ? mealForm.product_id : null,
         inventory_id: mealForm.item_type === 'Insumo' ? mealForm.inventory_id : null,
@@ -1190,14 +1547,24 @@ export default function AdminNomina() {
                   )}
 
                   {hasPermission('Nomina', 'editar') && periodDetails.period.status === 'Aprobado' && (
-                    <button 
-                      className="ds-btn ds-btn-secondary ds-btn-sm"
-                      onClick={handleClosePeriod}
-                      disabled={loading}
-                      title="Cerrar definitivamente el periodo cuando los saldos estén saldados"
-                    >
-                      <Check size={15} color="var(--ds-success)" /> Cerrar Quincena
-                    </button>
+                    <>
+                      <button 
+                        className="ds-btn ds-btn-secondary ds-btn-sm"
+                        onClick={handleReopenPeriod}
+                        disabled={loading}
+                        title="Reabrir periodo para poder corregir asistencia o recalcular"
+                      >
+                        <RotateCcw size={15} color="var(--ds-warning)" /> Reabrir Quincena
+                      </button>
+                      <button 
+                        className="ds-btn ds-btn-secondary ds-btn-sm"
+                        onClick={handleClosePeriod}
+                        disabled={loading}
+                        title="Cerrar definitivamente el periodo cuando los saldos estén saldados"
+                      >
+                        <Check size={15} color="var(--ds-success)" /> Cerrar Quincena
+                      </button>
+                    </>
                   )}
                 </div>
               )}
@@ -1311,23 +1678,32 @@ export default function AdminNomina() {
                         </span>
                       </td>
                       <td>
-                        {hasPermission('Nomina', 'pagar') && periodDetails?.period?.status === 'Aprobado' && item.payment_status !== 'Pagado' && (
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                           <button 
-                            className="ds-btn ds-btn-primary ds-btn-sm"
-                            onClick={() => handleOpenPaymentModal(item)}
-                            title="Registrar comprobante de pago con idempotencia transaccional"
+                            className="ds-btn ds-btn-ghost ds-btn-sm"
+                            onClick={() => setViewingReceipt(item)}
+                            title="Ver Desprendible de Pago"
                           >
-                            <DollarSign size={14} /> Pagar
+                            <Eye size={15} /> Ver
                           </button>
-                        )}
-                        {periodDetails?.period?.status !== 'Aprobado' && item.payment_status !== 'Pagado' && (
-                          <small style={{ color: 'var(--ds-text-muted)' }}>Requiere aprobación</small>
-                        )}
-                        {item.payment_status === 'Pagado' && (
-                          <span style={{ fontSize: '0.8rem', color: 'var(--ds-success)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <CheckCircle2 size={14} /> Saldado
-                          </span>
-                        )}
+                          {hasPermission('Nomina', 'pagar') && periodDetails?.period?.status === 'Aprobado' && item.payment_status !== 'Pagado' && (
+                            <button 
+                              className="ds-btn ds-btn-primary ds-btn-sm"
+                              onClick={() => handleOpenPaymentModal(item)}
+                              title="Registrar comprobante de pago con idempotencia transaccional"
+                            >
+                              <DollarSign size={14} /> Pagar
+                            </button>
+                          )}
+                          {periodDetails?.period?.status !== 'Aprobado' && item.payment_status !== 'Pagado' && (
+                            <small style={{ color: 'var(--ds-text-muted)' }}>Requiere aprobación</small>
+                          )}
+                          {item.payment_status === 'Pagado' && (
+                            <span style={{ fontSize: '0.8rem', color: 'var(--ds-success)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              <CheckCircle2 size={14} /> Saldado
+                            </span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1496,6 +1872,16 @@ export default function AdminNomina() {
                       <td>
                         <strong>{emp.first_name} {emp.last_name}</strong>
                         <small>{emp.document_type}: {emp.document_number}</small>
+                        {emp.birth_date && (
+                          <small style={{ color: 'var(--ds-primary)', fontWeight: 600 }}>
+                            🎂 {calculateAge(emp.birth_date)} años ({emp.marital_status || 'Soltero/a'})
+                          </small>
+                        )}
+                        {emp.phone && (
+                          <small style={{ color: 'var(--ds-text-secondary)' }}>
+                            📞 {emp.phone}
+                          </small>
+                        )}
                       </td>
                       <td>
                         <span className="ds-badge ds-badge-neutral">{emp.position}</span>
@@ -1503,8 +1889,10 @@ export default function AdminNomina() {
                       <td>{emp.contract_type}</td>
                       <td>
                         <strong>
-                          {emp.contract_type?.includes('Turno') || emp.contract_type?.includes('Jornal')
-                            ? `${formatCurrency(emp.daily_rate || emp.hourly_rate * 8)} / turno`
+                          {Number(emp.daily_rate) > 0 && (!Number(emp.salary_base) || emp.contract_type === 'Prestación de Servicios' || emp.contract_type?.includes('Turno') || emp.contract_type?.includes('Jornal'))
+                            ? `${formatCurrency(emp.daily_rate)} / día`
+                            : Number(emp.hourly_rate) > 0 && !Number(emp.salary_base)
+                            ? `${formatCurrency(emp.hourly_rate)} / hora`
                             : formatCurrency(emp.salary_base)}
                         </strong>
                       </td>
@@ -1514,7 +1902,7 @@ export default function AdminNomina() {
                           : <span className="ds-badge ds-badge-neutral">Exento</span>}
                       </td>
                       <td>
-                        <span>{emp.payment_method || 'Transferencia'}</span>
+                        <span>{emp.payment_method || 'Efectivo'}</span>
                         {emp.bank_name ? <small>{emp.bank_name} - {emp.bank_account_number}</small> : null}
                       </td>
                       <td>{formatDateOnly(emp.hire_date)}</td>
@@ -1524,15 +1912,24 @@ export default function AdminNomina() {
                         </span>
                       </td>
                       <td>
-                        {hasPermission('Nomina', 'editar') && (
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                           <button 
                             className="ds-btn ds-btn-ghost ds-btn-sm"
-                            onClick={() => handleOpenEmployeeModal(emp)}
-                            title="Editar ficha del empleado"
+                            onClick={() => setViewingEmployee(emp)}
+                            title="Visualizar ficha del colaborador"
                           >
-                            <Edit3 size={15} /> Editar
+                            <Eye size={15} /> Ver
                           </button>
-                        )}
+                          {hasPermission('Nomina', 'editar') && (
+                            <button 
+                              className="ds-btn ds-btn-ghost ds-btn-sm"
+                              onClick={() => handleOpenEmployeeModal(emp)}
+                              title="Editar ficha del empleado"
+                            >
+                              <Edit3 size={15} /> Editar
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1587,7 +1984,8 @@ export default function AdminNomina() {
                   className="ds-btn ds-btn-primary ds-btn-sm"
                   onClick={() => {
                     setMealForm({
-                      employee_id: employees[0]?.id || '',
+                      employee_id: employees.find(e => e.status === 'Activo')?.id || employees[0]?.id || '',
+                      delivery_date: getTodayBogota(),
                       item_type: 'Menu',
                       product_id: availableProducts[0]?.id || '',
                       inventory_id: availableInventory[0]?.id || '',
@@ -2097,6 +2495,513 @@ export default function AdminNomina() {
       )}
 
       {/* =====================================================================
+          MODAL: VISUALIZAR FICHA DE COLABORADOR (SOLO LECTURA)
+      ====================================================================== */}
+      {viewingEmployee && (
+        <div className="ds-modal-overlay" onClick={() => setViewingEmployee(null)}>
+          <div className="ds-modal ds-modal-lg" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '750px' }}>
+            <div className="ds-modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Users size={20} style={{ color: 'var(--ds-primary)' }} />
+                <span className="ds-modal-title">Ficha de Colaborador</span>
+              </div>
+              <button className="ds-modal-close" onClick={() => setViewingEmployee(null)}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="ds-modal-body" style={{ display: 'grid', gap: 'var(--ds-space-lg)', maxHeight: '75vh', overflowY: 'auto' }}>
+              {/* Encabezado Principal */}
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                padding: 'var(--ds-space-md)', 
+                background: 'var(--ds-surface-secondary, #f8f9fa)', 
+                borderRadius: 'var(--ds-radius-md, 8px)',
+                border: '1px solid var(--ds-border, #e5e7eb)'
+              }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: 'var(--ds-text-primary)' }}>
+                    {viewingEmployee.first_name} {viewingEmployee.last_name}
+                  </h3>
+                  <div style={{ color: 'var(--ds-text-secondary)', fontSize: '0.9rem', marginTop: '2px' }}>
+                    <strong>{viewingEmployee.document_type}:</strong> {viewingEmployee.document_number} &bull; 
+                    <span style={{ marginLeft: '6px' }}><strong>Cargo:</strong> {viewingEmployee.position}</span>
+                  </div>
+                </div>
+                <div>
+                  <span className={`ds-badge ${viewingEmployee.status === 'Activo' ? 'ds-badge-success' : 'ds-badge-neutral'}`} style={{ fontSize: '0.9rem', padding: '6px 12px' }}>
+                    {viewingEmployee.status}
+                  </span>
+                </div>
+              </div>
+
+              {/* Sección 1: Datos Personales */}
+              <div>
+                <h4 style={{ margin: '0 0 var(--ds-space-sm) 0', fontSize: '1rem', fontWeight: 600, color: 'var(--ds-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Users size={16} /> Información Personal
+                </h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--ds-space-sm)', background: 'var(--ds-surface)', padding: 'var(--ds-space-md)', borderRadius: 'var(--ds-radius-sm, 6px)', border: '1px solid var(--ds-border, #e5e7eb)' }}>
+                  <div>
+                    <span className="ds-label" style={{ marginBottom: 0, fontSize: '0.8rem' }}>Fecha de Nacimiento:</span>
+                    <div><strong>{viewingEmployee.birth_date ? formatDateOnly(viewingEmployee.birth_date) : 'No registrada'}</strong></div>
+                  </div>
+                  <div>
+                    <span className="ds-label" style={{ marginBottom: 0, fontSize: '0.8rem' }}>Edad Calculada:</span>
+                    <div>
+                      <strong style={{ color: viewingEmployee.birth_date ? 'var(--ds-primary)' : 'inherit' }}>
+                        {viewingEmployee.birth_date ? `🎂 ${calculateAge(viewingEmployee.birth_date)} años` : 'No registrada'}
+                      </strong>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="ds-label" style={{ marginBottom: 0, fontSize: '0.8rem' }}>Estado Civil:</span>
+                    <div><strong>{viewingEmployee.marital_status || 'Soltero/a'}</strong></div>
+                  </div>
+                  <div>
+                    <span className="ds-label" style={{ marginBottom: 0, fontSize: '0.8rem' }}>Teléfono / Celular:</span>
+                    <div><strong>{viewingEmployee.phone || 'No registrado'}</strong></div>
+                  </div>
+                  <div>
+                    <span className="ds-label" style={{ marginBottom: 0, fontSize: '0.8rem' }}>Correo Electrónico:</span>
+                    <div><strong>{viewingEmployee.email || 'No registrado'}</strong></div>
+                  </div>
+                  <div>
+                    <span className="ds-label" style={{ marginBottom: 0, fontSize: '0.8rem' }}>Dirección:</span>
+                    <div><strong>{viewingEmployee.address || 'No registrada'}</strong></div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sección 2: Condiciones Laborales y Salario */}
+              <div>
+                <h4 style={{ margin: '0 0 var(--ds-space-sm) 0', fontSize: '1rem', fontWeight: 600, color: 'var(--ds-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Briefcase size={16} /> Contrato y Remuneración
+                </h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--ds-space-sm)', background: 'var(--ds-surface)', padding: 'var(--ds-space-md)', borderRadius: 'var(--ds-radius-sm, 6px)', border: '1px solid var(--ds-border, #e5e7eb)' }}>
+                  <div>
+                    <span className="ds-label" style={{ marginBottom: 0, fontSize: '0.8rem' }}>Tipo de Contrato:</span>
+                    <div><strong>{viewingEmployee.contract_type}</strong></div>
+                  </div>
+                  <div>
+                    <span className="ds-label" style={{ marginBottom: 0, fontSize: '0.8rem' }}>Fecha de Ingreso:</span>
+                    <div><strong>{formatDateOnly(viewingEmployee.hire_date)}</strong></div>
+                  </div>
+                  {viewingEmployee.discharge_date && (
+                    <div>
+                      <span className="ds-label" style={{ marginBottom: 0, fontSize: '0.8rem' }}>Fecha de Retiro:</span>
+                      <div><strong style={{ color: 'var(--ds-danger, #e11d48)' }}>{formatDateOnly(viewingEmployee.discharge_date)}</strong></div>
+                    </div>
+                  )}
+                  {viewingEmployee.discharge_reason && (
+                    <div>
+                      <span className="ds-label" style={{ marginBottom: 0, fontSize: '0.8rem' }}>Motivo de Retiro:</span>
+                      <div><strong>{viewingEmployee.discharge_reason}</strong></div>
+                    </div>
+                  )}
+                  <div>
+                    <span className="ds-label" style={{ marginBottom: 0, fontSize: '0.8rem' }}>Salario Base Mensual:</span>
+                    <div><strong>{Number(viewingEmployee.salary_base) > 0 ? formatCurrency(viewingEmployee.salary_base) : '$ 0 (No aplica)'}</strong></div>
+                  </div>
+                  <div>
+                    <span className="ds-label" style={{ marginBottom: 0, fontSize: '0.8rem' }}>Tarifa Diaria / Turno:</span>
+                    <div><strong>{Number(viewingEmployee.daily_rate) > 0 ? `${formatCurrency(viewingEmployee.daily_rate)} / día` : 'N/A'}</strong></div>
+                  </div>
+                  <div>
+                    <span className="ds-label" style={{ marginBottom: 0, fontSize: '0.8rem' }}>Auxilio de Transporte:</span>
+                    <div>
+                      <strong style={{ color: viewingEmployee.has_transport_allowance ? 'var(--ds-success)' : 'var(--ds-text-secondary)' }}>
+                        {viewingEmployee.has_transport_allowance ? 'Aplica (Ley 360)' : 'Exento'}
+                      </strong>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="ds-label" style={{ marginBottom: 0, fontSize: '0.8rem' }}>Deducción Salud (4%):</span>
+                    <div><strong>{viewingEmployee.deduce_health ? 'Sí' : 'No'}</strong></div>
+                  </div>
+                  <div>
+                    <span className="ds-label" style={{ marginBottom: 0, fontSize: '0.8rem' }}>Deducción Pensión (4%):</span>
+                    <div><strong>{viewingEmployee.deduce_pension ? 'Sí' : 'No'}</strong></div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sección 3: Medio de Pago */}
+              <div>
+                <h4 style={{ margin: '0 0 var(--ds-space-sm) 0', fontSize: '1rem', fontWeight: 600, color: 'var(--ds-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <CreditCard size={16} /> Dispersión de Pago
+                </h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--ds-space-sm)', background: 'var(--ds-surface)', padding: 'var(--ds-space-md)', borderRadius: 'var(--ds-radius-sm, 6px)', border: '1px solid var(--ds-border, #e5e7eb)' }}>
+                  <div>
+                    <span className="ds-label" style={{ marginBottom: 0, fontSize: '0.8rem' }}>Medio de Pago:</span>
+                    <div><strong style={{ fontSize: '1.05rem', color: 'var(--ds-primary)' }}>{viewingEmployee.payment_method || 'Efectivo'}</strong></div>
+                  </div>
+                  <div>
+                    <span className="ds-label" style={{ marginBottom: 0, fontSize: '0.8rem' }}>Banco / Entidad:</span>
+                    <div><strong>{viewingEmployee.bank_name || 'N/A'}</strong></div>
+                  </div>
+                  <div>
+                    <span className="ds-label" style={{ marginBottom: 0, fontSize: '0.8rem' }}>Tipo de Cuenta:</span>
+                    <div><strong>{viewingEmployee.bank_account_type || 'N/A'}</strong></div>
+                  </div>
+                  <div>
+                    <span className="ds-label" style={{ marginBottom: 0, fontSize: '0.8rem' }}>Número de Cuenta / Teléfono:</span>
+                    <div><strong>{viewingEmployee.bank_account_number || 'N/A'}</strong></div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sección 4: Observaciones */}
+              {viewingEmployee.notes && (
+                <div>
+                  <h4 style={{ margin: '0 0 var(--ds-space-sm) 0', fontSize: '1rem', fontWeight: 600, color: 'var(--ds-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <FileText size={16} /> Observaciones
+                  </h4>
+                  <div style={{ background: 'var(--ds-surface)', padding: 'var(--ds-space-md)', borderRadius: 'var(--ds-radius-sm, 6px)', border: '1px solid var(--ds-border, #e5e7eb)', fontSize: '0.9rem' }}>
+                    {viewingEmployee.notes}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="ds-modal-footer">
+              {hasPermission('Nomina', 'editar') && (
+                <button 
+                  type="button" 
+                  className="ds-btn ds-btn-secondary"
+                  onClick={() => {
+                    const emp = viewingEmployee;
+                    setViewingEmployee(null);
+                    handleOpenEmployeeModal(emp);
+                  }}
+                >
+                  <Edit3 size={15} /> Editar Ficha
+                </button>
+              )}
+              <button type="button" className="ds-btn ds-btn-primary" onClick={() => setViewingEmployee(null)}>
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+          MODAL: DESPRENDIBLE DE PAGO (COLILLA DE NÓMINA INDIVIDUAL)
+      ====================================================================== */}
+      {viewingReceipt && (
+        <div className="ds-modal-overlay" onClick={() => setViewingReceipt(null)}>
+          <div className="ds-modal ds-modal-lg" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '820px' }}>
+            <div className="ds-modal-header" style={{ borderBottom: '2px solid var(--ds-primary)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <FileText size={20} style={{ color: 'var(--ds-primary)' }} />
+                <span className="ds-modal-title">Desprendible de Pago de Nómina</span>
+              </div>
+              <button className="ds-modal-close" onClick={() => setViewingReceipt(null)}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="ds-modal-body" style={{ display: 'grid', gap: 'var(--ds-space-md)', maxHeight: '75vh', overflowY: 'auto' }}>
+              {/* Encabezado Corporativo del Desprendible */}
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                padding: 'var(--ds-space-md)',
+                background: 'var(--ds-surface-secondary, #f8f9fa)',
+                borderRadius: 'var(--ds-radius-md, 8px)',
+                border: '1px solid var(--ds-border, #e5e7eb)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                  <img 
+                    src={settings?.admin_logo || settings?.logo || '/logo.png'} 
+                    alt="Distric House" 
+                    style={{ height: '56px', maxWidth: '120px', objectFit: 'contain', borderRadius: '6px' }}
+                    onError={(e) => { e.target.style.display = 'none'; }}
+                  />
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800, color: 'var(--ds-text-primary)' }}>
+                      DISTRIC HOUSE
+                    </h3>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--ds-text-secondary)', marginTop: '2px' }}>
+                      Comprobante Individual de Pago de Nómina
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--ds-primary)', fontWeight: 600, marginTop: '4px' }}>
+                      Periodo: {periodDetails?.period?.name || 'Periodo de Nómina'}
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--ds-text-muted)' }}>
+                      Lapso: {formatDateOnly(periodDetails?.period?.start_date)} al {formatDateOnly(periodDetails?.period?.end_date)}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ textAlign: 'right' }}>
+                  <span className={`ds-badge ${
+                    viewingReceipt.payment_status === 'Pagado' ? 'ds-badge-success' :
+                    viewingReceipt.payment_status === 'Parcial' ? 'ds-badge-warning' : 'ds-badge-danger'
+                  }`} style={{ fontSize: '0.9rem', padding: '6px 12px' }}>
+                    {viewingReceipt.payment_status || 'Pendiente'}
+                  </span>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--ds-text-muted)', marginTop: '6px' }}>
+                    Medio: <strong>{viewingReceipt.payment_method || 'Efectivo'}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Datos del Colaborador */}
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', 
+                gap: 'var(--ds-space-sm)',
+                padding: 'var(--ds-space-md)',
+                background: 'var(--ds-surface)',
+                borderRadius: 'var(--ds-radius-sm, 6px)',
+                border: '1px solid var(--ds-border, #e5e7eb)',
+                fontSize: '0.88rem'
+              }}>
+                <div>
+                  <span className="ds-label" style={{ marginBottom: 0, fontSize: '0.78rem' }}>Colaborador:</span>
+                  <div><strong>{viewingReceipt.first_name} {viewingReceipt.last_name}</strong></div>
+                </div>
+                <div>
+                  <span className="ds-label" style={{ marginBottom: 0, fontSize: '0.78rem' }}>Identificación:</span>
+                  <div><strong>{viewingReceipt.document_type || 'CC'}: {viewingReceipt.document_number}</strong></div>
+                </div>
+                <div>
+                  <span className="ds-label" style={{ marginBottom: 0, fontSize: '0.78rem' }}>Cargo:</span>
+                  <div><strong>{viewingReceipt.position}</strong></div>
+                </div>
+                <div>
+                  <span className="ds-label" style={{ marginBottom: 0, fontSize: '0.78rem' }}>Contrato:</span>
+                  <div><strong>{viewingReceipt.contract_type}</strong></div>
+                </div>
+                <div>
+                  <span className="ds-label" style={{ marginBottom: 0, fontSize: '0.78rem' }}>Estado de Jornada:</span>
+                  <div>
+                    <strong style={{ color: 'var(--ds-primary)' }}>
+                      {viewingReceipt.contract_type?.includes('Turno') || viewingReceipt.contract_type?.includes('Jornal') 
+                        ? 'Por Jornal / Turno (Por Día)' 
+                        : viewingReceipt.contract_type === 'Prestación de Servicios' 
+                        ? 'Prestación de Servicios (Por Día)' 
+                        : 'Jornada Laboral Ordinaria'} ({viewingReceipt.hours_worked || 0} hrs)
+                    </strong>
+                  </div>
+                </div>
+                <div>
+                  <span className="ds-label" style={{ marginBottom: 0, fontSize: '0.78rem' }}>Total Días Remunerados:</span>
+                  <div>
+                    <strong style={{ color: 'var(--ds-success)' }}>
+                      {viewingReceipt.days_worked} días
+                    </strong>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--ds-text-secondary)', marginLeft: '4px' }}>
+                      ({formatCurrency(
+                        Number(viewingReceipt.daily_rate) > 0 
+                          ? Number(viewingReceipt.daily_rate) 
+                          : (Number(viewingReceipt.days_worked) > 0 ? Math.round(Number(viewingReceipt.base_salary_earned) / Number(viewingReceipt.days_worked)) : 0)
+                      )}/día)
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <span className="ds-label" style={{ marginBottom: 0, fontSize: '0.78rem' }}>Valor Días Remunerados:</span>
+                  <div>
+                    <strong style={{ fontSize: '0.98rem', color: 'var(--ds-success)' }}>
+                      {formatCurrency(viewingReceipt.base_salary_earned)}
+                    </strong>
+                  </div>
+                </div>
+                <div>
+                  <span className="ds-label" style={{ marginBottom: 0, fontSize: '0.78rem' }}>Cuenta / Dispersión:</span>
+                  <div><span>{viewingReceipt.bank_name ? `${viewingReceipt.bank_name} (${viewingReceipt.bank_account_type}): ${viewingReceipt.bank_account_number}` : (viewingReceipt.bank_account_number || 'Efectivo')}</span></div>
+                </div>
+              </div>
+
+              {/* Tablas Devengados vs. Deducciones */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 'var(--ds-space-md)' }}>
+                {/* 1. Devengados */}
+                <div style={{ border: '1px solid var(--ds-border, #e5e7eb)', borderRadius: 'var(--ds-radius-sm, 6px)', overflow: 'hidden' }}>
+                  <div style={{ background: 'rgba(34, 197, 94, 0.1)', color: 'var(--ds-success)', padding: '8px 12px', fontWeight: 700, fontSize: '0.9rem', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>1. INGRESOS / DEVENGADOS</span>
+                    <span>VALOR</span>
+                  </div>
+                  <table className="ds-table" style={{ margin: 0, fontSize: '0.85rem' }}>
+                    <tbody>
+                      <tr>
+                        <td>
+                          <div>
+                            <strong>Días Remunerados</strong> ({viewingReceipt.days_worked} d a {formatCurrency(
+                              Number(viewingReceipt.daily_rate) > 0 
+                                ? Number(viewingReceipt.daily_rate) 
+                                : (Number(viewingReceipt.days_worked) > 0 ? Math.round(Number(viewingReceipt.base_salary_earned) / Number(viewingReceipt.days_worked)) : 0)
+                            )}/día)
+                          </div>
+                          {Number(viewingReceipt.days_leave_paid) > 0 && (
+                            <small style={{ color: 'var(--ds-primary)', display: 'block' }}>
+                              • Incluye {viewingReceipt.days_leave_paid} días de permiso remunerado ({formatCurrency(
+                                (Number(viewingReceipt.daily_rate) > 0 
+                                  ? Number(viewingReceipt.daily_rate) 
+                                  : Math.round(Number(viewingReceipt.base_salary_earned) / (Number(viewingReceipt.days_worked) || 1))) * Number(viewingReceipt.days_leave_paid)
+                              )})
+                            </small>
+                          )}
+                          {Number(viewingReceipt.days_rest) > 0 && (
+                            <small style={{ color: 'var(--ds-text-secondary)', display: 'block' }}>
+                              • Incluye {viewingReceipt.days_rest} días de descanso legal remunerado
+                            </small>
+                          )}
+                          {Number(viewingReceipt.days_holiday) > 0 && (
+                            <small style={{ color: 'var(--ds-text-secondary)', display: 'block' }}>
+                              • Incluye {viewingReceipt.days_holiday} días festivos remunerados
+                            </small>
+                          )}
+                        </td>
+                        <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--ds-success)' }}>
+                          {formatCurrency(viewingReceipt.base_salary_earned)}
+                        </td>
+                      </tr>
+                      {Number(viewingReceipt.days_leave_unpaid) > 0 && (
+                        <tr style={{ color: 'var(--ds-danger)' }}>
+                          <td>
+                            <div>• Permisos No Remunerados ({viewingReceipt.days_leave_unpaid} d)</div>
+                            <small style={{ color: 'var(--ds-text-muted)' }}>Días no computados para liquidación</small>
+                          </td>
+                          <td style={{ textAlign: 'right', fontWeight: 600 }}>-$ 0</td>
+                        </tr>
+                      )}
+                      <tr>
+                        <td>Auxilio de Transporte</td>
+                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatCurrency(viewingReceipt.transport_allowance_earned)}</td>
+                      </tr>
+                      <tr>
+                        <td>Horas Extras / Recargos</td>
+                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatCurrency(viewingReceipt.overtime_amount)}</td>
+                      </tr>
+                      {Number(viewingReceipt.bonuses_earned) > 0 && (
+                        <tr>
+                          <td>Bonificaciones / Otros</td>
+                          <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatCurrency(viewingReceipt.bonuses_earned)}</td>
+                        </tr>
+                      )}
+                      <tr style={{ background: 'var(--ds-surface-secondary, #f8f9fa)', fontWeight: 800 }}>
+                        <td>TOTAL DEVENGADO</td>
+                        <td style={{ textAlign: 'right', color: 'var(--ds-success)' }}>{formatCurrency(viewingReceipt.total_accrued)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* 2. Deducciones */}
+                <div style={{ border: '1px solid var(--ds-border, #e5e7eb)', borderRadius: 'var(--ds-radius-sm, 6px)', overflow: 'hidden' }}>
+                  <div style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--ds-danger)', padding: '8px 12px', fontWeight: 700, fontSize: '0.9rem', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>2. DEDUCCIONES</span>
+                    <span>VALOR</span>
+                  </div>
+                  <table className="ds-table" style={{ margin: 0, fontSize: '0.85rem' }}>
+                    <tbody>
+                      <tr>
+                        <td>Aporte Salud (4%)</td>
+                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatCurrency(viewingReceipt.health_deduction)}</td>
+                      </tr>
+                      <tr>
+                        <td>Aporte Pensión (4%)</td>
+                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatCurrency(viewingReceipt.pension_deduction)}</td>
+                      </tr>
+                      {Number(viewingReceipt.advances_deduction) > 0 && (
+                        <tr>
+                          <td>Anticipos y Préstamos</td>
+                          <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatCurrency(viewingReceipt.advances_deduction)}</td>
+                        </tr>
+                      )}
+                      {Number(viewingReceipt.other_deductions) > 0 && (
+                        <tr>
+                          <td>Otras Deducciones</td>
+                          <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatCurrency(viewingReceipt.other_deductions)}</td>
+                        </tr>
+                      )}
+                      <tr style={{ background: 'var(--ds-surface-secondary, #f8f9fa)', fontWeight: 800 }}>
+                        <td>TOTAL DEDUCCIONES</td>
+                        <td style={{ textAlign: 'right', color: 'var(--ds-danger)' }}>{formatCurrency(viewingReceipt.total_deductions)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Cuadro Total Neto a Pagar */}
+              <div style={{ 
+                background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, rgba(34, 197, 94, 0.02) 100%)', 
+                border: '2px solid var(--ds-success)', 
+                borderRadius: 'var(--ds-radius-md, 8px)', 
+                padding: 'var(--ds-space-md)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: 'var(--ds-space-md)'
+              }}>
+                <div>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--ds-success)', textTransform: 'uppercase' }}>
+                    NETO A PAGAR EN LA QUINCENA
+                  </div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--ds-success)' }}>
+                    {formatCurrency(viewingReceipt.net_payable)}
+                  </div>
+                </div>
+
+                <div style={{ textAlign: 'right', fontSize: '0.88rem' }}>
+                  <div>Pagado: <strong style={{ color: 'var(--ds-success)' }}>{formatCurrency(viewingReceipt.total_paid || 0)}</strong></div>
+                  <div>Saldo Pendiente: <strong style={{ color: (viewingReceipt.pending_balance || 0) > 0 ? 'var(--ds-warning)' : 'inherit' }}>{formatCurrency(viewingReceipt.pending_balance || 0)}</strong></div>
+                </div>
+              </div>
+
+              {/* Consumo interno informativo */}
+              {Number(viewingReceipt.meals_count) > 0 && (
+                <div style={{ fontSize: '0.82rem', color: 'var(--ds-text-secondary)', background: 'var(--ds-surface-secondary)', padding: '6px 12px', borderRadius: '4px' }}>
+                  ☕ <strong>Consumo interno de turno:</strong> {viewingReceipt.meals_count} comidas/suministros ({formatCurrency(viewingReceipt.internal_consumption_cost)} costo empresa asumido).
+                </div>
+              )}
+            </div>
+
+            <div className="ds-modal-footer" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button 
+                  type="button" 
+                  className="ds-btn ds-btn-secondary"
+                  onClick={() => handlePrintReceipt(viewingReceipt, periodDetails?.period, settings)}
+                  title="Abrir vista de impresión y guardar como PDF"
+                >
+                  <Printer size={16} /> Imprimir / PDF
+                </button>
+                <button 
+                  type="button" 
+                  className="ds-btn ds-btn-secondary"
+                  style={{ color: '#16a34a', borderColor: '#86efac' }}
+                  onClick={() => handleSendWhatsApp(viewingReceipt, periodDetails?.period)}
+                  title="Enviar desprendible por WhatsApp al colaborador"
+                >
+                  <Send size={16} /> WhatsApp
+                </button>
+                <button 
+                  type="button" 
+                  className="ds-btn ds-btn-secondary"
+                  onClick={() => handleSendEmail(viewingReceipt, periodDetails?.period)}
+                  title="Enviar desprendible por Correo Electrónico"
+                >
+                  <Mail size={16} /> Correo
+                </button>
+              </div>
+
+              <button type="button" className="ds-btn ds-btn-primary" onClick={() => setViewingReceipt(null)}>
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
           MODAL: NUEVO / EDITAR EMPLEADO
       ====================================================================== */}
       {isEmployeeModalOpen && (
@@ -2162,6 +3067,71 @@ export default function AdminNomina() {
                 </div>
 
                 <div>
+                  <label className="ds-label">Teléfono / Celular:</label>
+                  <input 
+                    type="tel" 
+                    className="ds-input" 
+                    placeholder="Ej. 3001234567"
+                    value={employeeForm.phone}
+                    onChange={(e) => setEmployeeForm({ ...employeeForm, phone: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="ds-label">Correo Electrónico:</label>
+                  <input 
+                    type="email" 
+                    className="ds-input" 
+                    placeholder="Ej. colaborador@distrito.com"
+                    value={employeeForm.email}
+                    onChange={(e) => setEmployeeForm({ ...employeeForm, email: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="ds-label">Dirección de Residencia:</label>
+                  <input 
+                    type="text" 
+                    className="ds-input" 
+                    placeholder="Ej. Calle 10 # 5-20, Barrio El Centro"
+                    value={employeeForm.address}
+                    onChange={(e) => setEmployeeForm({ ...employeeForm, address: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="ds-label">Estado Civil:</label>
+                  <select 
+                    className="ds-input"
+                    value={employeeForm.marital_status}
+                    onChange={(e) => setEmployeeForm({ ...employeeForm, marital_status: e.target.value })}
+                  >
+                    <option value="Soltero/a">Soltero/a</option>
+                    <option value="Casado/a">Casado/a</option>
+                    <option value="Unión Libre">Unión Libre</option>
+                    <option value="Divorciado/a">Divorciado/a</option>
+                    <option value="Viudo/a">Viudo/a</option>
+                  </select>
+                </div>
+
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label className="ds-label">Fecha de Nacimiento:</label>
+                    {calculateAge(employeeForm.birth_date) !== null && (
+                      <span className="ds-badge ds-badge-success" style={{ fontWeight: 700, fontSize: '0.82rem' }}>
+                        {calculateAge(employeeForm.birth_date)} años
+                      </span>
+                    )}
+                  </div>
+                  <input 
+                    type="date" 
+                    className="ds-input" 
+                    value={employeeForm.birth_date}
+                    onChange={(e) => setEmployeeForm({ ...employeeForm, birth_date: e.target.value })}
+                  />
+                </div>
+
+                <div>
                   <label className="ds-label">Cargo / Posición *:</label>
                   <select 
                     className="ds-input"
@@ -2182,7 +3152,21 @@ export default function AdminNomina() {
                   <select 
                     className="ds-input"
                     value={employeeForm.contract_type}
-                    onChange={(e) => setEmployeeForm({ ...employeeForm, contract_type: e.target.value })}
+                    onChange={(e) => {
+                      const cType = e.target.value;
+                      if (cType === 'Prestación de Servicios') {
+                        setEmployeeForm(prev => ({
+                          ...prev,
+                          contract_type: cType,
+                          has_transport_allowance: false,
+                          deduce_health: false,
+                          deduce_pension: false,
+                          salary_base: ''
+                        }));
+                      } else {
+                        setEmployeeForm(prev => ({ ...prev, contract_type: cType }));
+                      }
+                    }}
                   >
                     <option value="Laboral Fijo Quincenal">Laboral Fijo Quincenal (360 días)</option>
                     <option value="Laboral Indefinido">Laboral Indefinido</option>
@@ -2213,14 +3197,36 @@ export default function AdminNomina() {
                   />
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '28px' }}>
-                  <input 
-                    type="checkbox"
-                    id="chkTransport"
-                    checked={employeeForm.has_transport_allowance}
-                    onChange={(e) => setEmployeeForm({ ...employeeForm, has_transport_allowance: e.target.checked })}
-                  />
-                  <label htmlFor="chkTransport" style={{ cursor: 'pointer', fontWeight: 600 }}>Aplica Auxilio de Transporte</label>
+                <div style={{ gridColumn: '1 / -1', display: 'flex', flexWrap: 'wrap', gap: 'var(--ds-space-lg)', padding: 'var(--ds-space-xs) 0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input 
+                      type="checkbox"
+                      id="chkTransport"
+                      checked={employeeForm.has_transport_allowance}
+                      onChange={(e) => setEmployeeForm({ ...employeeForm, has_transport_allowance: e.target.checked })}
+                    />
+                    <label htmlFor="chkTransport" style={{ cursor: 'pointer', fontWeight: 600 }}>Aplica Auxilio de Transporte</label>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input 
+                      type="checkbox"
+                      id="chkHealth"
+                      checked={employeeForm.deduce_health}
+                      onChange={(e) => setEmployeeForm({ ...employeeForm, deduce_health: e.target.checked })}
+                    />
+                    <label htmlFor="chkHealth" style={{ cursor: 'pointer', fontWeight: 600 }}>Deducir Salud Empleado (4%)</label>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input 
+                      type="checkbox"
+                      id="chkPension"
+                      checked={employeeForm.deduce_pension}
+                      onChange={(e) => setEmployeeForm({ ...employeeForm, deduce_pension: e.target.checked })}
+                    />
+                    <label htmlFor="chkPension" style={{ cursor: 'pointer', fontWeight: 600 }}>Deducir Pensión Empleado (4%)</label>
+                  </div>
                 </div>
 
                 <div>
@@ -2258,6 +3264,43 @@ export default function AdminNomina() {
                     onChange={(e) => setEmployeeForm({ ...employeeForm, hire_date: e.target.value })}
                   />
                 </div>
+
+                <div>
+                  <label className="ds-label">Estado del Colaborador:</label>
+                  <select
+                    className="ds-input"
+                    value={employeeForm.status}
+                    onChange={(e) => setEmployeeForm({ ...employeeForm, status: e.target.value })}
+                  >
+                    <option value="Activo">Activo</option>
+                    <option value="Inactivo">Inactivo</option>
+                    <option value="Retirado">Retirado / Renuncia</option>
+                  </select>
+                </div>
+
+                {(employeeForm.status === 'Retirado' || employeeForm.status === 'Inactivo' || employeeForm.discharge_date) && (
+                  <>
+                    <div>
+                      <label className="ds-label">Fecha de Retiro / Renuncia:</label>
+                      <input 
+                        type="date" 
+                        className="ds-input" 
+                        value={employeeForm.discharge_date}
+                        onChange={(e) => setEmployeeForm({ ...employeeForm, discharge_date: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="ds-label">Motivo de Retiro:</label>
+                      <input 
+                        type="text" 
+                        className="ds-input" 
+                        placeholder="Ej. Renuncia voluntaria, fin de contrato"
+                        value={employeeForm.discharge_reason}
+                        onChange={(e) => setEmployeeForm({ ...employeeForm, discharge_reason: e.target.value })}
+                      />
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="ds-modal-footer">
@@ -2480,6 +3523,17 @@ export default function AdminNomina() {
                       <option key={e.id} value={e.id}>{e.first_name} {e.last_name} ({e.position})</option>
                     ))}
                   </select>
+                </div>
+
+                <div>
+                  <label className="ds-label">Fecha de Entrega *:</label>
+                  <input 
+                    type="date"
+                    className="ds-input"
+                    required
+                    value={mealForm.delivery_date}
+                    onChange={(e) => setMealForm({ ...mealForm, delivery_date: e.target.value })}
+                  />
                 </div>
 
                 <div>
