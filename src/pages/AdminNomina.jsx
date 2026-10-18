@@ -1096,7 +1096,11 @@ export default function AdminNomina() {
       if (res.ok) {
         showFeedback('success', data.message || `Entrega de consumo interno registrada.`);
         setIsMealModalOpen(false);
-        loadMeals();
+        if (payload.delivery_date > mealsDateEnd) {
+          setMealsDateEnd(payload.delivery_date);
+        } else {
+          loadMeals();
+        }
       } else if (data.code === 'RECIPE_REQUIRED') {
         const isDirective = ['Super Administrador', 'Administrador', 'Gerente'].includes(user?.role);
         if (isDirective && window.confirm(`${data.error}\n\n¿Como directivo, autorizas registrar el consumo financiero sin salida física de inventario (allow_untracked_meal)?`)) {
@@ -1110,7 +1114,11 @@ export default function AdminNomina() {
           if (authRes.ok) {
             showFeedback('success', authData.message || 'Entrega autorizada sin receta.');
             setIsMealModalOpen(false);
-            loadMeals();
+            if (payload.delivery_date > mealsDateEnd) {
+              setMealsDateEnd(payload.delivery_date);
+            } else {
+              loadMeals();
+            }
           } else {
             showFeedback('error', authData.error || 'Autorización rechazada.');
           }
@@ -3526,14 +3534,24 @@ export default function AdminNomina() {
                 </div>
 
                 <div>
-                  <label className="ds-label">Fecha de Entrega *:</label>
-                  <input 
-                    type="date"
-                    className="ds-input"
-                    required
-                    value={mealForm.delivery_date}
-                    onChange={(e) => setMealForm({ ...mealForm, delivery_date: e.target.value })}
-                  />
+                  <label className="ds-label">Fecha de Entrega (Colombia) *:</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input 
+                      type="date"
+                      className="ds-input"
+                      required
+                      value={mealForm.delivery_date}
+                      onChange={(e) => setMealForm({ ...mealForm, delivery_date: e.target.value })}
+                    />
+                    <button
+                      type="button"
+                      className="ds-btn ds-btn-secondary ds-btn-sm"
+                      onClick={() => setMealForm({ ...mealForm, delivery_date: getTodayBogota() })}
+                      title="Fijar a la fecha actual de Colombia"
+                    >
+                      Hoy
+                    </button>
+                  </div>
                 </div>
 
                 <div>

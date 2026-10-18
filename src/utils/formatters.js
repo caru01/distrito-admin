@@ -27,7 +27,18 @@ export function formatDateTime(value) {
 
 export function formatDateOnly(value) {
   if (!value) return '—';
-  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const str = String(value).trim();
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (match) return `${match[3]}/${match[2]}/${match[1]}`;
-  return String(value);
+  const date = new Date(str);
+  if (Number.isFinite(date.getTime())) {
+    return date.toLocaleDateString('es-CO', {
+      timeZone: 'America/Bogota',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+  }
+  return str;
 }
+
