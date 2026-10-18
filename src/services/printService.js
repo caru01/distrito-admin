@@ -119,12 +119,25 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
   }
   if (!cashierName) cashierName = 'Camilo Rincones';
 
-  const address = order.address || order.customer?.address || '';
-  const barrio = order.barrio || order.customer?.barrio || '';
-  const apartment = order.delivery_apartment || order.apartment || order.apartamento || order.customer?.apartment || order.customer?.apartamento || '';
-  const tower = order.delivery_tower || order.tower || order.torre || order.customer?.tower || order.customer?.torre || '';
-  const floor = order.delivery_floor || order.floor || order.piso || order.customer?.floor || order.customer?.piso || '';
-  const reference = order.delivery_reference || order.reference || order.referencia || order.customer?.reference || order.customer?.referencia || '';
+  const cleanStr = (val) => (val != null ? String(val).trim() : '');
+  const address = cleanStr(order.address || order.customer?.address);
+  const barrio = cleanStr(order.barrio || order.customer?.barrio);
+  const apartment = cleanStr(
+    order.delivery_apartment || order.apartment || order.apartamento ||
+    order.customer?.delivery_apartment || order.customer?.apartment || order.customer?.apartamento
+  );
+  const tower = cleanStr(
+    order.delivery_tower || order.tower || order.torre ||
+    order.customer?.delivery_tower || order.customer?.tower || order.customer?.torre
+  );
+  const floor = cleanStr(
+    order.delivery_floor || order.floor || order.piso ||
+    order.customer?.delivery_floor || order.customer?.floor || order.customer?.piso
+  );
+  const reference = cleanStr(
+    order.delivery_reference || order.reference || order.referencia || order.deliveryReference ||
+    order.customer?.delivery_reference || order.customer?.reference || order.customer?.referencia || order.customer?.deliveryReference
+  );
 
   const paymentMethod = order.payment_method || order.paymentMethod || 'Efectivo';
 

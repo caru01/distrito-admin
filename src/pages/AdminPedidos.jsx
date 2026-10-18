@@ -1058,7 +1058,23 @@ export default function AdminPedidos() {
                       <div style={{ color: 'var(--ds-text-primary)', fontWeight: '600', fontSize: '15px' }}>{order.customer_name || 'Sin nombre'}</div>
                       <div style={{ color: 'var(--ds-text-secondary)', fontSize: '13px', marginTop: '4px' }}>{order.customer_phone || 'Sin teléfono'}</div>
                       <div style={{ marginTop: '4px' }}>{getDeliveryTypeBadge(order.delivery_type)}</div>
-                      {String(order.delivery_type || '').toLowerCase() === 'domicilio' && (order.barrio || order.address) && <div style={{ color: 'var(--ds-text-muted)', fontSize: '12px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}><MapPin size={12} />{[order.barrio, order.address].filter(Boolean).join(', ')}</div>}
+                      {String(order.delivery_type || '').toLowerCase() === 'domicilio' && (order.barrio || order.address) && (
+                        <div style={{ color: 'var(--ds-text-muted)', fontSize: '12px', marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <MapPin size={12} />
+                            {[order.barrio, order.address].filter(Boolean).join(', ')}
+                          </div>
+                          {(order.delivery_apartment || order.delivery_tower || order.delivery_reference) && (
+                            <div style={{ fontSize: '11px', color: '#38BDF8', fontWeight: 500, paddingLeft: '16px' }}>
+                              {[
+                                order.delivery_apartment && `Apto: ${order.delivery_apartment}`,
+                                order.delivery_tower && `Torre: ${order.delivery_tower}`,
+                                order.delivery_reference && `Ref: ${order.delivery_reference}`
+                              ].filter(Boolean).join(' · ')}
+                            </div>
+                          )}
+                        </div>
+                      )}
                       {order.notes && <div style={{ color: '#FCD34D', fontSize: '12px', marginTop: '6px', fontStyle: 'italic', padding: '4px 8px', backgroundColor: 'rgba(252,211,77,0.1)', borderRadius: '4px', display: 'inline-block' }}>Nota: {order.notes}</div>}
                     </td>
                     <td>{getSourceIcon(order.source || 'Web')}</td>
@@ -1131,9 +1147,20 @@ export default function AdminPedidos() {
                 {String(order.delivery_type || '').toLowerCase() === 'domicilio' && (order.address || order.barrio) && (
                   <div className="ds-table-card-row">
                     <span className="ds-table-card-label">Dirección</span>
-                    <span className="ds-table-card-value" style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
-                      <MapPin size={13} style={{ marginTop: '2px', flexShrink: 0, color: 'var(--ds-primary)' }} />
-                      <span>{[order.barrio, order.address].filter(Boolean).join(' · ')}</span>
+                    <span className="ds-table-card-value" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <span style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
+                        <MapPin size={13} style={{ marginTop: '2px', flexShrink: 0, color: 'var(--ds-primary)' }} />
+                        <span>{[order.barrio, order.address].filter(Boolean).join(' · ')}</span>
+                      </span>
+                      {(order.delivery_apartment || order.delivery_tower || order.delivery_reference) && (
+                        <span style={{ fontSize: '11px', color: '#38BDF8', fontWeight: 500, paddingLeft: '17px' }}>
+                          {[
+                            order.delivery_apartment && `Apto: ${order.delivery_apartment}`,
+                            order.delivery_tower && `Torre: ${order.delivery_tower}`,
+                            order.delivery_reference && `Ref: ${order.delivery_reference}`
+                          ].filter(Boolean).join(' · ')}
+                        </span>
+                      )}
                     </span>
                   </div>
                 )}
@@ -1249,6 +1276,15 @@ export default function AdminPedidos() {
                 </div>
                 <div style={{ borderTop: '1px solid var(--ds-border)', paddingTop: '12px' }}>
                   <div style={{ color: 'var(--ds-text-secondary)', fontSize: '14px' }}><strong>Dirección:</strong> {selectedOrder.address}, {selectedOrder.barrio}</div>
+                  {selectedOrder.delivery_apartment && (
+                    <div style={{ color: 'var(--ds-text-secondary)', fontSize: '14px', marginTop: '4px' }}><strong>Apartamento / Casa:</strong> {selectedOrder.delivery_apartment}</div>
+                  )}
+                  {selectedOrder.delivery_tower && (
+                    <div style={{ color: 'var(--ds-text-secondary)', fontSize: '14px', marginTop: '4px' }}><strong>Torre:</strong> {selectedOrder.delivery_tower}</div>
+                  )}
+                  {selectedOrder.delivery_reference && (
+                    <div style={{ color: 'var(--ds-text-secondary)', fontSize: '14px', marginTop: '4px' }}><strong>Referencia:</strong> {selectedOrder.delivery_reference}</div>
+                  )}
                   <div style={{ color: 'var(--ds-text-secondary)', fontSize: '14px', marginTop: '4px' }}><strong>Entrega:</strong> {selectedOrder.delivery_type}</div>
                   {selectedOrder.source !== 'Web' && (
                     <div style={{ marginTop: '12px', padding: '10px', backgroundColor: selectedOrder.tracking_sent_at ? 'rgba(34,197,94,0.1)' : 'rgba(245,158,11,0.1)', borderRadius: '8px', border: `1px solid ${selectedOrder.tracking_sent_at ? 'rgba(34,197,94,0.2)' : 'rgba(245,158,11,0.2)'}` }}>

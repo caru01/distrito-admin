@@ -550,6 +550,14 @@ export default function TomarPedido() {
         voucher_reference: customer.voucher_reference || '',
         source:            customer.source,
         notes:             finalNotes,
+        reference:         customer.reference || '',
+        delivery_reference: customer.reference || '',
+        apartment:         customer.apartment || '',
+        delivery_apartment: customer.apartment || '',
+        tower:             customer.tower || '',
+        delivery_tower:    customer.tower || '',
+        floor:             customer.floor || '',
+        delivery_floor:    customer.floor || '',
         cart:              cart.map(i => ({ id: i.id, title: i.title, price: i.price, quantity: i.qty, notes: i.notes || undefined })),
         total,
         status:            sendToKitchen ? 'En preparación' : 'Nuevo',
@@ -610,7 +618,26 @@ export default function TomarPedido() {
           total: authoritativeTotal,
           delivery_fee: authoritativeDelivery,
           cart_json: cart,
-          created_at: data.order?.created_at || customer.created_at || new Date().toISOString()
+          created_at: data.order?.created_at || customer.created_at || new Date().toISOString(),
+          delivery_reference: customer.reference || '',
+          reference: customer.reference || '',
+          delivery_apartment: customer.apartment || '',
+          apartment: customer.apartment || '',
+          delivery_tower: customer.tower || '',
+          tower: customer.tower || '',
+          delivery_floor: customer.floor || '',
+          floor: customer.floor || '',
+          customer: {
+            ...customer,
+            delivery_reference: customer.reference || '',
+            reference: customer.reference || '',
+            delivery_apartment: customer.apartment || '',
+            apartment: customer.apartment || '',
+            delivery_tower: customer.tower || '',
+            tower: customer.tower || '',
+            delivery_floor: customer.floor || '',
+            floor: customer.floor || '',
+          }
         };
 
         // 🖨️ Generar e imprimir comanda de cocina automáticamente si está habilitado en este dispositivo
