@@ -26,11 +26,11 @@ export default function CrmProductPicker({
     };
   }, [search]);
 
-  // Mapa de cantidades en carrito para badge de 0ms
+  // Mapa de cantidades en carrito para badge de 0ms (soporta IDs UUID y numéricos)
   const cartQtyMap = useMemo(() => {
     const map = new Map();
     for (const item of cart) {
-      map.set(Number(item.id), item.quantity);
+      map.set(String(item.id), item.quantity);
     }
     return map;
   }, [cart]);
@@ -106,7 +106,7 @@ export default function CrmProductPicker({
           </div>
         ) : filteredProducts.length > 0 ? (
           filteredProducts.map((p) => {
-            const qty = cartQtyMap.get(Number(p.id)) || 0;
+            const qty = cartQtyMap.get(String(p.id)) || 0;
             const inStock = p.track_stock ? Number(p.stock || 0) > 0 : true;
 
             return (

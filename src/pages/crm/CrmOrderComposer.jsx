@@ -118,10 +118,11 @@ export default function CrmOrderComposer({
     };
   }, []);
 
-  // Handlers del Carrito (memorizados para fluidez 60 FPS)
+  // Handlers del Carrito (memorizados para fluidez 60 FPS, soporta IDs UUID y numéricos)
   const handleAddToCart = useCallback((product) => {
+    const targetId = String(product.id);
     setCart((prev) => {
-      const idx = prev.findIndex((i) => Number(i.id) === Number(product.id));
+      const idx = prev.findIndex((i) => String(i.id) === targetId);
       if (idx >= 0) {
         const copy = [...prev];
         copy[idx] = { ...copy[idx], quantity: copy[idx].quantity + 1 };
@@ -142,23 +143,26 @@ export default function CrmOrderComposer({
   }, []);
 
   const handleUpdateQuantity = useCallback((productId, nextQty) => {
+    const targetId = String(productId);
     setCart((prev) => {
       if (nextQty <= 0) {
-        return prev.filter((i) => Number(i.id) !== Number(productId));
+        return prev.filter((i) => String(i.id) !== targetId);
       }
       return prev.map((i) =>
-        Number(i.id) === Number(productId) ? { ...i, quantity: nextQty } : i
+        String(i.id) === targetId ? { ...i, quantity: nextQty } : i
       );
     });
   }, []);
 
   const handleRemoveItem = useCallback((productId) => {
-    setCart((prev) => prev.filter((i) => Number(i.id) !== Number(productId)));
+    const targetId = String(productId);
+    setCart((prev) => prev.filter((i) => String(i.id) !== targetId));
   }, []);
 
   const handleUpdateItemNotes = useCallback((productId, noteText) => {
+    const targetId = String(productId);
     setCart((prev) =>
-      prev.map((i) => (Number(i.id) === Number(productId) ? { ...i, notes: noteText } : i))
+      prev.map((i) => (String(i.id) === targetId ? { ...i, notes: noteText } : i))
     );
   }, []);
 
