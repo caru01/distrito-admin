@@ -882,7 +882,7 @@ export default function AdminPedidos() {
         <div style={{ display: 'flex', alignItems: 'center', backgroundColor: 'var(--ds-bg-elevated)', border: '1px solid var(--ds-border)', borderRadius: '12px', padding: '0 16px', height: '52px' }}>
           <label style={{ color: 'var(--ds-text-secondary)', fontSize: '14px', fontWeight: '500', marginRight: '12px' }}>Fecha:</label>
           <input type="date" onClick={(e) => { try { e.target.showPicker?.(); } catch {} }} value={filterDate} onChange={e => setFilterDate(e.target.value)}
-            style={{ backgroundColor: 'transparent', color: 'var(--ds-text-primary)', border: 'none', outline: 'none', fontSize: '15px', cursor: 'pointer', colorScheme: 'dark' }} />
+            style={{ backgroundColor: 'transparent', color: 'var(--ds-text-primary)', border: 'none', outline: 'none', fontSize: '15px', cursor: 'pointer', colorScheme: 'light' }} />
           {filterDate && <button onClick={() => setFilterDate('')} style={{ background: 'none', border: 'none', color: 'var(--ds-text-muted)', cursor: 'pointer', marginLeft: '8px', padding: '4px' }}><X size={16} /></button>}
         </div>
         <button
@@ -948,7 +948,7 @@ export default function AdminPedidos() {
                   if (e.target.value) setFilterDate('');
                 }}
                 className="ds-input"
-                style={{ colorScheme: 'dark' }}
+                style={{ colorScheme: 'light' }}
               />
             </div>
 
@@ -963,7 +963,7 @@ export default function AdminPedidos() {
                   if (e.target.value) setFilterDate('');
                 }}
                 className="ds-input"
-                style={{ colorScheme: 'dark' }}
+                style={{ colorScheme: 'light' }}
               />
             </div>
 

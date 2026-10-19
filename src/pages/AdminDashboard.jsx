@@ -342,7 +342,7 @@ export default function AdminDashboard() {
                     fontSize: '13px',
                     fontWeight: '600',
                     cursor: 'pointer',
-                    colorScheme: 'dark'
+                    colorScheme: 'light'
                   }}
                 />
                 {filterDate && filterDate !== getTodayColombia() && (
@@ -387,7 +387,7 @@ export default function AdminDashboard() {
                     fontSize: '13px',
                     fontWeight: '600',
                     cursor: 'pointer',
-                    colorScheme: 'dark'
+                    colorScheme: 'light'
                   }}
                 />
                 <span style={{ color: 'var(--ds-text-muted)', fontSize: '12px' }}>–</span>
@@ -408,7 +408,7 @@ export default function AdminDashboard() {
                     fontSize: '13px',
                     fontWeight: '600',
                     cursor: 'pointer',
-                    colorScheme: 'dark'
+                    colorScheme: 'light'
                   }}
                 />
                 {(filterDateFrom || filterDateTo) && (
@@ -547,7 +547,7 @@ export default function AdminDashboard() {
                     fontSize: '12px',
                     fontWeight: '600',
                     cursor: 'pointer',
-                    colorScheme: 'dark'
+                    colorScheme: 'light'
                   }}
                 />
                 <span style={{ color: 'var(--ds-text-muted)' }}>–</span>
@@ -566,7 +566,7 @@ export default function AdminDashboard() {
                     fontSize: '12px',
                     fontWeight: '600',
                     cursor: 'pointer',
-                    colorScheme: 'dark'
+                    colorScheme: 'light'
                   }}
                 />
               </div>

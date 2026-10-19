@@ -345,11 +345,11 @@ export default function AdminGastos() {
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center', background: 'var(--ds-card)', padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--ds-border)' }}>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <label style={{ fontSize: '12px', color: '#BDBDBD', marginBottom: '4px' }}>Desde</label>
-            <input type="date" className="ds-input" style={{ colorScheme: 'dark', padding: '6px' }} value={startDate} onChange={e => setStartDate(e.target.value)} />
+            <input type="date" className="ds-input" style={{ colorScheme: 'light', padding: '6px' }} value={startDate} onChange={e => setStartDate(e.target.value)} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <label style={{ fontSize: '12px', color: '#BDBDBD', marginBottom: '4px' }}>Hasta</label>
-            <input type="date" className="ds-input" style={{ colorScheme: 'dark', padding: '6px' }} value={endDate} onChange={e => setEndDate(e.target.value)} />
+            <input type="date" className="ds-input" style={{ colorScheme: 'light', padding: '6px' }} value={endDate} onChange={e => setEndDate(e.target.value)} />
           </div>
           <button onClick={() => { setStartDate(''); setEndDate(''); }} className="ds-btn ds-btn-ghost ds-btn-sm" style={{ alignSelf: 'flex-end', height: '36px' }}>
             Todas
@@ -467,7 +467,7 @@ export default function AdminGastos() {
                 
                 <div className="ds-form-group">
                   <label className="ds-form-label"><Calendar size={16}/> Fecha del Gasto</label>
-                  <input type="date" className="ds-input" required value={formData.expense_date} onChange={e => setFormData({...formData, expense_date: e.target.value})} style={{ colorScheme: 'dark' }} />
+                  <input type="date" className="ds-input" required value={formData.expense_date} onChange={e => setFormData({...formData, expense_date: e.target.value})} style={{ colorScheme: 'light' }} />
                 </div>
 
                 <div className="ds-form-group">

@@ -458,6 +458,32 @@ html[data-admin-density="compact"] { --ds-space-md: .75rem; --ds-space-lg: 1rem;
 .ds-input-group { position: relative; }
 .ds-input-group .ds-input { padding-left: 2.5rem; }
 .ds-input-group-icon { position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); color: var(--ds-text-muted); display: flex; align-items: center; pointer-events: none; }
+
+/* Date, Datetime & Time Pickers - Calendario e icono siempre nítidos y visibles */
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"],
+.ds-input[type="date"],
+.ds-input[type="datetime-local"],
+.ds-input[type="time"] {
+  color-scheme: light !important;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter: none !important;
+  opacity: 0.85;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover,
+input[type="time"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
 @media (max-width: 767px) {
   .ds-form-grid, .ds-form-grid-3 { grid-template-columns: 1fr; }
   .ds-form-col-span-2, .ds-form-col-span-3 { grid-column: span 1; }

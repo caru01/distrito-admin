@@ -1225,7 +1225,7 @@ export default function TomarPedido() {
                   onChange={e => setCustomer(c => ({ ...c, created_at: e.target.value }))}
                   onClick={e => { try { e.target.showPicker?.(); } catch {} }}
                   className="ds-input" 
-                  style={{ height: '42px', fontSize: '13px', colorScheme: 'dark', cursor: 'pointer', width: '100%' }} 
+                  style={{ height: '42px', fontSize: '13px', colorScheme: 'light', cursor: 'pointer', width: '100%' }} 
                 />
               </div>
 
