@@ -11,6 +11,7 @@ import {
   User as UserRound,
   X,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import ModernSearchField from "../../components/ModernSearchField";
 import { formatCurrency, formatDateTime } from "../../utils/formatters";
 import { API_URL } from "../../config/api";
@@ -25,7 +26,17 @@ import {
 
 const EMPTY_FILTERS = { search: "", status: "", source: "" };
 
+function formatContactIdentity(contact) {
+  if (!contact) return "";
+  if (contact.bsuid === "2222222") return "2222222 (Consumidor Final)";
+  if (contact.normalized_phone) return contact.normalized_phone;
+  if (contact.username) return `@${String(contact.username).replace(/^@/, "")}`;
+  if (contact.bsuid) return `ID WhatsApp: ${String(contact.bsuid).slice(0, 14)}…`;
+  return "Sin teléfono";
+}
+
 function ContactDetail({ id, close, notify, refresh }) {
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [form, setForm] = useState({});
   const [note, setNote] = useState("");
@@ -151,7 +162,7 @@ function ContactDetail({ id, close, notify, refresh }) {
           <div>
             <span className="ds-page-kicker">Perfil CRM 360°</span>
             <h2 className="ds-modal-title">
-              {contact.display_name || contact.normalized_phone}
+              {contact.display_name || formatContactIdentity(contact)}
             </h2>
           </div>
           <button className="ds-modal-close" onClick={close}>
@@ -235,10 +246,10 @@ function ContactDetail({ id, close, notify, refresh }) {
                   />
                 </label>
                 <label className="ds-form-group">
-                  <span className="ds-form-label">Teléfono canónico</span>
+                  <span className="ds-form-label">Teléfono / Identificador</span>
                   <input
                     className="ds-input"
-                    value={contact.normalized_phone}
+                    value={formatContactIdentity(contact)}
                     disabled
                   />
                 </label>
@@ -415,20 +426,36 @@ function ContactDetail({ id, close, notify, refresh }) {
               </article>
             </div>
             <div className="crm-contact-actions">
-              <a
-                className="ds-btn ds-btn-success"
-                href={`https://wa.me/${contact.normalized_phone.slice(1)}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <MessageCircle /> WhatsApp
-              </a>
-              <a
-                className="ds-btn ds-btn-secondary"
-                href={`tel:${contact.normalized_phone}`}
-              >
-                <Phone /> Llamar
-              </a>
+              {contact.bsuid !== "2222222" && (
+                <button
+                  type="button"
+                  className="ds-btn ds-btn-primary"
+                  onClick={() => {
+                    close();
+                    navigate(`/admin/crm/conversaciones?contactId=${contact.id}`);
+                  }}
+                >
+                  <MessageCircle /> Chat en CRM
+                </button>
+              )}
+              {contact.normalized_phone && (
+                <>
+                  <a
+                    className="ds-btn ds-btn-success"
+                    href={`https://wa.me/${contact.normalized_phone.replace(/^\+/, "")}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <MessageCircle /> WhatsApp
+                  </a>
+                  <a
+                    className="ds-btn ds-btn-secondary"
+                    href={`tel:${contact.normalized_phone}`}
+                  >
+                    <Phone /> Llamar
+                  </a>
+                </>
+              )}
             </div>
             {data.favorite_products?.length ? (
               <div className="crm-favorite-products">
@@ -442,22 +469,46 @@ function ContactDetail({ id, close, notify, refresh }) {
               </div>
             ) : null}
             <div className="customer-order-history">
-              <h3>Pedidos conectados</h3>
+              <h3>Historial de compras ({data.orders.length})</h3>
               {data.orders.length ? (
-                data.orders.map((order) => (
-                  <article key={order.id}>
-                    <div>
-                      <strong>#{order.id}</strong>
-                      <span className="ds-badge ds-badge-neutral">
-                        {order.status}
-                      </span>
-                    </div>
-                    <p>
-                      {formatDateTime(order.created_at)} · {order.source}
-                    </p>
-                    <b>{formatCurrency(order.total)}</b>
-                  </article>
-                ))
+                data.orders.map((order) => {
+                  const items = Array.isArray(order.cart_json)
+                    ? order.cart_json
+                    : [];
+                  return (
+                    <article key={order.id} className="crm-contact-order-item">
+                      <div>
+                        <strong>#{order.id}</strong>
+                        <span
+                          className={`ds-badge ds-badge-${
+                            ["Entregado", "Completado"].includes(order.status)
+                              ? "success"
+                              : order.status === "Cancelado"
+                              ? "danger"
+                              : "neutral"
+                          }`}
+                        >
+                          {order.status}
+                        </span>
+                      </div>
+                      <p>
+                        {formatDateTime(order.created_at)} · {order.source || "Web"} ·{" "}
+                        {order.delivery_type || "Domicilio"} ({order.payment_method || "Efectivo"})
+                      </p>
+                      {items.length > 0 && (
+                        <small className="crm-order-products-summary">
+                          {items
+                            .map(
+                              (it) =>
+                                `${it.quantity || 1}x ${it.title || it.name}`
+                            )
+                            .join(", ")}
+                        </small>
+                      )}
+                      <b>{formatCurrency(order.total)}</b>
+                    </article>
+                  );
+                })
               ) : (
                 <p className="ds-text-muted">Todavía no ha comprado.</p>
               )}
@@ -597,7 +648,7 @@ export default function CrmContacts({ revision, notify }) {
                               {contact.display_name || "Sin nombre"}
                             </strong>
                             <small>
-                              {contact.normalized_phone} ·{" "}
+                              {formatContactIdentity(contact)} ·{" "}
                               {contact.barrio || "Sin barrio"}
                             </small>
                           </div>
@@ -641,7 +692,7 @@ export default function CrmContacts({ revision, notify }) {
                     </span>
                     <div>
                       <strong>{contact.display_name || "Sin nombre"}</strong>
-                      <small>{contact.normalized_phone}</small>
+                      <small>{formatContactIdentity(contact)}</small>
                     </div>
                   </div>
                   <span
