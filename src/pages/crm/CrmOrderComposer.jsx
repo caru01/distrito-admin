@@ -197,7 +197,11 @@ export default function CrmOrderComposer({
 
     const customerName = contact?.display_name || conversation?.display_name || 'Cliente WhatsApp';
     const customerPhone = contact?.normalized_phone || conversation?.normalized_phone || '';
-    const resolvedContactId = contact?.id || conversation?.contact_id || null;
+    const resolvedContactId =
+      conversation?.contact_id ||
+      contact?.contact_id ||
+      (contact && contact !== conversation ? contact.id : null) ||
+      null;
 
     let finalNotes = notes || '';
     if (paymentMethod === 'compartido') {
