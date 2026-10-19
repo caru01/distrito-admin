@@ -60,7 +60,7 @@ export default function CrmOrderDelivery({
           <button
             type="button"
             className={`crm-type-btn ${!isDelivery ? 'is-active' : ''}`}
-            onClick={() => onDeliveryTypeChange('tienda')}
+            onClick={() => onDeliveryTypeChange('recoger')}
           >
             <Store size={16} />
             <div>

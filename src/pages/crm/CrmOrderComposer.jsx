@@ -227,7 +227,7 @@ export default function CrmOrderComposer({
         cash_split: paymentMethod === 'compartido' ? cashSplit : undefined,
         transfer_split: paymentMethod === 'compartido' ? transferSplit : undefined,
         notes: finalNotes,
-        source: 'WhatsApp CRM',
+        source: 'WhatsApp',
       },
       cart: cart.map((i) => ({
         id: i.id,
@@ -267,7 +267,7 @@ export default function CrmOrderComposer({
           cash_split: paymentMethod === 'compartido' ? cashSplit : undefined,
           transfer_split: paymentMethod === 'compartido' ? transferSplit : undefined,
           cashAmount: paymentMethod === 'efectivo' && cashAmount !== '' ? Number(cashAmount) : undefined,
-          source: 'WhatsApp CRM',
+          source: 'WhatsApp',
           notes: finalNotes,
           reference,
           delivery_reference: reference,

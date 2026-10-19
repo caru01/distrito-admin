@@ -168,9 +168,20 @@ export default function TomarPedido() {
           longitude: editOrder.delivery_longitude == null ? null : Number(editOrder.delivery_longitude),
           placeId: editOrder.delivery_place_id || '',
           locationAdjusted: Boolean(editOrder.delivery_location_adjusted),
-          locationConfirmed: editOrder.delivery_latitude != null && editOrder.delivery_longitude != null,
-          deliveryType: editOrder.delivery_type || 'domicilio',
-          source: editOrder.source || 'WhatsApp',
+          deliveryType: (() => {
+            const dt = String(editOrder.delivery_type || '').toLowerCase().trim();
+            if (dt === 'tienda' || dt === 'recoger' || dt === 'para recoger') return 'recoger';
+            if (dt === 'presencial' || dt === 'mostrador' || dt === 'en local' || dt === 'mesa') return 'presencial';
+            return 'domicilio';
+          })(),
+          source: (() => {
+            const src = String(editOrder.source || '').toLowerCase().trim();
+            if (src.includes('whatsapp') || editOrder.crm_contact_id) return 'WhatsApp';
+            if (src.includes('tel') || src === 'telefono') return 'Teléfono';
+            if (src.includes('web')) return 'Web';
+            if (src.includes('mostrador') || src.includes('presencial')) return 'Mostrador';
+            return 'WhatsApp';
+          })(),
           paymentMethod: editOrder.payment_method || 'efectivo',
           cash_split: (() => {
             if (editOrder.notes && editOrder.notes.includes('Pago Compartido:')) {
@@ -266,10 +277,21 @@ export default function TomarPedido() {
       longitude: client.longitude == null ? null : Number(client.longitude),
       placeId: client.placeId || '',
       locationAdjusted: Boolean(client.locationAdjusted),
-      locationConfirmed: client.latitude != null && client.longitude != null,
-      deliveryType: client.delivery_type || 'domicilio',
+      deliveryType: (() => {
+        const dt = String(client.delivery_type || '').toLowerCase().trim();
+        if (dt === 'tienda' || dt === 'recoger') return 'recoger';
+        if (dt === 'presencial' || dt === 'mostrador') return 'presencial';
+        return 'domicilio';
+      })(),
       paymentMethod: client.payment_method || 'efectivo',
-      source: client.source || 'WhatsApp',
+      source: (() => {
+        const src = String(client.source || '').toLowerCase().trim();
+        if (src.includes('whatsapp') || client.crm_contact_id) return 'WhatsApp';
+        if (src.includes('tel') || src === 'telefono') return 'Teléfono';
+        if (src.includes('web')) return 'Web';
+        if (src.includes('mostrador') || src.includes('presencial')) return 'Mostrador';
+        return 'WhatsApp';
+      })(),
       notes: client.notes || ''
     }));
     setShowClientSearch(false);
@@ -1210,41 +1232,71 @@ export default function TomarPedido() {
               <div style={{ marginBottom: '12px' }}>
                 <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--ds-text-secondary)', display: 'block', marginBottom: '6px' }}>Tipo de Entrega</span>
                 <div className="ds-option-group" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
-                  {[{ key: 'domicilio', label: 'Domicilio' }, { key: 'presencial', label: 'Mostrador' }, { key: 'recoger', label: 'Recoger' }].map(d => (
-                    <button 
-                      key={d.key} 
-                      onClick={() => setCustomer(c => ({ ...c, deliveryType: d.key }))} 
-                      className={`ds-option-btn ${customer.deliveryType === d.key ? 'active' : ''}`}
-                      style={{ padding: '8px 4px', fontSize: '12px', fontWeight: 600, textAlign: 'center', justifyContent: 'center', minHeight: '38px' }}
-                    >
-                      {d.label}
-                    </button>
-                  ))}
+                  {[{ key: 'domicilio', label: 'Domicilio' }, { key: 'presencial', label: 'Mostrador' }, { key: 'recoger', label: 'Recoger' }].map(d => {
+                    const isActive = (() => {
+                      const dt = String(customer.deliveryType || '').toLowerCase().trim();
+                      if (d.key === 'recoger') return dt === 'recoger' || dt === 'tienda' || dt === 'para recoger';
+                      if (d.key === 'presencial') return dt === 'presencial' || dt === 'mostrador' || dt === 'en local';
+                      return dt === 'domicilio' || (!dt && d.key === 'domicilio');
+                    })();
+                    return (
+                      <button 
+                        key={d.key} 
+                        type="button"
+                        onClick={() => setCustomer(c => ({ ...c, deliveryType: d.key }))} 
+                        className={`ds-option-btn ${isActive ? 'active' : ''}`}
+                        style={{ 
+                          padding: '8px 4px', 
+                          fontSize: '12px', 
+                          fontWeight: 600, 
+                          textAlign: 'center', 
+                          justifyContent: 'center', 
+                          minHeight: '38px',
+                          backgroundColor: isActive ? 'var(--ds-primary)' : undefined,
+                          color: isActive ? '#fff' : undefined,
+                          borderColor: isActive ? 'var(--ds-primary)' : undefined
+                        }}
+                      >
+                        {d.label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
               <div style={{ marginBottom: '12px' }}>
                 <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--ds-text-secondary)', display: 'block', marginBottom: '6px' }}>Origen</span>
                 <div className="ds-option-group" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px' }}>
-                  {SOURCE_OPTIONS.map(s => (
-                    <button 
-                      key={s.key} 
-                      onClick={() => setCustomer(c => ({ ...c, source: s.key }))} 
-                      className={`ds-option-btn ${customer.source === s.key ? 'active' : ''}`} 
-                      style={{ 
-                        backgroundColor: customer.source === s.key ? s.color : undefined, 
-                        color: customer.source === s.key ? '#fff' : undefined,
-                        borderColor: customer.source === s.key ? s.color : undefined,
-                        padding: '8px 6px',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        justifyContent: 'center',
-                        minHeight: '38px'
-                      }}
-                    >
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>{s.icon} {s.label}</span>
-                    </button>
-                  ))}
+                  {SOURCE_OPTIONS.map(s => {
+                    const isSourceActive = (() => {
+                      const src = String(customer.source || '').toLowerCase().trim();
+                      if (s.key === 'WhatsApp') return src.includes('whatsapp') || (!src && !customer.source);
+                      if (s.key === 'Teléfono') return src.includes('tel');
+                      if (s.key === 'Web') return src.includes('web');
+                      if (s.key === 'Mostrador') return src.includes('mostrador') || src.includes('presencial');
+                      return customer.source === s.key;
+                    })();
+                    return (
+                      <button 
+                        key={s.key} 
+                        type="button"
+                        onClick={() => setCustomer(c => ({ ...c, source: s.key }))} 
+                        className={`ds-option-btn ${isSourceActive ? 'active' : ''}`} 
+                        style={{ 
+                          backgroundColor: isSourceActive ? s.color : undefined, 
+                          color: isSourceActive ? '#fff' : undefined,
+                          borderColor: isSourceActive ? s.color : undefined,
+                          padding: '8px 6px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          justifyContent: 'center',
+                          minHeight: '38px'
+                        }}
+                      >
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>{s.icon} {s.label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
