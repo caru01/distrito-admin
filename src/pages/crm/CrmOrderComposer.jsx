@@ -195,10 +195,25 @@ export default function CrmOrderComposer({
     setIsSubmitting(true);
     setSubmitError(null);
 
+    const customerName = contact?.display_name || conversation?.display_name || 'Cliente WhatsApp';
+    const customerPhone = contact?.normalized_phone || conversation?.normalized_phone || '';
+    const resolvedContactId = contact?.id || conversation?.contact_id || null;
+
+    let finalNotes = notes || '';
+    if (paymentMethod === 'compartido') {
+      const cSplit = Number(cashSplit) || 0;
+      const tSplit = Number(transferSplit) || 0;
+      const splitText = `(Pago Compartido: $${cSplit.toLocaleString('es-CO')} efectivo, $${tSplit.toLocaleString('es-CO')} transferencia)`;
+      finalNotes = finalNotes ? `${finalNotes}\n${splitText}` : splitText;
+    }
+
     const payload = {
       customer: {
-        name: contact?.display_name || conversation?.display_name || 'Cliente WhatsApp',
-        phone: contact?.normalized_phone || conversation?.normalized_phone || '',
+        name: customerName,
+        phone: customerPhone,
+        crm_contact_id: resolvedContactId,
+        bsuid: contact?.bsuid || conversation?.bsuid || null,
+        username: contact?.username || conversation?.username || null,
         address,
         barrio,
         reference,
@@ -207,7 +222,8 @@ export default function CrmOrderComposer({
         cashAmount: paymentMethod === 'efectivo' && cashAmount !== '' ? Number(cashAmount) : undefined,
         cash_split: paymentMethod === 'compartido' ? cashSplit : undefined,
         transfer_split: paymentMethod === 'compartido' ? transferSplit : undefined,
-        notes,
+        notes: finalNotes,
+        source: 'WhatsApp CRM',
       },
       cart: cart.map((i) => ({
         id: i.id,
@@ -224,10 +240,118 @@ export default function CrmOrderComposer({
     };
 
     try {
-      const response = await crmRequest(
-        `/conversations/${conversation.id}/orders`,
-        crmJson('POST', payload, { 'Idempotency-Key': idempotencyKeyRef.current })
-      );
+      let response;
+      try {
+        response = await crmRequest(
+          `/conversations/${conversation.id}/orders`,
+          crmJson('POST', payload, { 'Idempotency-Key': idempotencyKeyRef.current })
+        );
+      } catch (primaryErr) {
+        if (!String(primaryErr.message || '').includes('Ruta API no encontrada')) {
+          throw primaryErr;
+        }
+        // Fallback automático a /checkout + /conversations/:id/messages si el VPS aún no ha reiniciado crm_api.js
+        const token = sessionStorage.getItem('distrito_admin_token');
+        const checkoutBody = {
+          customer_name: customerName,
+          customer_phone: customerPhone || null,
+          crm_contact_id: resolvedContactId,
+          address,
+          barrio,
+          delivery_type: deliveryType,
+          payment_method: paymentMethod,
+          cash_split: paymentMethod === 'compartido' ? cashSplit : undefined,
+          transfer_split: paymentMethod === 'compartido' ? transferSplit : undefined,
+          cashAmount: paymentMethod === 'efectivo' && cashAmount !== '' ? Number(cashAmount) : undefined,
+          source: 'WhatsApp CRM',
+          notes: finalNotes,
+          reference,
+          delivery_reference: reference,
+          cart: payload.cart,
+          total: orderTotal,
+          status: sendToKitchen ? 'En preparación' : 'Nuevo',
+          customer: payload.customer,
+        };
+        const chkRes = await fetch(`${API_URL}/checkout`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(checkoutBody),
+        });
+        const chkData = await chkRes.json();
+        if (!chkRes.ok && chkData.status !== 'ok') {
+          throw new Error(chkData.error || 'No fue posible registrar el pedido.');
+        }
+        const orderId = chkData.order?.id || chkData.order_id || chkData.id;
+        const authoritativeDelivery = Number(chkData.order?.delivery_fee ?? chkData.delivery_fee ?? effectiveDeliveryFee);
+        const authoritativeTotal = Number(chkData.order?.total ?? chkData.total ?? orderTotal);
+        const createdOrderObj = {
+          id: orderId,
+          customer_name: customerName,
+          customer_phone: customerPhone,
+          address,
+          barrio,
+          delivery_type: deliveryType,
+          payment_method: paymentMethod,
+          total: authoritativeTotal,
+          subtotal,
+          delivery_fee: authoritativeDelivery,
+          status: sendToKitchen ? 'En preparación' : 'Nuevo',
+          cart_json: payload.cart,
+        };
+
+        let waStatus = { status: 'skipped' };
+        if (sendWhatsAppSummary && !isConsumidorFinal) {
+          const orderNumStr = String(orderId || 0).padStart(4, '0');
+          const isDel = deliveryType === 'domicilio';
+          const changeReq = paymentMethod === 'efectivo' && Number(cashAmount) >= authoritativeTotal
+            ? Number(cashAmount) - authoritativeTotal
+            : null;
+          const lines = [
+            '🍔 *Distrito BG — Confirmación de Pedido*',
+            `*Pedido #${orderNumStr}*`,
+            '',
+            `Hola *${customerName}*, tu pedido fue registrado y ya se encuentra *${createdOrderObj.status}* en nuestra cocina. 👨‍🍳🔥`,
+            '',
+            '*🛒 Detalle de tu pedido:*',
+          ];
+          for (const it of payload.cart) {
+            const sub = Number(it.price || 0) * Number(it.quantity || 1);
+            lines.push(`• ${it.quantity}x ${it.title} — ${formatCurrency(sub)}`);
+            if (it.notes) lines.push(`  ↳ _${it.notes}_`);
+          }
+          lines.push('');
+          lines.push(`*Modalidad:* ${isDel ? '🛵 A Domicilio' : '🏪 Recoger en local'}`);
+          if (isDel && address) {
+            lines.push(`*Dirección:* ${address}${barrio ? ` (${barrio})` : ''}`);
+          }
+          lines.push(`*Método de Pago:* ${paymentMethod.toUpperCase()}`);
+          if (changeReq && changeReq > 0) {
+            lines.push(`*Cambio requerido:* ${formatCurrency(changeReq)}`);
+          }
+          if (isDel && authoritativeDelivery > 0) {
+            lines.push(`*Domicilio:* ${formatCurrency(authoritativeDelivery)}`);
+          }
+          lines.push(`*Total a pagar:* ${formatCurrency(authoritativeTotal)}`);
+          if (chkData.tracking_url || chkData.order?.tracking_url) {
+            lines.push('', '🔎 *Rastrea tu pedido en tiempo real:*', chkData.tracking_url || chkData.order?.tracking_url);
+          }
+          lines.push('', '¡Muchas gracias por elegir Distrito BG! ❤️');
+
+          try {
+            await crmRequest(
+              `/conversations/${conversation.id}/messages`,
+              crmJson('POST', { text: lines.join('\n') })
+            );
+            waStatus = { status: 'queued' };
+          } catch (waErr) {
+            waStatus = { status: 'failed', message: waErr.message };
+          }
+        } else if (isConsumidorFinal) {
+          waStatus = { status: 'omitted_consumidor_final' };
+        }
+
+        response = { status: 'ok', order: createdOrderObj, whatsapp: waStatus };
+      }
 
       setCreatedOrderResult(response);
       if (onOrderCreated) {
