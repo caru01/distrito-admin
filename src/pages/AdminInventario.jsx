@@ -301,8 +301,16 @@ export default function AdminInventario() {
   const loadProductionPlan = useCallback(async () => {
     try {
       const res = await fetchAuth(`${API_URL}/admin/production/plan`);
+      if (!res.ok) {
+        console.warn('No se pudo cargar el plan de producción desde el servidor (HTTP ' + res.status + ')');
+        return;
+      }
       const data = await res.json();
-      let planToUse = (data && data.plan && Object.keys(data.plan).length > 0) ? data.plan : null;
+      let rawPlan = data?.plan;
+      if (typeof rawPlan === 'string') {
+        try { rawPlan = JSON.parse(rawPlan); } catch (e) {}
+      }
+      let planToUse = (rawPlan && typeof rawPlan === 'object' && Object.keys(rawPlan).length > 0) ? rawPlan : null;
 
       // Si la BD aún no tiene metas pero había algo en localStorage, migrarlo automáticamente
       if (!planToUse) {
@@ -333,6 +341,13 @@ export default function AdminInventario() {
       console.error('Error cargando plan de producción:', err);
     }
   }, [fetchAuth]);
+
+  // Recargar datos y plan siempre que se abra la pestaña de Plan de Producción
+  useEffect(() => {
+    if (activeTab === 'plan_produccion') {
+      loadProductionPlan();
+    }
+  }, [activeTab, loadProductionPlan]);
 
   // Persistir en la base de datos Neon con debounce (400ms)
   const persistProductionPlan = useCallback((updatedPlan) => {
@@ -468,7 +483,7 @@ export default function AdminInventario() {
     const requirementsMap = {}; // inventory_id -> { insumo, requiredQty, usedIn: [] }
 
     products.forEach((prod) => {
-      const target = Number(productionPlan[prod.id]) || 0;
+      const target = Number(productionPlan[prod.id] || productionPlan[String(prod.id)]) || 0;
       const prodRecipes = productRecipesMap[String(prod.id)] || [];
       const hasRecipe = prodRecipes.length > 0;
 
@@ -492,9 +507,26 @@ export default function AdminInventario() {
 
       if (target > 0) {
         totalPlannedUnits += target;
+        const unitPrice = Number(prod.price) || 0;
+        const projectedRevenue = target * unitPrice;
+
+        let recipeUnitCost = 0;
+        if (hasRecipe) {
+          prodRecipes.forEach((rcp) => {
+            const uq = Number(rcp.quantity) || 0;
+            const ins = insumosMap[String(rcp.inventory_id)];
+            const uc = ins ? (Number(ins.average_cost) || Number(ins.unit_cost) || 0) : (Number(rcp.inventory_average_cost) || 0);
+            recipeUnitCost += (uq * uc);
+          });
+        }
+
         activeProducts.push({
           product: prod,
           target,
+          unitPrice,
+          projectedRevenue,
+          recipeUnitCost,
+          projectedCost: target * recipeUnitCost,
           hasRecipe,
           recipesCount: prodRecipes.length,
           maxPossibleWithStock: maxPossibleWithStock !== null ? maxPossibleWithStock : 0,
@@ -612,6 +644,13 @@ export default function AdminInventario() {
       ? Math.round((sufficientItems.length / insumosList.length) * 100)
       : 100;
 
+    const totalProjectedRevenue = activeProducts.reduce((sum, item) => sum + item.projectedRevenue, 0);
+    const totalMaterialsCost = insumosList.reduce((acc, curr) => acc + (curr.requiredQty * curr.unitCost), 0);
+    const projectedGrossProfit = totalProjectedRevenue - totalMaterialsCost;
+    const projectedMarginPct = totalProjectedRevenue > 0
+      ? Math.round((projectedGrossProfit / totalProjectedRevenue) * 100)
+      : 0;
+
     return {
       activeProducts,
       totalPlannedUnits,
@@ -619,6 +658,10 @@ export default function AdminInventario() {
       deficitItems,
       sufficientItems,
       totalEstimatedCost,
+      totalProjectedRevenue,
+      totalMaterialsCost,
+      projectedGrossProfit,
+      projectedMarginPct,
       coveragePct,
       missingRecipesCount: activeProducts.filter((p) => !p.hasRecipe).length
     };
@@ -629,7 +672,7 @@ export default function AdminInventario() {
       const title = (p.title || p.product_title || p.name || '').toLowerCase();
       const matchesSearch = !planSearch.trim() || title.includes(planSearch.trim().toLowerCase());
       const matchesCat = planCategoryFilter === 'ALL' || p.category === planCategoryFilter;
-      const target = Number(productionPlan[p.id]) || 0;
+      const target = Number(productionPlan[p.id] || productionPlan[String(p.id)]) || 0;
       const matchesActive = !planOnlyActiveTargets || target > 0;
       return matchesSearch && matchesCat && matchesActive;
     });
@@ -660,8 +703,10 @@ export default function AdminInventario() {
     text += `📅 *Fecha:* ${dateStr}\n\n`;
     text += `🎯 *METAS DE PRODUCCIÓN:*\n`;
     planAnalysis.activeProducts.forEach((p) => {
-      text += `• ${p.target}x ${p.product.title || p.product.name}\n`;
+      text += `• ${p.target}x ${p.product.title || p.product.name} (Venta est.: ${formatCurrency(p.projectedRevenue)})\n`;
     });
+    text += `💵 *VENTA TOTAL PROYECTADA:* ${formatCurrency(planAnalysis.totalProjectedRevenue)}\n`;
+    text += `📊 *Margen Bruto Estimado:* ${formatCurrency(planAnalysis.projectedGrossProfit)} (${planAnalysis.projectedMarginPct}%)\n`;
     text += `\n🚨 *INSUMOS A COMPRAR (${planAnalysis.deficitItems.length}):*\n`;
     planAnalysis.deficitItems.forEach((it, idx) => {
       const qtyFormatted = it.deficit % 1 === 0 ? it.deficit : it.deficit.toFixed(2);
@@ -703,6 +748,7 @@ export default function AdminInventario() {
         <td style="padding: 6px 10px; border-bottom: 1px solid #e5e7eb; text-align: center;">${p.product.category || '-'}</td>
         <td style="padding: 6px 10px; border-bottom: 1px solid #e5e7eb; text-align: right; font-weight: bold; color: #4338ca;">${p.target} uds</td>
         <td style="padding: 6px 10px; border-bottom: 1px solid #e5e7eb; text-align: right;">${p.maxPossibleWithStock} uds</td>
+        <td style="padding: 6px 10px; border-bottom: 1px solid #e5e7eb; text-align: right; font-weight: bold; color: #059669;">${formatCurrency(p.projectedRevenue)}</td>
       </tr>
     `).join('');
 
@@ -765,12 +811,19 @@ export default function AdminInventario() {
               <th>Producto de Carta</th>
               <th style="text-align: center;">Categoría</th>
               <th style="text-align: right;">Meta Programada</th>
-              <th style="text-align: right;">Capacidad Actual con Stock</th>
+              <th style="text-align: right;">Capacidad con Stock</th>
+              <th style="text-align: right;">Venta Proyectada</th>
             </tr>
           </thead>
           <tbody>
             ${productsRows}
           </tbody>
+          <tfoot>
+            <tr style="background: #f9fafb; font-weight: bold; font-size: 13px;">
+              <td colspan="4" style="padding: 10px; text-align: right;">VENTA TOTAL PROYECTADA:</td>
+              <td style="padding: 10px; text-align: right; color: #059669; font-size: 14px;">${formatCurrency(planAnalysis.totalProjectedRevenue)}</td>
+            </tr>
+          </tfoot>
         </table>
 
         <h3 style="font-size: 13px; text-transform: uppercase; margin-bottom: 6px; color: #dc2626;">
@@ -2566,7 +2619,10 @@ export default function AdminInventario() {
         </button>
         <button
           className={`ds-btn ds-btn-sm ${activeTab === 'plan_produccion' ? 'ds-btn-primary' : 'ds-btn-secondary'}`}
-          onClick={() => setActiveTab('plan_produccion')}
+          onClick={() => {
+            setActiveTab('plan_produccion');
+            loadProductionPlan();
+          }}
           style={activeTab === 'plan_produccion' ? { background: '#7c3aed', borderColor: '#7c3aed', color: '#fff', fontWeight: 'bold' } : {}}
           title="Planificar requerimientos de compras según metas de producción (ej: 100 salchipapas, 100 hamburguesas, 50 perros)"
         >
@@ -4678,6 +4734,25 @@ export default function AdminInventario() {
               </div>
             </div>
 
+            {/* Venta Total Proyectada */}
+            <div className="ds-card" style={{ padding: '16px', borderLeft: '4px solid #10b981', background: 'rgba(16, 185, 129, 0.04)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase', color: 'var(--ds-text-secondary)' }}>
+                  Venta Total Proyectada
+                </span>
+                <DollarSign size={18} color="#10b981" />
+              </div>
+              <div style={{ fontSize: '24px', fontWeight: '900', color: '#10b981' }}>
+                {formatCurrency(planAnalysis.totalProjectedRevenue)}
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--ds-text-muted)', marginTop: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span>Ganancia bruta est.:</span>
+                <strong style={{ color: planAnalysis.projectedGrossProfit >= 0 ? '#10b981' : '#ef4444' }}>
+                  {formatCurrency(planAnalysis.projectedGrossProfit)} ({planAnalysis.projectedMarginPct}%)
+                </strong>
+              </div>
+            </div>
+
             {/* Insumos Involucrados */}
             <div className="ds-card" style={{ padding: '16px', borderLeft: '4px solid #3b82f6' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
@@ -4715,14 +4790,14 @@ export default function AdminInventario() {
             </div>
 
             {/* Presupuesto de Compras */}
-            <div className="ds-card" style={{ padding: '16px', borderLeft: '4px solid #10b981' }}>
+            <div className="ds-card" style={{ padding: '16px', borderLeft: '4px solid #f59e0b' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                 <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase', color: 'var(--ds-text-secondary)' }}>
                   Inversión en Compras
                 </span>
-                <DollarSign size={18} color="#10b981" />
+                <ShoppingCart size={18} color="#f59e0b" />
               </div>
-              <div style={{ fontSize: '24px', fontWeight: '900', color: '#10b981' }}>
+              <div style={{ fontSize: '24px', fontWeight: '900', color: '#f59e0b' }}>
                 {formatCurrency(planAnalysis.totalEstimatedCost)}
               </div>
               <div style={{ fontSize: '12px', color: 'var(--ds-text-muted)', marginTop: '4px' }}>
@@ -4851,7 +4926,7 @@ export default function AdminInventario() {
                   </div>
                 ) : (
                   filteredPlanProducts.map((p) => {
-                    const target = Number(productionPlan[p.id]) || 0;
+                    const target = Number(productionPlan[p.id] || productionPlan[String(p.id)]) || 0;
                     const prodRecipes = productRecipesMap[String(p.id)] || [];
                     const hasRecipe = prodRecipes.length > 0;
                     const isConfigured = target > 0;
@@ -4906,8 +4981,13 @@ export default function AdminInventario() {
                                 </span>
                               )}
                             </div>
-                            <div style={{ fontSize: '12px', color: 'var(--ds-text-muted)', marginTop: '2px' }}>
-                              Precio venta: <span style={{ color: 'var(--ds-text-secondary)', fontWeight: '600' }}>{formatCurrency(p.price)}</span>
+                            <div style={{ fontSize: '12px', color: 'var(--ds-text-muted)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                              <span>Precio venta: <span style={{ color: 'var(--ds-text-secondary)', fontWeight: '600' }}>{formatCurrency(p.price)}</span></span>
+                              {target > 0 && (
+                                <span style={{ color: '#10b981', fontWeight: '800', background: 'rgba(16, 185, 129, 0.1)', padding: '1px 6px', borderRadius: '4px' }}>
+                                  • Venta est.: {formatCurrency(target * (Number(p.price) || 0))}
+                                </span>
+                              )}
                             </div>
                           </div>
 
