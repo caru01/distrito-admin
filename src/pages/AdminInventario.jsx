@@ -292,14 +292,70 @@ export default function AdminInventario() {
   // ==========================================
   // ESTADO Y LÓGICA: PLAN DE PRODUCCIÓN & REQUERIMIENTOS (MRP)
   // ==========================================
-  const [productionPlan, setProductionPlan] = useState(() => {
+  const [productionPlan, setProductionPlan] = useState({});
+  const [planSaving, setPlanSaving] = useState(false);
+  const [planLastSaved, setPlanLastSaved] = useState(null);
+  const planSaveTimeoutRef = useRef(null);
+
+  // Cargar plan de producción desde Neon (y migrar local si existía)
+  const loadProductionPlan = useCallback(async () => {
     try {
-      const saved = localStorage.getItem('distrito_production_plan');
-      return saved ? JSON.parse(saved) : {};
-    } catch {
-      return {};
+      const res = await fetchAuth(`${API_URL}/admin/production/plan`);
+      const data = await res.json();
+      let planToUse = (data && data.plan && Object.keys(data.plan).length > 0) ? data.plan : null;
+
+      // Si la BD aún no tiene metas pero había algo en localStorage, migrarlo automáticamente
+      if (!planToUse) {
+        try {
+          const localSaved = localStorage.getItem('distrito_production_plan');
+          if (localSaved) {
+            const parsed = JSON.parse(localSaved);
+            if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+              planToUse = parsed;
+              await fetchAuth(`${API_URL}/admin/production/plan`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ plan: planToUse })
+              });
+              localStorage.removeItem('distrito_production_plan');
+            }
+          }
+        } catch (e) {
+          console.warn('Error en migración inicial de plan local:', e);
+        }
+      } else {
+        try { localStorage.removeItem('distrito_production_plan'); } catch (e) {}
+      }
+
+      setProductionPlan(planToUse || {});
+      if (data && data.updated_at) setPlanLastSaved(new Date(data.updated_at));
+    } catch (err) {
+      console.error('Error cargando plan de producción:', err);
     }
-  });
+  }, [fetchAuth]);
+
+  // Persistir en la base de datos Neon con debounce (400ms)
+  const persistProductionPlan = useCallback((updatedPlan) => {
+    setPlanSaving(true);
+    if (planSaveTimeoutRef.current) clearTimeout(planSaveTimeoutRef.current);
+    planSaveTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await fetchAuth(`${API_URL}/admin/production/plan`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ plan: updatedPlan })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setPlanLastSaved(new Date(data.updated_at || Date.now()));
+        }
+      } catch (err) {
+        console.error('Error guardando plan en Neon:', err);
+      } finally {
+        setPlanSaving(false);
+      }
+    }, 400);
+  }, [fetchAuth]);
 
   const [planSearch, setPlanSearch] = useState('');
   const [planCategoryFilter, setPlanCategoryFilter] = useState('ALL');
@@ -316,14 +372,10 @@ export default function AdminInventario() {
       if (num === 0) {
         delete updated[productId];
       }
-      try {
-        localStorage.setItem('distrito_production_plan', JSON.stringify(updated));
-      } catch (e) {
-        console.error(e);
-      }
+      persistProductionPlan(updated);
       return updated;
     });
-  }, []);
+  }, [persistProductionPlan]);
 
   const handleIncrementProductTarget = useCallback((productId, delta) => {
     setProductionPlan((prev) => {
@@ -333,24 +385,23 @@ export default function AdminInventario() {
       if (nextVal === 0) {
         delete updated[productId];
       }
+      persistProductionPlan(updated);
+      return updated;
+    });
+  }, [persistProductionPlan]);
+
+  const handleClearProductionPlan = useCallback(async () => {
+    if (window.confirm('¿Deseas reiniciar todas las metas de producción a 0 en la base de datos?')) {
+      setProductionPlan({});
       try {
-        localStorage.setItem('distrito_production_plan', JSON.stringify(updated));
+        await fetchAuth(`${API_URL}/admin/production/plan`, { method: 'DELETE' });
+        setPlanLastSaved(new Date());
       } catch (e) {
         console.error(e);
       }
-      return updated;
-    });
-  }, []);
-
-  const handleClearProductionPlan = useCallback(() => {
-    if (window.confirm('¿Deseas reiniciar todas las metas de producción a 0?')) {
-      setProductionPlan({});
-      try {
-        localStorage.removeItem('distrito_production_plan');
-      } catch (e) {}
-      showToast('Plan de producción reiniciado a 0');
+      showToast('Plan de producción reiniciado a 0 en la base de datos');
     }
-  }, [showToast]);
+  }, [fetchAuth, showToast]);
 
   const handleSetCommonPreset = useCallback((qty) => {
     const updated = {};
@@ -361,11 +412,9 @@ export default function AdminInventario() {
       }
     });
     setProductionPlan(updated);
-    try {
-      localStorage.setItem('distrito_production_plan', JSON.stringify(updated));
-    } catch (e) {}
-    showToast(`Meta de ${qty} unidades aplicada a los productos con receta`);
-  }, [products, recipes, showToast]);
+    persistProductionPlan(updated);
+    showToast(`Meta de ${qty} unidades guardada en la base de datos`);
+  }, [products, recipes, persistProductionPlan, showToast]);
 
   // Mapa de sub-recetas: target_inventory_id -> lista de ingredientes
   const subrecipesMap = useMemo(() => {
@@ -939,13 +988,15 @@ export default function AdminInventario() {
       loadValuation(),
       loadPurchaseSuggestions(),
       loadMovements(),
-      loadProfitability()
+      loadProfitability(),
+      loadProductionPlan()
     ]);
     setBusy(false);
   }, [
     loadInsumos, loadSuppliers, loadPurchases, loadProducts,
     loadRecipes, loadSubrecipes, loadBatches, loadModifierRecipes,
-    loadAudits, loadValuation, loadPurchaseSuggestions, loadMovements, loadProfitability
+    loadAudits, loadValuation, loadPurchaseSuggestions, loadMovements, loadProfitability,
+    loadProductionPlan
   ]);
 
   useEffect(() => {
@@ -4538,11 +4589,20 @@ export default function AdminInventario() {
           {/* TOOLBAR SUPERIOR */}
           <div className="inventory-toolbar" style={{ flexWrap: 'wrap', gap: '16px' }}>
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '20px' }}>🎯</span>
                 <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: 'var(--ds-text-primary)' }}>
                   Planificador de Producción & Requerimientos de Insumos
                 </h3>
+                {planSaving ? (
+                  <span className="ds-badge" style={{ background: 'rgba(234, 179, 8, 0.15)', color: '#ca8a04', border: '1px solid rgba(234, 179, 8, 0.3)', display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: '700' }}>
+                    <RefreshCw size={11} className="animate-spin" /> Guardando en Neon...
+                  </span>
+                ) : (
+                  <span className="ds-badge" style={{ background: 'rgba(22, 163, 74, 0.1)', color: '#16a34a', border: '1px solid rgba(22, 163, 74, 0.25)', display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: '700' }}>
+                    <CheckCircle2 size={12} /> Guardado 100% en Base de Datos {planLastSaved ? `(${planLastSaved.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })})` : ''}
+                  </span>
+                )}
               </div>
               <p style={{ margin: '6px 0 0 0', fontSize: '13px', color: 'var(--ds-text-secondary)', maxWidth: '850px' }}>
                 Configura cuánta producción deseas mantener lista (ej: 100 salchipapas, 100 hamburguesas, 50 perros). El sistema analiza las recetas técnicas y tu inventario actual en tiempo real para decirte con precisión quirúrgica qué insumos debes comprar, las cantidades faltantes y el presupuesto estimado.
@@ -4556,12 +4616,13 @@ export default function AdminInventario() {
                   loadInsumos();
                   loadRecipes();
                   loadSubrecipes();
-                  showToast('Stock y recetas actualizados');
+                  loadProductionPlan();
+                  showToast('Stock y plan actualizados desde Neon');
                 }}
                 className="ds-btn ds-btn-secondary ds-btn-sm"
-                title="Sincronizar stock actual con la base de datos"
+                title="Sincronizar stock actual y metas con la base de datos"
               >
-                <RefreshCw size={14} /> Recargar Stock
+                <RefreshCw size={14} /> Recargar Stock y Plan
               </button>
 
               <button
