@@ -2,7 +2,6 @@ import { API_URL } from '../config/api';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { printTicket } from '../services/printService';
-import { DeliveryAddressPicker } from '@distrito/shared-ui';
 import {
   Zap, Search, ShoppingCart, Trash2, Plus, Minus, ChefHat, Printer,
   MessageCircle, Phone, Globe, Store, Banknote, Wallet, CreditCard,
@@ -135,14 +134,7 @@ export default function TomarPedido() {
   }, []);
 
   const [customer, setCustomer] = useState(EMPTY_CUSTOMER);
-  const [mapsAvailable, setMapsAvailable] = useState(
-    import.meta.env.VITE_GOOGLE_MAPS_API_KEY ? null : false
-  );
   const [deliveryCost, setDeliveryCost] = useState(0);
-
-  const updateDeliveryLocation = useCallback((changes) => {
-    setCustomer((current) => ({ ...current, ...changes }));
-  }, []);
 
   // 🚀 CARGAR PEDIDO EN EDICIÓN EN 0ms
   useEffect(() => {
@@ -492,11 +484,7 @@ export default function TomarPedido() {
       return;
     }
     if (customer.deliveryType === 'domicilio' && (!customer.address.trim() || !customer.barrio.trim())) {
-      showToast('Selecciona la dirección y completa el barrio', 'error'); return;
-    }
-    if (customer.deliveryType === 'domicilio' && mapsAvailable !== false
-        && (!customer.locationConfirmed || customer.latitude == null || customer.longitude == null)) {
-      showToast('Selecciona una sugerencia y confirma la ubicación exacta', 'error'); return;
+      showToast('Escribe la dirección y el barrio para el domicilio', 'error'); return;
     }
 
     if (customer.paymentMethod === 'efectivo' && customer.cashAmount !== undefined && customer.cashAmount !== '') {
@@ -1184,34 +1172,38 @@ export default function TomarPedido() {
                 </div>
               )}
 
-              {customer.deliveryType === 'domicilio' && <>
-                <DeliveryAddressPicker
-                  value={customer}
-                  onChange={updateDeliveryLocation}
-                  onAvailabilityChange={setMapsAvailable}
-                  apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''}
-                  mapId={import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID'}
-                  inputClassName="ds-input"
-                  compact
-                />
-                <div className="ds-form-grid delivery-extra-fields" style={{ margin: '12px 0', gap: '10px' }}>
-                  <div className="ds-form-group" style={{ marginBottom: 0 }}>
-                    <input placeholder="Barrio" value={customer.barrio} onChange={e => setCustomer(c => ({ ...c, barrio: e.target.value }))} className="ds-input" />
+              {customer.deliveryType === 'domicilio' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', margin: '10px 0' }}>
+                  <div className="ds-form-group" style={{ marginBottom: 0, position: 'relative' }}>
+                    <MapPin size={16} style={{ position: 'absolute', left: '10px', top: '13px', color: 'var(--ds-text-muted)', zIndex: 1 }} />
+                    <input 
+                      placeholder="Dirección del domicilio (ej: Calle 15 # 12-34) *" 
+                      value={customer.address} 
+                      onChange={e => setCustomer(c => ({ ...c, address: e.target.value }))} 
+                      className="ds-input" 
+                      style={{ paddingLeft: '34px', height: '42px', fontSize: '13px' }}
+                    />
                   </div>
                   <div className="ds-form-group" style={{ marginBottom: 0 }}>
-                    <input placeholder="Apartamento" value={customer.apartment} onChange={e => setCustomer(c => ({ ...c, apartment: e.target.value }))} className="ds-input" />
+                    <input 
+                      placeholder="Barrio (ej: Cardón, Centro, Novalito) *" 
+                      value={customer.barrio} 
+                      onChange={e => setCustomer(c => ({ ...c, barrio: e.target.value }))} 
+                      className="ds-input" 
+                      style={{ height: '42px', fontSize: '13px' }}
+                    />
                   </div>
                   <div className="ds-form-group" style={{ marginBottom: 0 }}>
-                    <input placeholder="Torre" value={customer.tower} onChange={e => setCustomer(c => ({ ...c, tower: e.target.value }))} className="ds-input" />
-                  </div>
-                  <div className="ds-form-group" style={{ marginBottom: 0 }}>
-                    <input placeholder="Piso" value={customer.floor} onChange={e => setCustomer(c => ({ ...c, floor: e.target.value }))} className="ds-input" />
+                    <input 
+                      placeholder="Punto de referencia (portón negro, frente al parque, color casa...)" 
+                      value={customer.reference} 
+                      onChange={e => setCustomer(c => ({ ...c, reference: e.target.value }))} 
+                      className="ds-input" 
+                      style={{ height: '42px', fontSize: '13px' }}
+                    />
                   </div>
                 </div>
-                <div className="ds-form-group" style={{ marginBottom: '12px' }}>
-                  <input placeholder="Referencia (portón, color, frente a…)" value={customer.reference} onChange={e => setCustomer(c => ({ ...c, reference: e.target.value }))} className="ds-input" />
-                </div>
-              </>}
+              )}
 
               <div className="ds-form-group" style={{ marginBottom: '12px' }}>
                 <textarea placeholder="Observaciones / Notas de preparación" value={customer.notes} onChange={e => setCustomer(c => ({ ...c, notes: e.target.value }))} rows={2} className="ds-input" style={{ resize: 'none', fontSize: '13px', padding: '8px 10px' }} />
