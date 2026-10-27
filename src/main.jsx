@@ -30,6 +30,7 @@ const AdminClientes = lazy(() => import('./pages/AdminClientes.jsx'))
 const AdminDeliveryCompanies = lazy(() => import('./pages/AdminDeliveryCompanies.jsx'))
 const AdminCRM = lazy(() => import('./pages/AdminCRM.jsx'))
 const AdminNomina = lazy(() => import('./pages/AdminNomina.jsx'))
+const AdminBony = lazy(() => import('./pages/AdminBony.jsx'))
 
 // Limpieza de banderas de sesión previas si existieran
 try {
@@ -48,6 +49,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/admin/reset-password" element={<ResetPassword />} />
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<AdminDashboard />} />
+            <Route path="bony" element={<AdminBony />} />
             <Route path="pedidos" element={<AdminPedidos />} />
             <Route path="mapa-domicilios" element={<AdminDeliveryMap />} />
             <Route path="empresas-domicilios" element={<AdminDeliveryCompanies />} />

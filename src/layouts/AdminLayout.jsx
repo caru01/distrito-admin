@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState, useContext } from 'react';
 import { Outlet, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ShoppingBag, Package, List, Users, Archive, BarChart3, Settings, LogOut, Megaphone, Menu, X, DollarSign, FileSpreadsheet, Clock, Zap, MapPin, BellRing, Building2, Contact, AlertTriangle, ChevronRight, Banknote } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Package, List, Users, Archive, BarChart3, Settings, LogOut, Megaphone, Menu, X, DollarSign, FileSpreadsheet, Clock, Zap, MapPin, BellRing, Building2, Contact, AlertTriangle, ChevronRight, Banknote, Bot } from 'lucide-react';
 import { API_URL } from '../config/api';
 import { AuthContext } from '../context/AuthContext';
 import { playAttentionAlert, speakNotification, unlockNotificationAudio } from '@distrito/shared-ui';
+import BonyFloatingWidget from '../components/BonyFloatingWidget';
 
 export default function AdminLayout() {
   const token = sessionStorage.getItem('distrito_admin_token');
@@ -324,7 +325,7 @@ export default function AdminLayout() {
           style={{
             position: 'fixed',
             right: '24px',
-            bottom: newOrderAlert ? '120px' : '24px',
+            bottom: newOrderAlert ? '160px' : '90px',
             zIndex: 145,
             display: 'flex',
             flexDirection: 'column',
@@ -472,6 +473,11 @@ export default function AdminLayout() {
             </Link>
           </div>
         </aside>
+      )}
+
+      {/* ASISTENTE INTELIGENTE FLOTANTE BONY */}
+      {isAuthenticated && token && (
+        <BonyFloatingWidget defaultOpen={false} />
       )}
 
     </div>
