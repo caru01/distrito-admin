@@ -60,7 +60,7 @@ export default function DeliveryAssignmentModal({ order, onClose, onSuccess }) {
     event.preventDefault(); setSaving(true); setError('');
     try {
       const isOwn = mode === 'own';
-      if (isOwn && !driverId) throw new Error('Selecciona un domiciliario de Distrito BG.');
+      if (isOwn && !driverId) throw new Error('Selecciona un domiciliario de Distric House.');
       if (!isOwn && !form.companyId) throw new Error('Selecciona una empresa activa.');
       const response = await fetch(
         isOwn ? `${API_URL}/admin/delivery/orders/${order.id}/assign` : `${API_URL}/admin/delivery/orders/${order.id}/assign-external`,
@@ -71,6 +71,9 @@ export default function DeliveryAssignmentModal({ order, onClose, onSuccess }) {
       );
       const data = await readApiJson(response);
       if (!response.ok) throw new Error(data.error || 'No fue posible asignar la entrega.');
+      if (isOwn && data.whatsapp_url && !data.whatsapp_sent) {
+        window.open(data.whatsapp_url, '_blank');
+      }
       onSuccess?.(data.order); onClose();
     } catch (requestError) { setError(requestError.message); }
     finally { setSaving(false); }
@@ -84,7 +87,7 @@ export default function DeliveryAssignmentModal({ order, onClose, onSuccess }) {
       </div>
       <div className="delivery-assignment-types">
         <button type="button" className={mode === 'own' ? 'active' : ''} onClick={() => setMode('own')}>
-          <Bike/><strong>Domiciliario Distrito BG</strong>
+          <Bike/><strong>Domiciliario Distric House</strong>
           <small>Asignación directa a domiciliario interno sin necesidad de app ni GPS.</small>
         </button>
         <button type="button" className={mode === 'external' ? 'active' : ''} onClick={() => setMode('external')}>
@@ -93,7 +96,7 @@ export default function DeliveryAssignmentModal({ order, onClose, onSuccess }) {
         </button>
       </div>
       {mode === 'own' ? <label className="ds-form-group">
-        <span className="ds-form-label">Domiciliario de Distrito BG</span>
+        <span className="ds-form-label">Domiciliario de Distric House</span>
         <select className="ds-select" required value={driverId} onChange={(e) => setDriverId(e.target.value)}>
           <option value="">Seleccionar domiciliario…</option>
           {eligibleDrivers.map((driver) => (
