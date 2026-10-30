@@ -168,7 +168,7 @@ export default function AdminLayout() {
     { name: 'Dashboard', path: '/admin', icon: <LayoutDashboard size={20} />, module: 'Dashboard' },
     { name: 'Tomar Pedido', path: '/admin/tomar-pedido', icon: <Zap size={20} />, module: 'Pedidos' },
     { name: 'Pedidos', path: '/admin/pedidos', icon: <ShoppingBag size={20} />, module: 'Pedidos' },
-    { name: 'Mapa de Domicilios', path: '/admin/mapa-domicilios', icon: <MapPin size={20} />, module: 'Domicilios' },
+    // { name: 'Mapa de Domicilios', path: '/admin/mapa-domicilios', icon: <MapPin size={20} />, module: 'Domicilios' },
     { name: 'Empresas de Domicilios', path: '/admin/empresas-domicilios', icon: <Building2 size={20} />, module: 'Empresas Domicilios', fallbackModule: 'Domicilios' },
     { name: 'Categorías', path: '/admin/categorias', icon: <List size={20} />, module: 'Categorias' },
     { name: 'Productos', path: '/admin/productos', icon: <Package size={20} />, module: 'Productos' },

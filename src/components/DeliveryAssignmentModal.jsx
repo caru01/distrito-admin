@@ -22,14 +22,21 @@ export default function DeliveryAssignmentModal({ order, onClose, onSuccess }) {
       fetch(`${API_URL}/admin/delivery-companies`, { headers: authHeaders() }).then(readApiJson),
     ]).then(([overview, companyData]) => {
       if (cancelled) return;
-      setDrivers(overview.drivers || []); setCompanies((companyData.companies || []).filter((item) => item.status === 'Activa'));
+      setDrivers(overview.drivers || []);
+      setCompanies((companyData.companies || []).filter((item) => item.status === 'Activa'));
     }).catch((requestError) => setError(requestError.message)).finally(() => !cancelled && setLoading(false));
     return () => { cancelled = true; };
   }, []);
 
   const ownDrivers = useMemo(() => drivers.filter((driver) => !driver.external_company_id), [drivers]);
-  const eligibleDrivers = useMemo(() => ownDrivers.filter((driver) => driver.live_status !== 'Desconectado' && Number(driver.active_order_count || 0) < Number(driver.max_active_orders || 1)), [ownDrivers]);
-  const fullDrivers = ownDrivers.filter((driver) => driver.live_status !== 'Desconectado').length - eligibleDrivers.length;
+  // Domiciliarios propios de Distrito BG (sin exigir app delivery ni GPS en vivo)
+  const eligibleDrivers = useMemo(() => ownDrivers.filter((driver) => driver.status !== 'Inactivo'), [ownDrivers]);
+
+  useEffect(() => {
+    if (!driverId && eligibleDrivers.length > 0) {
+      setDriverId(String(eligibleDrivers[0].id));
+    }
+  }, [eligibleDrivers, driverId]);
 
   const selectedCompany = useMemo(() => {
     return companies.find((item) => Number(item.id) === Number(form.companyId));
@@ -53,7 +60,7 @@ export default function DeliveryAssignmentModal({ order, onClose, onSuccess }) {
     event.preventDefault(); setSaving(true); setError('');
     try {
       const isOwn = mode === 'own';
-      if (isOwn && !driverId) throw new Error('Selecciona un domiciliario conectado.');
+      if (isOwn && !driverId) throw new Error('Selecciona un domiciliario de Distrito BG.');
       if (!isOwn && !form.companyId) throw new Error('Selecciona una empresa activa.');
       const response = await fetch(
         isOwn ? `${API_URL}/admin/delivery/orders/${order.id}/assign` : `${API_URL}/admin/delivery/orders/${order.id}/assign-external`,
@@ -71,9 +78,32 @@ export default function DeliveryAssignmentModal({ order, onClose, onSuccess }) {
 
   return <div className="ds-modal-overlay" onMouseDown={(event) => event.target === event.currentTarget && !saving && onClose()}><div className="ds-modal ds-modal-lg delivery-assignment-modal" role="dialog" aria-modal="true"><form onSubmit={submit}><div className="ds-modal-header"><div><span className="ds-page-kicker">Pedido #{String(order?.id || '').padStart(4, '0')}</span><h2 className="ds-modal-title">Asignar entrega</h2></div><button type="button" className="ds-modal-close" onClick={onClose}><X/></button></div><div className="ds-modal-body ds-form">
     {loading ? <div className="ds-loader-container"><div className="ds-loader"/><p>Consultando capacidad logística…</p></div> : <>
-      <div className="delivery-assignment-summary"><span><CheckCircle size={16}/>{eligibleDrivers.length} propios con capacidad</span><span><Truck size={16}/>{fullDrivers} sin cupo</span><span><Building2 size={16}/>{companies.length} empresas activas</span></div>
-      <div className="delivery-assignment-types"><button type="button" className={mode === 'own' ? 'active' : ''} onClick={() => setMode('own')}><Bike/><strong>Domiciliario Distrito BG</strong><small>Seguimiento GPS real cuando la app comparte ubicación.</small></button><button type="button" className={mode === 'external' ? 'active' : ''} onClick={() => setMode('external')}><Building2/><strong>Empresa externa</strong><small>Seguimiento por estados; nunca muestra un GPS simulado.</small></button></div>
-      {mode === 'own' ? <label className="ds-form-group"><span className="ds-form-label">Domiciliario conectado</span><select className="ds-select" required value={driverId} onChange={(e) => setDriverId(e.target.value)}><option value="">Seleccionar…</option>{eligibleDrivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.name || driver.username} · {driver.active_order_count || 0}/{driver.max_active_orders || 1} pedidos</option>)}</select>{!eligibleDrivers.length && <small className="delivery-assignment-warning">No hay domiciliarios propios conectados con capacidad. Usa una empresa externa.</small>}</label> : <div className="ds-form"><div className="ds-form-grid"><label className="ds-form-group"><span className="ds-form-label">Empresa</span><select className="ds-select" required value={form.companyId} onChange={(e) => selectCompany(e.target.value)}><option value="">Seleccionar…</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.name} · ${Number(company.default_fee || 0).toLocaleString('es-CO')}</option>)}</select></label><label className="ds-form-group"><span className="ds-form-label">Costo externo</span><input className="ds-input" required type="number" min="0" step="100" value={form.externalCost} onChange={(e) => setForm({ ...form, externalCost: Number(e.target.value) })}/></label>
+      <div className="delivery-assignment-summary">
+        <span><CheckCircle size={16}/>{eligibleDrivers.length} domiciliario(s) propio(s) activo(s)</span>
+        <span><Building2 size={16}/>{companies.length} empresas activas</span>
+      </div>
+      <div className="delivery-assignment-types">
+        <button type="button" className={mode === 'own' ? 'active' : ''} onClick={() => setMode('own')}>
+          <Bike/><strong>Domiciliario Distrito BG</strong>
+          <small>Asignación directa a domiciliario interno sin necesidad de app ni GPS.</small>
+        </button>
+        <button type="button" className={mode === 'external' ? 'active' : ''} onClick={() => setMode('external')}>
+          <Building2/><strong>Empresa externa</strong>
+          <small>Seguimiento por estados logísticos y aliado externo.</small>
+        </button>
+      </div>
+      {mode === 'own' ? <label className="ds-form-group">
+        <span className="ds-form-label">Domiciliario de Distrito BG</span>
+        <select className="ds-select" required value={driverId} onChange={(e) => setDriverId(e.target.value)}>
+          <option value="">Seleccionar domiciliario…</option>
+          {eligibleDrivers.map((driver) => (
+            <option key={driver.id} value={driver.id}>
+              {driver.name || driver.username} {driver.phone ? `· Cel: ${driver.phone}` : ''} {driver.plate ? `· Moto: ${driver.plate}` : ''}
+            </option>
+          ))}
+        </select>
+        {!eligibleDrivers.length && <small className="delivery-assignment-warning">No hay domiciliarios registrados o activos con rol Domiciliario. Puedes registrarlos en el menú de Usuarios o usar una empresa externa.</small>}
+      </label> : <div className="ds-form"><div className="ds-form-grid"><label className="ds-form-group"><span className="ds-form-label">Empresa</span><select className="ds-select" required value={form.companyId} onChange={(e) => selectCompany(e.target.value)}><option value="">Seleccionar…</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.name} · ${Number(company.default_fee || 0).toLocaleString('es-CO')}</option>)}</select></label><label className="ds-form-group"><span className="ds-form-label">Costo externo</span><input className="ds-input" required type="number" min="0" step="100" value={form.externalCost} onChange={(e) => setForm({ ...form, externalCost: Number(e.target.value) })}/></label>
       {selectedCompany && (selectedCompany.active_drivers || []).length > 0 && (
         <label className="ds-form-group" style={{ gridColumn: '1 / -1' }}>
           <span className="ds-form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
