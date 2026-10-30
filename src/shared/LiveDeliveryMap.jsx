@@ -5,7 +5,7 @@ import './live-map.css';
 const DEFAULT_STORE = {
   latitude: 10.4631,
   longitude: -73.2532,
-  name: 'Distrito BG',
+  name: 'Distric House',
   address: 'Valledupar, Colombia',
 };
 
@@ -186,7 +186,7 @@ export default function LiveDeliveryMap({
       map: mapRef.current,
       position: storePoint,
       title: normalizedStore.name || 'Restaurante',
-      content: markerContent('store', normalizedStore.name || 'Distrito BG', normalizedStore.address || 'Punto de salida'),
+      content: markerContent('store', normalizedStore.name || 'Distric House', normalizedStore.address || 'Punto de salida'),
       zIndex: 20,
     })];
 

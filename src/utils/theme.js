@@ -19,5 +19,5 @@ export function applyAdminTheme(settings = {}) {
   };
   root.style.setProperty('--ds-font', fonts[settings.admin_font_family] || fonts.modern);
   root.dataset.adminDensity = settings.admin_density || 'comfortable';
-  document.title = settings.admin_page_title || 'Distrito BG Admin';
+  document.title = settings.admin_page_title || 'Distric House Admin';
 }

@@ -29,7 +29,7 @@ export default function DeliveryAssignmentModal({ order, onClose, onSuccess }) {
   }, []);
 
   const ownDrivers = useMemo(() => drivers.filter((driver) => !driver.external_company_id), [drivers]);
-  // Domiciliarios propios de Distrito BG (sin exigir app delivery ni GPS en vivo)
+  // Domiciliarios propios de Distric House (sin exigir app delivery ni GPS en vivo)
   const eligibleDrivers = useMemo(() => ownDrivers.filter((driver) => driver.status !== 'Inactivo'), [ownDrivers]);
 
   useEffect(() => {

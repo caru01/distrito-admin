@@ -419,7 +419,7 @@ export default function RappiConfigTab({
             
             {/* Input URL del Webhook con botón de copia */}
             <div>
-              <label className="ds-form-label" style={{ fontWeight: '700' }}>URL Pública del Webhook de Distrito BG</label>
+              <label className="ds-form-label" style={{ fontWeight: '700' }}>URL Pública del Webhook de Distric House</label>
               <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
                 <input
                   type="text"

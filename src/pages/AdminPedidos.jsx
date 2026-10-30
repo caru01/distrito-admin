@@ -404,7 +404,7 @@ export default function AdminPedidos() {
         const message = buildReadyOrderWhatsAppMessage({
           orderId: id,
           trackingUrl,
-          restaurantName: 'Distrito BG',
+          restaurantName: 'Distric House',
           deliveryType: orderData?.delivery_type || orderData?.deliveryType,
           providerType: orderData?.delivery_provider_type || orderData?.deliveryProviderType,
           externalCompanyName: orderData?.external_company_name || orderData?.externalCompany?.name,
@@ -433,7 +433,7 @@ export default function AdminPedidos() {
         const message = buildReadyOrderWhatsAppMessage({
           orderId: id,
           trackingUrl,
-          restaurantName: 'Distrito BG',
+          restaurantName: 'Distric House',
           deliveryType: orderData?.delivery_type || orderData?.deliveryType,
           providerType: orderData?.delivery_provider_type || orderData?.deliveryProviderType,
           externalCompanyName: orderData?.external_company_name || orderData?.externalCompany?.name,
@@ -526,7 +526,7 @@ ${order.notes ? `📝 *Observaciones:* ${order.notes}\n` : ''}━━━━━━
     if (!phone) return;
     const digits = String(phone).replace(/\D/g, '');
     const fullPhone = digits.length === 10 ? `57${digits}` : digits;
-    const greeting = customerName?.trim() ? `Hola ${customerName.trim()}, te escribimos de Distrito BG.` : 'Hola, te escribimos de Distrito BG.';
+    const greeting = customerName?.trim() ? `Hola ${customerName.trim()}, te escribimos de Distric House.` : 'Hola, te escribimos de Distric House.';
     const url = `https://api.whatsapp.com/send/?phone=${fullPhone}&text=${encodeURIComponent(greeting)}`;
     window.open(url, '_blank', 'noopener,noreferrer');
   };

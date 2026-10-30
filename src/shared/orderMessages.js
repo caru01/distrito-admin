@@ -60,7 +60,7 @@ export function buildNewOrderWhatsAppMessage({
   deliveryFee = 0,
   total = 0,
   change = 0,
-  restaurantName = 'Distrito BG',
+  restaurantName = 'Distric House',
 }) {
   const orderNumber = String(orderId || 0).padStart(4, '0');
   const isDelivery = String(customer.deliveryType || '').toLowerCase() === 'domicilio';
@@ -124,7 +124,7 @@ export function buildNewOrderWhatsAppMessage({
 }
 
 export function buildReadyOrderWhatsAppMessage({
-  orderId, trackingUrl, restaurantName = 'Distrito BG', deliveryType,
+  orderId, trackingUrl, restaurantName = 'Distric House', deliveryType,
   providerType, externalCompanyName, status,
 }) {
   const orderNumber = String(orderId || 0).padStart(4, '0');

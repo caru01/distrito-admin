@@ -290,7 +290,7 @@ export default function AdminRoles() {
           <span className="ds-eyebrow">Control de acceso</span>
           <h1 className="ds-page-title">Roles y permisos</h1>
           <p className="ds-page-subtitle">
-            Una matriz central define exactamente qué puede ver y modificar cada rol en todos los módulos de Distrito BG.
+            Una matriz central define exactamente qué puede ver y modificar cada rol en todos los módulos de Distric House.
           </p>
         </div>
         <button className="ds-btn ds-btn-primary" onClick={openCreate} style={{ height: '42px', borderRadius: '10px' }}>

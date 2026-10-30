@@ -37,9 +37,9 @@ export default function AdminConfiguracion() {
     web_primary_color: '#B30401', web_background_color: '#F1F2F6', web_surface_color: '#FFFFFF', web_text_color: '#2F3542',
     admin_primary_color: '#B30401', admin_background_color: '#F1F2F6', admin_surface_color: '#FFFFFF', admin_text_color: '#0F172A',
     delivery_primary_color: '#B30401', delivery_background_color: '#F8FAFC', delivery_surface_color: '#FFFFFF', delivery_text_color: '#0F172A',
-    web_logo: '', web_page_title: 'Distrito BG', web_hero_title: 'Más que comida, una experiencia', web_hero_subtitle: 'Pedidos preparados al momento.', web_font_family: 'modern', web_card_style: 'rounded',
-    admin_logo: '', admin_page_title: 'Distrito BG Admin', admin_sidebar_title: 'Distrito BG', admin_font_family: 'modern', admin_density: 'comfortable',
-    delivery_logo: '', delivery_page_title: 'Distrito BG Delivery', delivery_heading: 'Pedidos disponibles', delivery_subtitle: 'Acepta, recoge y entrega desde un solo lugar.', delivery_font_family: 'modern', delivery_card_style: 'rounded',
+    web_logo: '', web_page_title: 'Distric House', web_hero_title: 'Más que comida, una experiencia', web_hero_subtitle: 'Pedidos preparados al momento.', web_font_family: 'modern', web_card_style: 'rounded',
+    admin_logo: '', admin_page_title: 'Distric House Admin', admin_sidebar_title: 'Distric House', admin_font_family: 'modern', admin_density: 'comfortable',
+    delivery_logo: '', delivery_page_title: 'Distric House Delivery', delivery_heading: 'Pedidos disponibles', delivery_subtitle: 'Acepta, recoge y entrega desde un solo lugar.', delivery_font_family: 'modern', delivery_card_style: 'rounded',
     notification_voice: 'female-clear', notification_language: 'es-CO'
   });
   const [kitchenLocationConfirmed, setKitchenLocationConfirmed] = useState(false);
@@ -708,7 +708,7 @@ export default function AdminConfiguracion() {
                         )}
                         <div>
                           <strong style={{ fontSize: '17px', color: settings.web_text_color || '#111827', display: 'block' }}>
-                            {settings.web_page_title || settings.restaurant_name || 'Distrito BG'}
+                            {settings.web_page_title || settings.restaurant_name || 'Distric House'}
                           </strong>
                           <span style={{ fontSize: '12px', color: '#6B7280' }}>Tienda en línea</span>
                         </div>
@@ -1302,7 +1302,7 @@ export default function AdminConfiguracion() {
                   value={settings.welcome_message} 
                   onChange={e => handleChange('welcome_message', e.target.value)}
                   style={{ minHeight: '120px', resize: 'vertical' }}
-                  placeholder="Bienvenido a Distrito BG. Disfruta nuestras hamburguesas..."
+                  placeholder="Bienvenido a Distric House. Disfruta nuestras hamburguesas..."
                 />
               </div>
             </div>

@@ -26,7 +26,7 @@ const EMPTY_DASHBOARD = {
   inventory: { total: 0, critical: 0, outOfStock: 0 },
   recentOrders: [],
   topProducts: [],
-  settings: { restaurantName: 'Distrito BG', currency: 'COP', enabledPayments: 0 },
+  settings: { restaurantName: 'Distric House', currency: 'COP', enabledPayments: 0 },
   schedule: { isOpen: false, statusText: 'No disponible', currentSchedule: null },
 };
 
@@ -263,7 +263,7 @@ export default function AdminDashboard() {
           <span className="dashboard-eyebrow">Centro de operaciones</span>
           <h1>Hola, {firstName}. Tu tienda está {schedule?.isOpen ? 'lista para vender' : 'fuera de horario'}.</h1>
           <p>
-            Controla pedidos, catálogo, inventario y configuración de {settings.restaurantName || 'Distrito BG'} desde un solo lugar.
+            Controla pedidos, catálogo, inventario y configuración de {settings.restaurantName || 'Distric House'} desde un solo lugar.
           </p>
           <div className="dashboard-hero-meta">
             <span className={`dashboard-store-status ${schedule?.isOpen ? 'open' : 'closed'}`}>

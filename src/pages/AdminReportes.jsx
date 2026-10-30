@@ -838,7 +838,7 @@ export default function AdminReportes() {
       return `"${protectedText.replace(/"/g, '""')}"`;
     };
     const rows = [
-      ['Reporte Distrito BG'], ['Desde', from], ['Hasta', to], [],
+      ['Reporte Distric House'], ['Desde', from], ['Hasta', to], [],
       ['Indicador', 'Valor'],
       ['Ventas totales', report.kpis.totalVentas || 0],
       ['Pedidos realizados', report.kpis.pedidosRealizados || 0],

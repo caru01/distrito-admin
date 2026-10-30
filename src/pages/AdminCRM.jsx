@@ -118,7 +118,7 @@ export default function AdminCRM() {
       <header className="ds-page-header">
         <div>
           <span className="ds-page-kicker">Relación comercial unificada</span>
-          <h1 className="ds-page-title">CRM Distrito BG</h1>
+          <h1 className="ds-page-title">CRM Distric House</h1>
           <p className="ds-page-subtitle">
             Conversación, cliente, pedido, campaña y conversión conectados a una sola fuente de verdad.
           </p>

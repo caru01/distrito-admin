@@ -189,7 +189,7 @@ export default function AdminLogin() {
                   <Lock size={12} /> Conexión segura y protegida
                 </p>
                 <p className="copyright">
-                  © 2026 <span>Distrito BG.</span> Todos los derechos reservados
+                  © 2026 <span>Distric House.</span> Todos los derechos reservados
                 </p>
               </div>
           </form>
