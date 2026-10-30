@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { API_URL } from '../config/api';
 import { formatCurrency, formatNumber } from '../utils/formatters';
+import { optimizeImageFile } from '../utils/imageOptimizer';
 
 const PAGE_SIZE = 10;
 const EMPTY_PRODUCT = {
@@ -41,6 +42,7 @@ export default function AdminProductos() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [optimizingImage, setOptimizingImage] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [notice, setNotice] = useState(null);
   const [draggedProduct, setDraggedProduct] = useState(null);
@@ -189,14 +191,26 @@ export default function AdminProductos() {
 
   const updateProduct = (field, value) => setCurrentProduct((current) => ({ ...current, [field]: value }));
 
-  const uploadImage = (event) => {
+  const uploadImage = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('image/')) return setNotice({ type: 'error', text: 'Selecciona una imagen válida.' });
-    if (file.size > 4 * 1024 * 1024) return setNotice({ type: 'error', text: 'La imagen supera el máximo de 4 MB.' });
-    const reader = new FileReader();
-    reader.onload = () => updateProduct('image', reader.result);
-    reader.readAsDataURL(file);
+    if (!file.type.startsWith('image/')) return setNotice({ type: 'error', text: 'Selecciona una imagen válida (JPG, PNG o WebP).' });
+    if (file.size > 15 * 1024 * 1024) return setNotice({ type: 'error', text: 'La imagen supera el máximo permitido de 15 MB.' });
+    try {
+      setOptimizingImage(true);
+      setNotice(null);
+      const optimizedDataUrl = await optimizeImageFile(file, {
+        maxWidth: 1000,
+        maxHeight: 1000,
+        quality: 0.82,
+      });
+      updateProduct('image', optimizedDataUrl);
+    } catch (err) {
+      setNotice({ type: 'error', text: err.message || 'Error al procesar y optimizar la imagen.' });
+    } finally {
+      setOptimizingImage(false);
+      event.target.value = '';
+    }
   };
 
   const handleSave = async (event) => {
@@ -222,7 +236,20 @@ export default function AdminProductos() {
           barcode: currentProduct.barcode.trim(),
         }),
       });
-      const data = await response.json();
+
+      const contentType = response.headers.get('content-type') || '';
+      let data = {};
+      if (contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        if (!response.ok) {
+          if (response.status === 413) {
+            throw new Error('La imagen es demasiado pesada para el servidor (Error 413). Selecciona otra imagen.');
+          }
+          throw new Error(`Error en el servidor (HTTP ${response.status}).`);
+        }
+      }
+
       if (!response.ok || data.status !== 'ok') throw new Error(data.error || 'No fue posible guardar el producto.');
       setProducts((current) => currentProduct.id ? current.map((product) => product.id === data.product.id ? data.product : product) : [data.product, ...current]);
       setIsModalOpen(false);
@@ -403,7 +430,7 @@ export default function AdminProductos() {
         <div className="ds-modal-body"><div className="product-form-layout">
           <section className="ds-form"><div className="product-form-section"><strong>Información de venta</strong><span>Datos visibles en la tienda.</span></div><div className="ds-form-group"><label className="ds-form-label" htmlFor="product-name">Nombre</label><input id="product-name" className="ds-input" required maxLength={255} value={currentProduct.title} onChange={(event) => updateProduct('title', event.target.value)} /></div><div className="ds-form-group"><label className="ds-form-label" htmlFor="product-description">Descripción</label><textarea id="product-description" className="ds-textarea" maxLength={1000} value={currentProduct.description} onChange={(event) => updateProduct('description', event.target.value)} /></div><div className="ds-form-grid"><div className="ds-form-group"><label className="ds-form-label" htmlFor="product-price">Precio</label><input id="product-price" type="number" min="0" step="1" className="ds-input" required value={currentProduct.price} onChange={(event) => updateProduct('price', event.target.value)} /></div><div className="ds-form-group"><label className="ds-form-label" htmlFor="product-category">Categoría</label><select id="product-category" className="ds-select" required value={currentProduct.category} onChange={(event) => updateProduct('category', event.target.value)}><option value="">Selecciona…</option>{categories.map((category) => <option key={category.id} value={category.name}>{category.name}</option>)}</select></div></div><div className="ds-form-grid"><div className="ds-form-group"><label className="ds-form-label" htmlFor="product-status">Estado</label><select id="product-status" className="ds-select" value={currentProduct.status} onChange={(event) => updateProduct('status', event.target.value)}><option value="Activo">Activo</option><option value="Inactivo">Inactivo</option></select></div><label className="product-feature-field"><input type="checkbox" checked={currentProduct.is_featured} onChange={(event) => updateProduct('is_featured', event.target.checked)} /><Star size={20} fill={currentProduct.is_featured ? 'currentColor' : 'none'} /><span><strong>Producto destacado</strong><small>Aparece primero en la tienda.</small></span></label></div>
           </section>
-          <section className="ds-form"><div className="product-form-section"><strong>Imagen</strong><span>Archivo o URL del producto.</span></div><div className="product-image-editor">{currentProduct.image ? <img key={currentProduct.image} src={currentProduct.image} alt="Vista previa" /> : <div><ImageIcon size={40} /><span>Sin imagen</span></div>}<div><label className="ds-btn ds-btn-secondary"><Upload size={17} /> Subir imagen<input type="file" accept="image/*" onChange={uploadImage} /></label>{currentProduct.image && <button type="button" className="ds-btn ds-btn-ghost" onClick={() => updateProduct('image', '')}><Trash2 size={17} /> Quitar</button>}</div></div><div className="ds-form-group"><label className="ds-form-label" htmlFor="product-image-url">URL de imagen</label><input id="product-image-url" className="ds-input" value={currentProduct.image?.startsWith('data:') ? '' : currentProduct.image} onChange={(event) => updateProduct('image', event.target.value)} placeholder="https://…" /></div>
+          <section className="ds-form"><div className="product-form-section"><strong>Imagen</strong><span>Archivo o URL del producto.</span></div><div className="product-image-editor">{currentProduct.image ? <img key={currentProduct.image} src={currentProduct.image} alt="Vista previa" /> : <div><ImageIcon size={40} /><span>Sin imagen</span></div>}<div><label className="ds-btn ds-btn-secondary" style={{ opacity: optimizingImage ? 0.7 : 1, pointerEvents: optimizingImage ? 'none' : 'auto' }}>{optimizingImage ? <RefreshCw size={17} className="ds-spin" /> : <Upload size={17} />} {optimizingImage ? 'Optimizando…' : 'Subir imagen'}<input type="file" accept="image/*" onChange={uploadImage} disabled={optimizingImage} /></label>{currentProduct.image && <button type="button" className="ds-btn ds-btn-ghost" disabled={optimizingImage} onClick={() => updateProduct('image', '')}><Trash2 size={17} /> Quitar</button>}</div></div><div className="ds-form-group"><label className="ds-form-label" htmlFor="product-image-url">URL de imagen</label><input id="product-image-url" className="ds-input" value={currentProduct.image?.startsWith('data:') ? '' : currentProduct.image} onChange={(event) => updateProduct('image', event.target.value)} placeholder="https://…" /></div>
           </section>
           <section className="ds-form product-inventory-section"><div className="product-form-section"><strong>Inventario</strong><span>La misma información usada por el módulo de existencias.</span></div><label className="announcement-publish-toggle"><input type="checkbox" checked={currentProduct.track_stock} onChange={(event) => updateProduct('track_stock', event.target.checked)} /><span className="ds-switch" aria-hidden="true"><i /></span><span><strong>Controlar existencias</strong><small>Impide vender cuando no hay stock.</small></span></label>{currentProduct.track_stock && <><div className="ds-form-grid-3"><div className="ds-form-group"><label className="ds-form-label" htmlFor="product-stock">Existencia</label><input id="product-stock" type="number" min="0" step="0.01" className="ds-input" value={currentProduct.stock} onChange={(event) => updateProduct('stock', event.target.value)} /></div><div className="ds-form-group"><label className="ds-form-label" htmlFor="product-threshold">Alerta mínima</label><input id="product-threshold" type="number" min="0" step="0.01" className="ds-input" value={currentProduct.low_stock_threshold} onChange={(event) => updateProduct('low_stock_threshold', event.target.value)} /></div><div className="ds-form-group"><label className="ds-form-label" htmlFor="product-unit">Unidad</label><select id="product-unit" className="ds-select" value={currentProduct.inventory_unit} onChange={(event) => updateProduct('inventory_unit', event.target.value)}><option value="unidad">Unidad</option><option value="porción">Porción</option><option value="gramo">Gramo</option><option value="mililitro">Mililitro</option></select></div></div><div className="ds-form-grid"><div className="ds-form-group"><label className="ds-form-label" htmlFor="product-cost">Costo unitario</label><input id="product-cost" type="number" min="0" step="1" className="ds-input" value={currentProduct.inventory_unit_cost} onChange={(event) => updateProduct('inventory_unit_cost', event.target.value)} /></div><div className="ds-form-group"><label className="ds-form-label" htmlFor="product-barcode">Código de barras</label><input id="product-barcode" inputMode="numeric" className="ds-input" value={currentProduct.barcode} onChange={(event) => updateProduct('barcode', event.target.value.replace(/\D/g, '').slice(0, 14))} placeholder="8 a 14 dígitos" /></div></div></>}
           </section>

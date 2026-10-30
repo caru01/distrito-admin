@@ -2,21 +2,56 @@ import { API_URL } from '../../config/api';
 import { readApiJson } from '../../utils/http';
 
 export function crmHeaders(json = false) {
+  const token = sessionStorage.getItem('distrito_admin_token');
   return {
-    Authorization: `Bearer ${sessionStorage.getItem('distrito_admin_token')}`,
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(json ? { 'Content-Type': 'application/json' } : {}),
   };
 }
 
 export async function crmRequest(path, options = {}) {
-  const response = await fetch(`${API_URL}/admin/crm${path}`, {
+  let response = await fetch(`${API_URL}/admin/crm${path}`, {
     ...options,
     headers: { ...crmHeaders(options.body !== undefined), ...(options.headers || {}) },
   });
+
+  // Si el token caducó, intentar renovar la sesión automáticamente
+  if (response.status === 401 || response.status === 403) {
+    const refreshToken =
+      sessionStorage.getItem('distrito_admin_refresh_token') ||
+      localStorage.getItem('distrito_admin_refresh_token');
+
+    if (refreshToken) {
+      try {
+        const refreshRes = await fetch(`${API_URL}/admin/refresh-token`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+        });
+        const refreshData = await refreshRes.json();
+        if (refreshRes.ok && refreshData.token) {
+          sessionStorage.setItem('distrito_admin_token', refreshData.token);
+          // Reintentar la petición original con el nuevo token
+          response = await fetch(`${API_URL}/admin/crm${path}`, {
+            ...options,
+            headers: {
+              ...crmHeaders(options.body !== undefined),
+              ...(options.headers || {}),
+              Authorization: `Bearer ${refreshData.token}`,
+            },
+          });
+        }
+      } catch {
+        // En caso de fallo de renovación, continuar al manejo regular
+      }
+    }
+  }
+
   const data = await readApiJson(response);
   if (!response.ok) {
     const error = new Error(data.error || 'No fue posible completar la operación CRM.');
     error.code = data.code;
+    error.status = response.status;
     throw error;
   }
   return data;

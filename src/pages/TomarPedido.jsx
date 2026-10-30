@@ -21,7 +21,7 @@ const colombiaDateKey = (value = new Date()) => {
   const parts = colombiaParts(value);
   return `${parts.year}-${parts.month}-${parts.day}`;
 };
-const toColombiaDateTimeLocal = (value) => {
+const toColombiaDateTimeLocal = (value = new Date()) => {
   if (!value) return '';
   const parts = colombiaParts(value);
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
@@ -33,7 +33,7 @@ const EMPTY_CUSTOMER = {
   placeId: '', locationAdjusted: false, locationConfirmed: false,
   deliveryType: 'domicilio', source: 'WhatsApp', paymentMethod: 'efectivo',
   cash_split: '', transfer_split: '',
-  voucher_reference: '', created_at: '',
+  voucher_reference: '', created_at: toColombiaDateTimeLocal(),
   crm_contact_id: null, bsuid: null, username: null
 };
 
@@ -665,7 +665,7 @@ export default function TomarPedido() {
         try { sessionStorage.removeItem('distrito_admin_orders_cache'); } catch (e) {}
         showToast(editId ? '✓ Pedido actualizado' : (sendToKitchen ? '📦 Pedido enviado a cocina' : '✓ Pedido guardado'));
         setCart([]);
-        setCustomer(EMPTY_CUSTOMER);
+        setCustomer({ ...EMPTY_CUSTOMER, created_at: toColombiaDateTimeLocal() });
         if (editId) {
           navigate('/admin/pedidos');
         } else {
@@ -1043,21 +1043,26 @@ export default function TomarPedido() {
               
               <div className="ds-form-grid" ref={clientFormRef} style={{ marginBottom: '12px', gap: '10px' }}>
                 <div className="ds-form-group" style={{ position: 'relative', marginBottom: 0 }}>
-                  <User size={16} style={{ position: 'absolute', left: '10px', top: '13px', color: 'var(--ds-text-muted)', zIndex: 1 }} />
+                  <Phone size={16} style={{ position: 'absolute', left: '10px', top: '13px', color: 'var(--ds-text-muted)', zIndex: 1 }} />
                   <input 
-                    placeholder="Nombre Cliente" 
-                    value={customer.name} 
+                    placeholder={customer.crm_contact_id && !customer.phone ? "🔒 Número privado" : "Teléfono"} 
+                    value={customer.phone} 
                     onChange={e => { 
-                      setCustomer(c => ({ ...c, name: e.target.value })); 
-                      setActiveSearchField('name');
+                      const val = e.target.value;
+                      setCustomer(c => ({ 
+                        ...c, 
+                        phone: val,
+                        ...(c.crm_contact_id ? { crm_contact_id: null, bsuid: null, username: null } : {})
+                      })); 
+                      setActiveSearchField('phone');
                       clearTimeout(searchTimeout.current); 
-                      searchTimeout.current = setTimeout(() => searchClient(e.target.value), 300); 
+                      searchTimeout.current = setTimeout(() => searchClient(val), 300); 
                     }} 
-                    onFocus={() => { if(customer.name) { setActiveSearchField('name'); searchClient(customer.name); } }}
+                    onFocus={() => { if(customer.phone) { setActiveSearchField('phone'); searchClient(customer.phone); } }}
                     className="ds-input" 
                     style={{ paddingLeft: '34px', height: '42px', fontSize: '13px' }} 
                   />
-                  {showClientSearch && activeSearchField === 'name' && clientSearch.length > 0 && (
+                  {showClientSearch && activeSearchField === 'phone' && clientSearch.length > 0 && (
                     <div className="ds-autocomplete" style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'var(--ds-bg-elevated)', border: '1px solid var(--ds-primary)', borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.6)', zIndex: 100, marginTop: '4px', maxHeight: '260px', overflowY: 'auto' }}>
                       {clientSearch.map((c, i) => (
                         <div key={i} className="ds-autocomplete-item" onClick={() => handleClientSelect(c)} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: i < clientSearch.length - 1 ? '1px solid var(--ds-border)' : 'none' }}>
@@ -1079,26 +1084,21 @@ export default function TomarPedido() {
                 </div>
 
                 <div className="ds-form-group" style={{ position: 'relative', marginBottom: 0 }}>
-                  <Phone size={16} style={{ position: 'absolute', left: '10px', top: '13px', color: 'var(--ds-text-muted)', zIndex: 1 }} />
+                  <User size={16} style={{ position: 'absolute', left: '10px', top: '13px', color: 'var(--ds-text-muted)', zIndex: 1 }} />
                   <input 
-                    placeholder={customer.crm_contact_id && !customer.phone ? "🔒 Número privado" : "Teléfono"} 
-                    value={customer.phone} 
+                    placeholder="Nombre Cliente" 
+                    value={customer.name} 
                     onChange={e => { 
-                      const val = e.target.value;
-                      setCustomer(c => ({ 
-                        ...c, 
-                        phone: val,
-                        ...(c.crm_contact_id ? { crm_contact_id: null, bsuid: null, username: null } : {})
-                      })); 
-                      setActiveSearchField('phone');
+                      setCustomer(c => ({ ...c, name: e.target.value })); 
+                      setActiveSearchField('name');
                       clearTimeout(searchTimeout.current); 
-                      searchTimeout.current = setTimeout(() => searchClient(val), 300); 
+                      searchTimeout.current = setTimeout(() => searchClient(e.target.value), 300); 
                     }} 
-                    onFocus={() => { if(customer.phone) { setActiveSearchField('phone'); searchClient(customer.phone); } }}
+                    onFocus={() => { if(customer.name) { setActiveSearchField('name'); searchClient(customer.name); } }}
                     className="ds-input" 
                     style={{ paddingLeft: '34px', height: '42px', fontSize: '13px' }} 
                   />
-                  {showClientSearch && activeSearchField === 'phone' && clientSearch.length > 0 && (
+                  {showClientSearch && activeSearchField === 'name' && clientSearch.length > 0 && (
                     <div className="ds-autocomplete" style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'var(--ds-bg-elevated)', border: '1px solid var(--ds-primary)', borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.6)', zIndex: 100, marginTop: '4px', maxHeight: '260px', overflowY: 'auto' }}>
                       {clientSearch.map((c, i) => (
                         <div key={i} className="ds-autocomplete-item" onClick={() => handleClientSelect(c)} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: i < clientSearch.length - 1 ? '1px solid var(--ds-border)' : 'none' }}>
@@ -1213,7 +1213,7 @@ export default function TomarPedido() {
                 <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--ds-text-secondary)', display: 'block', marginBottom: '4px' }}>📅 Fecha y hora del pedido (Colombia, opcional)</span>
                 <input 
                   type="datetime-local"
-                  value={customer.created_at || ''} 
+                  value={customer.created_at || toColombiaDateTimeLocal()} 
                   onChange={e => setCustomer(c => ({ ...c, created_at: e.target.value }))}
                   onClick={e => { try { e.target.showPicker?.(); } catch {} }}
                   className="ds-input" 
@@ -1223,8 +1223,8 @@ export default function TomarPedido() {
 
               <div style={{ marginBottom: '12px' }}>
                 <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--ds-text-secondary)', display: 'block', marginBottom: '6px' }}>Tipo de Entrega</span>
-                <div className="ds-option-group" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
-                  {[{ key: 'domicilio', label: 'Domicilio' }, { key: 'presencial', label: 'Mostrador' }, { key: 'recoger', label: 'Recoger' }].map(d => {
+                <div className="ds-option-group" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+                  {[{ key: 'domicilio', label: 'Domicilio' }, { key: 'recoger', label: 'Recoger' }].map(d => {
                     const isActive = (() => {
                       const dt = String(customer.deliveryType || '').toLowerCase().trim();
                       if (d.key === 'recoger') return dt === 'recoger' || dt === 'tienda' || dt === 'para recoger';

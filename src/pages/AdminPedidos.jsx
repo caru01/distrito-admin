@@ -468,6 +468,15 @@ export default function AdminPedidos() {
     navigate(`/admin/tomar-pedido?edit=${order.id}`);
   };
 
+  const handleOpenWhatsAppChat = (phone, customerName = '') => {
+    if (!phone) return;
+    const digits = String(phone).replace(/\D/g, '');
+    const fullPhone = digits.length === 10 ? `57${digits}` : digits;
+    const greeting = customerName?.trim() ? `Hola ${customerName.trim()}, te escribimos de Distrito BG.` : 'Hola, te escribimos de Distrito BG.';
+    const url = `https://api.whatsapp.com/send/?phone=${fullPhone}&text=${encodeURIComponent(greeting)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
   const tabs = ['Todos', 'Recibidos', 'En cocina', 'Listos para despacho', 'En reparto', 'Entregados', 'Pago pendiente', 'Cancelados'];
 
   // 🚀 OPTIMIZACIÓN 2: Filtrado memoizado ultra-rápido a 60 FPS con Más Filtros
@@ -1056,7 +1065,38 @@ export default function AdminPedidos() {
                     </td>
                     <td>
                       <div style={{ color: 'var(--ds-text-primary)', fontWeight: '600', fontSize: '15px' }}>{order.customer_name || 'Sin nombre'}</div>
-                      <div style={{ color: 'var(--ds-text-secondary)', fontSize: '13px', marginTop: '4px' }}>{order.customer_phone || 'Sin teléfono'}</div>
+                      <div style={{ color: 'var(--ds-text-secondary)', fontSize: '13px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <span>{order.customer_phone || 'Sin teléfono'}</span>
+                        {order.customer_phone && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleOpenWhatsAppChat(order.customer_phone, order.customer_name); }}
+                            className="ds-btn-whatsapp-chat"
+                            title="Abrir chat en WhatsApp"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              backgroundColor: '#22C55E',
+                              color: '#FFFFFF',
+                              border: 'none',
+                              borderRadius: '9999px',
+                              padding: '2px 8px',
+                              fontSize: '11px',
+                              fontWeight: '600',
+                              cursor: 'pointer',
+                              lineHeight: '1.4',
+                              boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                              transition: 'all 0.15s ease'
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#16A34A'; e.currentTarget.style.transform = 'scale(1.03)'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#22C55E'; e.currentTarget.style.transform = 'scale(1)'; }}
+                          >
+                            <MessageCircle size={12} strokeWidth={2.4} />
+                            <span>Abrir chat</span>
+                          </button>
+                        )}
+                      </div>
                       <div style={{ marginTop: '4px' }}>{getDeliveryTypeBadge(order.delivery_type)}</div>
                       {String(order.delivery_type || '').toLowerCase() === 'domicilio' && (order.barrio || order.address) && (
                         <div style={{ color: 'var(--ds-text-muted)', fontSize: '12px', marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -1135,8 +1175,32 @@ export default function AdminPedidos() {
                   <span className="ds-table-card-label">Cliente</span>
                   <span className="ds-table-card-value">
                     <div style={{ fontWeight: '600' }}>{order.customer_name || 'Sin nombre'}</div>
-                    <div style={{ color: 'var(--ds-text-secondary)' }}>
-                      {order.customer_phone || (order.crm_contact_id ? <span style={{ color: '#10B981', fontWeight: 600 }}>🔒 Número privado</span> : 'Sin teléfono')}
+                    <div style={{ color: 'var(--ds-text-secondary)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginTop: '2px' }}>
+                      <span>{order.customer_phone || (order.crm_contact_id ? <span style={{ color: '#10B981', fontWeight: 600 }}>🔒 Número privado</span> : 'Sin teléfono')}</span>
+                      {order.customer_phone && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); handleOpenWhatsAppChat(order.customer_phone, order.customer_name); }}
+                          title="Abrir chat en WhatsApp"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            backgroundColor: '#22C55E',
+                            color: '#FFFFFF',
+                            border: 'none',
+                            borderRadius: '9999px',
+                            padding: '2px 8px',
+                            fontSize: '11px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            lineHeight: '1.4'
+                          }}
+                        >
+                          <MessageCircle size={12} strokeWidth={2.4} />
+                          <span>Abrir chat</span>
+                        </button>
+                      )}
                     </div>
                   </span>
                 </div>

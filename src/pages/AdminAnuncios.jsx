@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { API_URL } from '../config/api';
 import { readApiJson } from '../utils/http';
+import { optimizeImageFile } from '../utils/imageOptimizer';
 import districStar from '../assets/distric-star.png';
 
 const EMPTY = {
@@ -271,14 +272,22 @@ export default function AdminAnuncios() {
     }
   };
 
-  const upload = (event) => {
+  const upload = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('image/') || file.size > 4 * 1024 * 1024)
-      return setNotice({ type: 'error', text: 'Usa JPG, PNG o WebP de máximo 4 MB.' });
-    const reader = new FileReader();
-    reader.onload = () => edit('image_url', reader.result);
-    reader.readAsDataURL(file);
+    if (!file.type.startsWith('image/'))
+      return setNotice({ type: 'error', text: 'Usa una imagen válida (JPG, PNG o WebP).' });
+    if (file.size > 15 * 1024 * 1024)
+      return setNotice({ type: 'error', text: 'La imagen supera el máximo de 15 MB.' });
+    try {
+      setNotice(null);
+      const optimized = await optimizeImageFile(file, { maxWidth: 1200, maxHeight: 800, quality: 0.82 });
+      edit('image_url', optimized);
+    } catch (err) {
+      setNotice({ type: 'error', text: err.message || 'Error al procesar la imagen.' });
+    } finally {
+      event.target.value = '';
+    }
   };
 
   const sendPush = async (event) => {

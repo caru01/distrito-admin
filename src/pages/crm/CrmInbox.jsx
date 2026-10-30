@@ -450,6 +450,8 @@ export default function CrmInbox({ revision, lastRealtimeEvent = null, notify })
   const [templates, setTemplates] = useState([]);
   const [templateId, setTemplateId] = useState('');
   const [sending, setSending] = useState(false);
+  const [loadingList, setLoadingList] = useState(true);
+  const [listError, setListError] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [showDrawer, setShowDrawer] = useState(false);
@@ -497,17 +499,31 @@ export default function CrmInbox({ revision, lastRealtimeEvent = null, notify })
 
   const loadList = async (isBackground = false) => {
     const reqSeq = ++listReqSeqRef.current;
+    if (!isBackground) {
+      setLoadingList(true);
+      setListError(null);
+    }
     try {
       const query = new URLSearchParams({ limit: 120, search, status });
       const data = await crmRequest(`/conversations?${query}`);
       if (reqSeq !== listReqSeqRef.current) return;
       const list = data.conversations || [];
       setConversations(list);
+      setListError(null);
       if (!selectedIdRef.current && list.length > 0 && !searchParams.get('contactId')) {
         setSelected(list[0].id);
       }
     } catch (error) {
-      if (!isBackground && reqSeq === listReqSeqRef.current) notify('error', error.message);
+      if (reqSeq === listReqSeqRef.current) {
+        if (!isBackground) {
+          setListError(error.message);
+          notify('error', error.message);
+        }
+      }
+    } finally {
+      if (!isBackground && reqSeq === listReqSeqRef.current) {
+        setLoadingList(false);
+      }
     }
   };
 
@@ -952,7 +968,21 @@ export default function CrmInbox({ revision, lastRealtimeEvent = null, notify })
         </div>
 
         <div className="crm-conversation-list">
-          {conversations.length ? (
+          {loadingList && !conversations.length ? (
+            <div className="crm-loading-state" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 16px', color: 'var(--ds-text-secondary)', gap: '12px' }}>
+              <div className="ds-loader" />
+              <span>Cargando conversaciones…</span>
+            </div>
+          ) : listError && !conversations.length ? (
+            <div className="ds-empty-state" style={{ padding: '32px 16px' }}>
+              <AlertCircle size={32} color="#EF4444" />
+              <h3 style={{ marginTop: '12px' }}>Error al cargar conversaciones</h3>
+              <p>{listError}</p>
+              <button type="button" className="ds-btn ds-btn-primary ds-btn-sm" style={{ marginTop: '12px' }} onClick={() => loadList(false)}>
+                <RefreshCw size={14} /> Reintentar
+              </button>
+            </div>
+          ) : conversations.length ? (
             conversations.map((item) => {
               const isActive = Number(selected) === Number(item.id);
               const isOutboundLast = item.last_message_direction === 'OUTBOUND';
@@ -1013,7 +1043,17 @@ export default function CrmInbox({ revision, lastRealtimeEvent = null, notify })
             <div className="ds-empty-state">
               <MessageCircle />
               <h3>Sin conversaciones</h3>
-              <p>Los mensajes entrantes y salientes aparecerán aquí en tiempo real.</p>
+              <p>
+                {search
+                  ? `No se encontraron conversaciones para "${search}".`
+                  : status === 'PENDING'
+                  ? 'No hay conversaciones pendientes por responder.'
+                  : status === 'CLOSED'
+                  ? 'No hay conversaciones archivadas o cerradas.'
+                  : status === 'UNREAD'
+                  ? 'No tienes mensajes nuevos sin leer.'
+                  : 'Los mensajes entrantes y salientes aparecerán aquí en tiempo real.'}
+              </p>
             </div>
           )}
         </div>

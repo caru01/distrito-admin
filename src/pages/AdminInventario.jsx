@@ -178,6 +178,7 @@ export default function AdminInventario() {
   const [copyModalOpen, setCopyModalOpen] = useState(false);
   const [copyTargetProductId, setCopyTargetProductId] = useState('');
   const [copyMode, setCopyMode] = useState('replace');
+  const [copyingRecipe, setCopyingRecipe] = useState(false);
 
   // Sub-recetas & Producción de Cocina
   const [subrecipes, setSubrecipes] = useState([]);
@@ -2322,6 +2323,7 @@ export default function AdminInventario() {
     if (!window.confirm(confirmMsg)) return;
 
     setBusy(true);
+    setCopyingRecipe(true);
     try {
       const res = await fetchAuth(`${API_URL}/admin/recipes/copy`, {
         method: 'POST',
@@ -2343,6 +2345,7 @@ export default function AdminInventario() {
       showToast(err.message, 'error');
     } finally {
       setBusy(false);
+      setCopyingRecipe(false);
     }
   };
 
@@ -7008,17 +7011,17 @@ export default function AdminInventario() {
                 type="button"
                 className="ds-btn ds-btn-secondary"
                 onClick={() => setCopyModalOpen(false)}
-                disabled={copyingRecipe}
+                disabled={copyingRecipe || busy}
               >
                 Cancelar
               </button>
               <button
                 type="button"
                 className="ds-btn ds-btn-primary"
-                onClick={handleCopyRecipe}
-                disabled={!copyTargetProductId || copyingRecipe}
+                onClick={() => handlePasteRecipe(copyTargetProductId, copyMode)}
+                disabled={!copyTargetProductId || copyingRecipe || busy}
               >
-                {copyingRecipe ? 'Duplicando...' : 'Duplicar Receta'}
+                {copyingRecipe || busy ? 'Duplicando...' : 'Duplicar Receta'}
               </button>
             </div>
           </div>
