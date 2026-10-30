@@ -10,7 +10,7 @@ import {
   ShoppingCart, Plus, Search, Filter, Globe, MessageCircle, Store, Phone,
   Clock, Eye, Pencil, Printer, MoreVertical, CheckCircle, ChefHat, Trash2, MapPin,
   Banknote, CreditCard, Smartphone, X, ChevronLeft, ChevronRight, Zap, Minus, Wallet, User, AlertCircle, Package, Building2, Truck,
-  Volume2, VolumeX, RefreshCw
+  Volume2, VolumeX, RefreshCw, Loader2
 } from 'lucide-react';
 
 const formatter = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
@@ -115,6 +115,8 @@ export default function AdminPedidos() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [updatingOrderId, setUpdatingOrderId] = useState(null);
   const [assigningOrder, setAssigningOrder] = useState(null);
+  const [toastMessage, setToastMessage] = useState(null);
+  const [sendingDriverId, setSendingDriverId] = useState(null);
 
   // Real-time tracking & Sound
   const knownOrderIdsRef = useRef(new Set());
@@ -468,58 +470,27 @@ export default function AdminPedidos() {
     navigate(`/admin/tomar-pedido?edit=${order.id}`);
   };
 
-  const handleSendWhatsAppToDriver = (order) => {
+  const handleSendWhatsAppToDriver = async (order) => {
     if (!order) return;
-    let driverPhone = order.delivery_driver_phone ? String(order.delivery_driver_phone).replace(/\D/g, '') : '';
-    if (driverPhone.length === 10) driverPhone = '57' + driverPhone;
-    if (!driverPhone) {
-      alert('El domiciliario no tiene un teléfono registrado');
-      return;
+    const token = sessionStorage.getItem('distrito_admin_token');
+    setSendingDriverId(order.id);
+    try {
+      const res = await fetch(`${API_URL}/admin/delivery/orders/${order.id}/notify-driver`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setToastMessage('Mensaje enviado al domiciliario');
+        setTimeout(() => setToastMessage(null), 3500);
+      } else {
+        alert(data.error || 'No fue posible enviar el mensaje al domiciliario');
+      }
+    } catch (err) {
+      alert('Error de red al intentar enviar el mensaje al domiciliario');
+    } finally {
+      setSendingDriverId(null);
     }
-
-    let cartItems = [];
-    if (Array.isArray(order.cart_json)) cartItems = order.cart_json;
-    else if (typeof order.cart_json === 'string') {
-      try { cartItems = JSON.parse(order.cart_json || '[]'); } catch {}
-    }
-    const itemsList = cartItems.map(item => {
-      const qty = item.quantity || item.qty || 1;
-      const name = item.title || item.name || 'Producto';
-      const notes = item.notes ? `\n   ↳ _Nota: ${item.notes}_` : '';
-      return ` • *${qty}x* ${name}${notes}`;
-    }).join('\n');
-
-    const orderNum = String(order.id).padStart(4, '0');
-    const totalFmt = '$' + Number(order.total || 0).toLocaleString('es-CO');
-    const changeInfo = order.change_required ? `\n🔄 *Cambio para:* $${Number(order.change_required).toLocaleString('es-CO')}` : '';
-    const detailInfo = [order.delivery_apartment ? `Apto: ${order.delivery_apartment}` : '', order.delivery_tower ? `Torre: ${order.delivery_tower}` : '', order.delivery_floor ? `Piso: ${order.delivery_floor}` : ''].filter(Boolean).join(' · ');
-
-    const addressStr = `${order.address || ''}${order.barrio ? `, ${order.barrio}` : ''}`;
-    const mapsUrl = (order.delivery_latitude && order.delivery_longitude)
-      ? `https://www.google.com/maps/search/?api=1&query=${order.delivery_latitude},${order.delivery_longitude}`
-      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressStr + ', Valledupar')}`;
-
-    const driverMsg = `🛵 *NUEVO DOMICILIO ASIGNADO*
-🏠 *Distric House*
-━━━━━━━━━━━━━━━━━━
-📋 *Pedido:* #${orderNum}
-👤 *Cliente:* ${order.customer_name || 'Cliente'}
-📱 *Teléfono:* ${order.customer_phone || 'No registrado'}
-📍 *Dirección:* ${addressStr}
-${detailInfo ? `🏢 *Detalle:* ${detailInfo}\n` : ''}🗺️ *Google Maps:*
-${mapsUrl}
-
-🍔 *PRODUCTOS A ENTREGAR:*
-${itemsList || ' • Ver en factura física'}
-
-💰 *DATOS DE COBRO:*
-💵 *Total a cobrar:* ${totalFmt}
-💳 *Método de pago:* ${order.payment_method || 'Efectivo'}${changeInfo}
-${order.notes ? `📝 *Observaciones:* ${order.notes}\n` : ''}━━━━━━━━━━━━━━━━━━
-¡Conduce con precaución! 🛵💨`;
-
-    const url = `https://api.whatsapp.com/send/?phone=${driverPhone}&text=${encodeURIComponent(driverMsg)}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   const handleOpenWhatsAppChat = (phone, customerName = '') => {
@@ -1425,7 +1396,7 @@ ${order.notes ? `📝 *Observaciones:* ${order.notes}\n` : ''}━━━━━━
               </div>
               {String(selectedOrder.delivery_type || '').toLowerCase() === 'domicilio' && (selectedOrder.delivery_provider_type || selectedOrder.delivery_user_id) && <div className="ds-card" style={{ padding: '20px', marginBottom: '24px' }}>
                 <h3 style={{ color: 'var(--ds-text-secondary)', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 12px 0' }}>Logística de entrega</h3>
-                {String(selectedOrder.delivery_provider_type || '').startsWith('external_') ? <div className="order-logistics-grid"><div><span>Tipo de entrega</span><strong><Building2 size={15}/> Empresa externa</strong></div><div><span>Empresa</span><strong>{selectedOrder.external_company_name || 'Operador aliado'}</strong></div><div><span>Domiciliario</span><strong>{selectedOrder.external_driver_name || 'Pendiente de informar'}</strong></div><div><span>Teléfono</span><strong>{selectedOrder.external_driver_phone || 'No informado'}</strong></div><div><span>Placa / identificación</span><strong>{selectedOrder.external_vehicle_id || 'No informada'}</strong></div><div><span>ETA</span><strong>{selectedOrder.external_eta_minutes ? `${selectedOrder.external_eta_minutes} min` : 'No informado'}</strong></div><div><span>Domicilio cliente</span><strong>{formatter.format(selectedOrder.delivery_fee || 0)}</strong></div><div><span>Costo externo</span><strong>{formatter.format(selectedOrder.external_delivery_cost || 0)}</strong></div><div><span>Margen logístico</span><strong style={{ color: Number(selectedOrder.logistics_margin ?? ((selectedOrder.delivery_fee || 0) - (selectedOrder.external_delivery_cost || 0))) < 0 ? '#EF4444' : '#22C55E' }}>{formatter.format(selectedOrder.logistics_margin ?? ((selectedOrder.delivery_fee || 0) - (selectedOrder.external_delivery_cost || 0)))}</strong></div></div> : <div className="order-logistics-own"><Truck size={20} color="var(--ds-primary)"/><div><strong>Domiciliario Distric House: {selectedOrder.delivery_driver_name || selectedOrder.driver_name || 'Asignado'}</strong>{selectedOrder.delivery_driver_phone && <div style={{ fontSize: '13px', color: 'var(--ds-text-secondary)', marginTop: '2px' }}>Teléfono: {selectedOrder.delivery_driver_phone}</div>}<small style={{ display: 'block', color: 'var(--ds-text-muted)', marginTop: '3px' }}>Entrega directa de Distric House (sin rastreo GPS).</small>{selectedOrder.delivery_driver_phone && <button type="button" onClick={() => handleSendWhatsAppToDriver(selectedOrder)} className="ds-btn ds-btn-sm" style={{ backgroundColor: '#22C55E', color: '#fff', fontSize: '12px', padding: '4px 10px', marginTop: '8px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}><MessageCircle size={14}/> Enviar datos al domiciliario por WhatsApp</button>}</div></div>}
+                {String(selectedOrder.delivery_provider_type || '').startsWith('external_') ? <div className="order-logistics-grid"><div><span>Tipo de entrega</span><strong><Building2 size={15}/> Empresa externa</strong></div><div><span>Empresa</span><strong>{selectedOrder.external_company_name || 'Operador aliado'}</strong></div><div><span>Domiciliario</span><strong>{selectedOrder.external_driver_name || 'Pendiente de informar'}</strong></div><div><span>Teléfono</span><strong>{selectedOrder.external_driver_phone || 'No informado'}</strong></div><div><span>Placa / identificación</span><strong>{selectedOrder.external_vehicle_id || 'No informada'}</strong></div><div><span>ETA</span><strong>{selectedOrder.external_eta_minutes ? `${selectedOrder.external_eta_minutes} min` : 'No informado'}</strong></div><div><span>Domicilio cliente</span><strong>{formatter.format(selectedOrder.delivery_fee || 0)}</strong></div><div><span>Costo externo</span><strong>{formatter.format(selectedOrder.external_delivery_cost || 0)}</strong></div><div><span>Margen logístico</span><strong style={{ color: Number(selectedOrder.logistics_margin ?? ((selectedOrder.delivery_fee || 0) - (selectedOrder.external_delivery_cost || 0))) < 0 ? '#EF4444' : '#22C55E' }}>{formatter.format(selectedOrder.logistics_margin ?? ((selectedOrder.delivery_fee || 0) - (selectedOrder.external_delivery_cost || 0)))}</strong></div></div> : <div className="order-logistics-own"><Truck size={20} color="var(--ds-primary)"/><div><strong>Domiciliario Distric House: {selectedOrder.delivery_driver_name || selectedOrder.driver_name || 'Asignado'}</strong>{selectedOrder.delivery_driver_phone && <div style={{ fontSize: '13px', color: 'var(--ds-text-secondary)', marginTop: '2px' }}>Teléfono: {selectedOrder.delivery_driver_phone}</div>}<small style={{ display: 'block', color: 'var(--ds-text-muted)', marginTop: '3px' }}>Entrega directa de Distric House (sin rastreo GPS).</small>{selectedOrder.delivery_driver_phone && <button type="button" disabled={sendingDriverId === selectedOrder.id} onClick={() => handleSendWhatsAppToDriver(selectedOrder)} className="ds-btn ds-btn-sm" style={{ backgroundColor: '#22C55E', color: '#fff', fontSize: '12px', padding: '5px 12px', marginTop: '8px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>{sendingDriverId === selectedOrder.id ? <><Loader2 size={13} className="animate-spin"/> Enviando…</> : <><MessageCircle size={14}/> Enviar datos al domiciliario por WhatsApp</>}</button>}</div></div>}
               </div>}
               <div className="ds-card" style={{ padding: '20px', marginBottom: '24px' }}>
                 <h3 style={{ color: 'var(--ds-text-secondary)', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 12px 0' }}>Productos</h3>
@@ -1491,8 +1462,35 @@ ${order.notes ? `📝 *Observaciones:* ${order.notes}\n` : ''}━━━━━━
       {assigningOrder && <DeliveryAssignmentModal
         order={assigningOrder}
         onClose={() => setAssigningOrder(null)}
-        onSuccess={() => { setAssigningOrder(null); fetchOrders(); }}
+        onSuccess={(updatedOrder, toastMsg) => {
+          setAssigningOrder(null);
+          fetchOrders();
+          if (toastMsg) {
+            setToastMessage(toastMsg);
+            setTimeout(() => setToastMessage(null), 3500);
+          }
+        }}
       />}
+      {toastMessage && (
+        <div style={{
+          position: 'fixed',
+          bottom: '28px',
+          right: '28px',
+          backgroundColor: '#10B981',
+          color: '#ffffff',
+          padding: '12px 22px',
+          borderRadius: '12px',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.22)',
+          fontWeight: '700',
+          fontSize: '14px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          zIndex: 99999
+        }}>
+          <CheckCircle size={19} /> {toastMessage}
+        </div>
+      )}
     </div>
   );
 }

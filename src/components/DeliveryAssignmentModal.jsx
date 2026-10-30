@@ -71,10 +71,7 @@ export default function DeliveryAssignmentModal({ order, onClose, onSuccess }) {
       );
       const data = await readApiJson(response);
       if (!response.ok) throw new Error(data.error || 'No fue posible asignar la entrega.');
-      if (isOwn && data.whatsapp_url && !data.whatsapp_sent) {
-        window.open(data.whatsapp_url, '_blank');
-      }
-      onSuccess?.(data.order); onClose();
+      onSuccess?.(data.order, isOwn ? 'Mensaje enviado al domiciliario' : null); onClose();
     } catch (requestError) { setError(requestError.message); }
     finally { setSaving(false); }
   };
