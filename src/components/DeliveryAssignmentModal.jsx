@@ -71,11 +71,11 @@ export default function DeliveryAssignmentModal({ order, onClose, onSuccess }) {
       );
       const data = await readApiJson(response);
       if (!response.ok) throw new Error(data.error || 'No fue posible asignar la entrega.');
-      if (isOwn && !data.whatsapp_sent && data.whatsapp_url) {
+      if (!data.whatsapp_sent && data.whatsapp_url) {
         window.open(data.whatsapp_url, '_blank');
         onSuccess?.(data.order, 'Ventana de 24h inactiva: Se abrió WhatsApp para enviar');
       } else {
-        onSuccess?.(data.order, isOwn ? 'Mensaje enviado al domiciliario' : null);
+        onSuccess?.(data.order, data.whatsapp_sent ? 'Mensaje enviado al domiciliario' : null);
       }
       onClose();
     } catch (requestError) { setError(requestError.message); }
@@ -113,7 +113,7 @@ export default function DeliveryAssignmentModal({ order, onClose, onSuccess }) {
       {selectedCompany && (selectedCompany.active_drivers || []).length > 0 && (
         <label className="ds-form-group" style={{ gridColumn: '1 / -1' }}>
           <span className="ds-form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Bike size={14} color="var(--ds-primary)"/> Mensajero registrado de {selectedCompany.name} (auto-rellenar)
+            <Bike size={14} color="var(--ds-primary)"/> Mensajero registrado de {selectedCompany.name} (elegir para enviar datos por WhatsApp)
           </span>
           <select
             className="ds-select"
@@ -143,13 +143,13 @@ export default function DeliveryAssignmentModal({ order, onClose, onSuccess }) {
             <option value="">Seleccionar mensajero de la lista o ingresar manual abajo…</option>
             {(selectedCompany.active_drivers || []).map((d) => (
               <option key={d.id} value={d.id}>
-                {d.name} {d.has_app_account ? '· 📱 App Activa (GPS en vivo)' : ''} · {d.vehicle_type} {d.vehicle_plate ? `(${d.vehicle_plate})` : ''} · Cel: {d.phone}
+                {d.name} {d.vehicle_type ? `· ${d.vehicle_type}` : ''} {d.vehicle_plate ? `(${d.vehicle_plate})` : ''} · Cel: {d.phone}
               </option>
             ))}
           </select>
         </label>
       )}
-      <label className="ds-form-group"><span className="ds-form-label">Nombre del Domiciliario</span><input className="ds-input" value={form.driverName} onChange={(e) => setForm({ ...form, driverName: e.target.value })} placeholder="Nombre si está disponible"/></label><label className="ds-form-group"><span className="ds-form-label">Teléfono</span><input className="ds-input" inputMode="tel" value={form.driverPhone} onChange={(e) => setForm({ ...form, driverPhone: e.target.value })}/></label><label className="ds-form-group"><span className="ds-form-label">Placa / identificación</span><input className="ds-input" value={form.vehicleId} onChange={(e) => setForm({ ...form, vehicleId: e.target.value })}/></label><label className="ds-form-group"><span className="ds-form-label">ETA (minutos)</span><input className="ds-input" type="number" min="1" max="1440" value={form.etaMinutes} onChange={(e) => setForm({ ...form, etaMinutes: e.target.value ? Number(e.target.value) : '' })}/></label></div><label className="ds-form-group"><span className="ds-form-label">Observaciones logísticas</span><textarea className="ds-textarea" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}/></label><div className="delivery-cost-preview"><span>Domicilio cobrado al cliente <strong>${Number(order.delivery_fee || 0).toLocaleString('es-CO')}</strong></span><span>Costo empresa <strong>${Number(form.externalCost || 0).toLocaleString('es-CO')}</strong></span><span>Margen logístico <strong className={Number(order.delivery_fee || 0) - Number(form.externalCost || 0) < 0 ? 'negative' : ''}>${(Number(order.delivery_fee || 0) - Number(form.externalCost || 0)).toLocaleString('es-CO')}</strong></span></div></div>}
+      <label className="ds-form-group"><span className="ds-form-label">Nombre del Mensajero</span><input className="ds-input" value={form.driverName} onChange={(e) => setForm({ ...form, driverName: e.target.value })} placeholder="Nombre del mensajero"/></label><label className="ds-form-group"><span className="ds-form-label">Teléfono (WhatsApp)</span><input className="ds-input" inputMode="tel" placeholder="Ej: 3001234567" value={form.driverPhone} onChange={(e) => setForm({ ...form, driverPhone: e.target.value })}/></label><label className="ds-form-group"><span className="ds-form-label">Placa / identificación</span><input className="ds-input" value={form.vehicleId} onChange={(e) => setForm({ ...form, vehicleId: e.target.value })}/></label><label className="ds-form-group"><span className="ds-form-label">ETA (minutos)</span><input className="ds-input" type="number" min="1" max="1440" value={form.etaMinutes} onChange={(e) => setForm({ ...form, etaMinutes: e.target.value ? Number(e.target.value) : '' })}/></label></div><label className="ds-form-group"><span className="ds-form-label">Observaciones logísticas</span><textarea className="ds-textarea" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}/></label><div className="delivery-cost-preview"><span>Domicilio cobrado al cliente <strong>${Number(order.delivery_fee || 0).toLocaleString('es-CO')}</strong></span><span>Costo empresa <strong>${Number(form.externalCost || 0).toLocaleString('es-CO')}</strong></span><span>Margen logístico <strong className={Number(order.delivery_fee || 0) - Number(form.externalCost || 0) < 0 ? 'negative' : ''}>${(Number(order.delivery_fee || 0) - Number(form.externalCost || 0)).toLocaleString('es-CO')}</strong></span></div></div>}
     </>}
     {error && <div className="ds-inline-alert ds-inline-alert-danger">{error}</div>}
   </div><div className="ds-modal-footer"><button type="button" className="ds-btn ds-btn-secondary" onClick={onClose}>Cancelar</button><button className="ds-btn ds-btn-primary" disabled={loading || saving || (mode === 'own' ? !eligibleDrivers.length : !companies.length)}>{saving ? <><Loader2 size={17}/> Asignando…</> : 'Confirmar asignación'}</button></div></form></div></div>;
