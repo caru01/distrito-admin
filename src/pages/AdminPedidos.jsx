@@ -481,8 +481,15 @@ export default function AdminPedidos() {
       });
       const data = await res.json();
       if (res.ok) {
-        setToastMessage('Mensaje enviado al domiciliario');
-        setTimeout(() => setToastMessage(null), 3500);
+        if (data.whatsapp_sent) {
+          setToastMessage('Mensaje enviado al domiciliario');
+          setTimeout(() => setToastMessage(null), 3500);
+        } else {
+          if (data.whatsapp_url) {
+            window.open(data.whatsapp_url, '_blank');
+          }
+          alert('Aviso: La ventana de 24 horas de WhatsApp con este domiciliario está inactiva (Meta exige que el domiciliario escriba al menos un mensaje al restaurante en las últimas 24h para envíos automáticos).\n\nSe abrió WhatsApp para que le envíes los datos directamente.\n\nTip: Pídele a tu domiciliario que envíe "Hola" al WhatsApp del restaurante para que las próximas asignaciones sean 100% automáticas.');
+        }
       } else {
         alert(data.error || 'No fue posible enviar el mensaje al domiciliario');
       }
