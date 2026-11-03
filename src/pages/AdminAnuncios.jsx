@@ -112,6 +112,12 @@ export default function AdminAnuncios() {
   const isPromoCard = campaign.campaign_type === 'promo_card';
   const promoData = useMemo(() => parsePromoBody(campaign.body), [campaign.body]);
 
+  const otherActivePromoCards = useMemo(() => {
+    return campaigns.filter(
+      (item) => item.campaign_type === 'promo_card' && item.is_active && item.id !== campaign.id
+    );
+  }, [campaigns, campaign.id]);
+
   const metrics = useMemo(() => {
     const views = campaigns.reduce((sum, item) => sum + Number(item.views_count || 0), 0);
     const clicks = campaigns.reduce((sum, item) => sum + Number(item.clicks_count || 0), 0);
@@ -174,7 +180,7 @@ export default function AdminAnuncios() {
     const serialized = JSON.stringify(DEFAULT_PROMO);
     setCampaign({
       ...EMPTY,
-      title: 'MARTES 13 DE OCTUBRE — DOMICILIO GRATIS',
+      title: 'TARJETA DE ANUNCIO',
       campaign_type: 'promo_card',
       body: serialized,
       cta_label: '$ 30.000 COP',
@@ -329,7 +335,7 @@ export default function AdminAnuncios() {
             <RefreshCw size={18} /> Actualizar
           </button>
           <button className="ds-btn ds-btn-secondary" onClick={createPromoCard} style={{ borderColor: '#B30401', color: '#B30401' }}>
-            <Sparkles size={18} /> + Tarjeta Domicilio Gratis
+            <Sparkles size={18} /> + Tarjeta de Anuncio
           </button>
           <button className="ds-btn ds-btn-primary" onClick={() => setCampaign(EMPTY)}>
             <CopyPlus size={18} /> + Nueva campaña
@@ -410,7 +416,7 @@ export default function AdminAnuncios() {
                           fontWeight: 700,
                         }}
                       >
-                        {isItemPromo ? 'Tarjeta Catálogo' : item.campaign_type === 'banner' ? 'Banner' : 'Ventana'}
+                        {isItemPromo ? 'Tarjeta de Anuncio' : item.campaign_type === 'banner' ? 'Banner' : 'Ventana'}
                       </span>
                     </div>
 
@@ -453,7 +459,7 @@ export default function AdminAnuncios() {
             ) : (
               <div className="ds-empty-state">
                 <Megaphone />
-                <p>Crea tu primera campaña o tarjeta promocional.</p>
+                <p>Crea tu primera campaña o tarjeta de anuncio.</p>
               </div>
             )}
           </div>
@@ -467,7 +473,7 @@ export default function AdminAnuncios() {
                 {campaign.id ? `Campaña #${campaign.id}` : 'Nueva campaña'}
               </span>
               <h2 className="ds-card-title">
-                {isPromoCard ? 'Tarjeta Promocional (Catálogo)' : 'Contenido y publicación'}
+                {isPromoCard ? 'Tarjeta de Anuncio (Catálogo)' : 'Contenido y publicación'}
               </h2>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
@@ -505,14 +511,14 @@ export default function AdminAnuncios() {
                         ...curr,
                         campaign_type: newType,
                         body: JSON.stringify(DEFAULT_PROMO),
-                        title: curr.title || 'MARTES 13 DE OCTUBRE — DOMICILIO GRATIS',
+                        title: curr.title || 'TARJETA DE ANUNCIO',
                       }));
                     } else {
                       edit('campaign_type', newType);
                     }
                   }}
                 >
-                  <option value="promo_card">Tarjeta Promocional (Catálogo / Domicilio Gratis)</option>
+                  <option value="promo_card">Tarjeta de Anuncio (Catálogo)</option>
                   <option value="modal">Ventana emergente (Modal)</option>
                   <option value="banner">Banner superior</option>
                 </select>
@@ -550,7 +556,7 @@ export default function AdminAnuncios() {
                   }}
                 >
                   <Truck size={20} />
-                  <span>Configuración de la Tarjeta Promocional</span>
+                  <span>Configuración de la Tarjeta de Anuncio</span>
                 </div>
 
                 <div className="ds-form-grid">
@@ -848,7 +854,7 @@ export default function AdminAnuncios() {
             <div style={{ width: '100%' }}>
               {previewDevice === 'desktop' ? (
                 /* ESCRITORIO: TARJETA LATERAL */
-                <div style={{ width: '100%', maxWidth: '300px', margin: '0 auto' }}>
+                <div style={{ width: '100%', maxWidth: '300px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                   <div
                     style={{
                       background: 'linear-gradient(180deg, #FFFFFF 0%, #FFF7F7 100%)',
@@ -952,10 +958,84 @@ export default function AdminAnuncios() {
                       </span>
                     </div>
                   </div>
+
+                  {/* Otras tarjetas de anuncio activas (aparecen abajo de cada una) */}
+                  {otherActivePromoCards.map((other) => {
+                    const otherData = parsePromoBody(other.body);
+                    return (
+                      <div
+                        key={other.id}
+                        onClick={() => setCampaign(normalize(other))}
+                        title="Clic para editar esta tarjeta"
+                        style={{
+                          background: 'linear-gradient(180deg, #FFFFFF 0%, #FFF7F7 100%)',
+                          border: '1.5px solid #F8D7DA',
+                          borderRadius: '20px',
+                          padding: '1.65rem 1.3rem',
+                          boxShadow: '0 10px 25px rgba(179, 4, 1, 0.08), 0 2px 6px rgba(0, 0, 0, 0.02)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          textAlign: 'center',
+                          boxSizing: 'border-box',
+                          color: '#1A1A1A',
+                          cursor: 'pointer',
+                          opacity: 0.92,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.85rem', width: '100%', marginBottom: '1rem' }}>
+                          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#B30401' }}>
+                            <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="#B30401" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="5.5" cy="17.5" r="3.5" />
+                              <circle cx="18.5" cy="17.5" r="3.5" />
+                              <path d="M15 6h-3l-2.5 5H18l-1.5-5z" />
+                              <path d="M9.5 11l-3 6.5" />
+                              <path d="M14 17.5h-4.5" />
+                              <path d="M18.5 14a3.5 3.5 0 0 0-3.5-3.5h-1" />
+                            </svg>
+                          </span>
+                          <img src={districStar} alt="" style={{ width: '30px', height: '30px', objectFit: 'contain' }} />
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.15rem', marginBottom: '0.75rem' }}>
+                          <span style={{ fontFamily: "'UNIFORMEXTRACONDENSED', 'Bebas Neue', 'Oswald', sans-serif", fontSize: '1.7rem', fontWeight: '900', letterSpacing: '0.04em', lineHeight: '1', color: '#1A1A1A' }}>
+                            {otherData.day || 'MARTES'}
+                          </span>
+                          <span style={{ fontFamily: "'UNIFORMEXTRACONDENSED', 'Bebas Neue', 'Oswald', sans-serif", fontSize: '1.4rem', fontWeight: '900', letterSpacing: '0.03em', lineHeight: '1.05', color: '#B30401' }}>
+                            {otherData.date || '13 DE OCTUBRE'}
+                          </span>
+                        </div>
+
+                        <div style={{ fontFamily: "'UNIFORMEXTRACONDENSED', 'Bebas Neue', 'Oswald', sans-serif", fontSize: '2.4rem', fontWeight: '900', letterSpacing: '0.03em', lineHeight: '0.95', color: '#1A1A1A', display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '1.15rem' }}>
+                          {otherData.headline || 'DOMICILIO'}
+                          <span style={{ color: '#B30401', fontSize: '2.7rem', lineHeight: '0.92' }}>
+                            {otherData.highlight || 'GRATIS'}
+                          </span>
+                        </div>
+
+                        <div style={{ width: '42px', height: '2.5px', background: '#B30401', borderRadius: '2px', opacity: 0.85, margin: '0 auto 1.15rem' }} />
+
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem', marginBottom: '1.1rem' }}>
+                          <p style={{ margin: 0, fontFamily: "'UNIFORMEXTRACONDENSED', 'Bebas Neue', 'Oswald', sans-serif", fontSize: '1.05rem', fontWeight: '600', letterSpacing: '0.02em', color: '#333333', textTransform: 'uppercase' }}>
+                            {otherData.condition || 'En compras superiores a'}
+                          </p>
+                          <p style={{ margin: 0, fontFamily: "'UNIFORMEXTRACONDENSED', 'Bebas Neue', 'Oswald', sans-serif", fontSize: '1.8rem', fontWeight: '900', letterSpacing: '0.03em', color: '#B30401', lineHeight: '1.1' }}>
+                            {otherData.price || '$ 30.000 COP'}
+                          </p>
+                        </div>
+
+                        <div style={{ paddingTop: '0.5rem' }}>
+                          <span style={{ fontSize: '0.68rem', fontWeight: '500', color: '#777777', letterSpacing: '0.01em', fontStyle: 'italic' }}>
+                            {otherData.terms || '* Términos y condiciones aplican.'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
                 /* MÓVIL: BANNER COMPACTO */
-                <div style={{ width: '100%', maxWidth: '360px', margin: '0 auto' }}>
+                <div style={{ width: '100%', maxWidth: '360px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                   <div
                     style={{
                       display: 'flex',
@@ -1047,6 +1127,84 @@ export default function AdminAnuncios() {
                       </span>
                     </div>
                   </div>
+
+                  {/* Otras tarjetas de anuncio activas en móvil */}
+                  {otherActivePromoCards.map((other) => {
+                    const otherData = parsePromoBody(other.body);
+                    return (
+                      <div
+                        key={other.id}
+                        onClick={() => setCampaign(normalize(other))}
+                        title="Clic para editar esta tarjeta"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          background: 'linear-gradient(135deg, #FFFFFF 0%, #FFF7F7 100%)',
+                          border: '1.5px solid #F8D7DA',
+                          borderRadius: '16px',
+                          padding: '0.75rem 0.95rem',
+                          boxShadow: '0 4px 14px rgba(179, 4, 1, 0.05)',
+                          gap: '0.85rem',
+                          boxSizing: 'border-box',
+                          cursor: 'pointer',
+                          opacity: 0.92,
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            background: '#B30401',
+                            color: '#FFFFFF',
+                            borderRadius: '10px',
+                            padding: '0.45rem 0.65rem',
+                            minWidth: '78px',
+                            flexShrink: 0,
+                            textAlign: 'center',
+                          }}
+                        >
+                          <span style={{ fontFamily: "'UNIFORMEXTRACONDENSED', 'Bebas Neue', 'Oswald', sans-serif", fontSize: '1rem', fontWeight: '900', lineHeight: '1', letterSpacing: '0.03em' }}>
+                            {otherData.day || 'MARTES'}
+                          </span>
+                          <span style={{ fontFamily: "'UNIFORMEXTRACONDENSED', 'Bebas Neue', 'Oswald', sans-serif", fontSize: '0.78rem', fontWeight: '900', lineHeight: '1.1', letterSpacing: '0.02em', opacity: 0.95 }}>
+                            {otherData.date || '13 DE OCTUBRE'}
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, gap: '0.15rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'nowrap' }}>
+                            <span style={{ color: '#B30401', display: 'inline-flex' }}>
+                              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="5.5" cy="17.5" r="3.5" />
+                                <circle cx="18.5" cy="17.5" r="3.5" />
+                                <path d="M15 6h-3l-2.5 5H18l-1.5-5z" />
+                                <path d="M9.5 11l-3 6.5" />
+                                <path d="M14 17.5h-4.5" />
+                                <path d="M18.5 14a3.5 3.5 0 0 0-3.5-3.5h-1" />
+                              </svg>
+                            </span>
+                            <strong style={{ fontFamily: "'UNIFORMEXTRACONDENSED', 'Bebas Neue', 'Oswald', sans-serif", fontSize: '1.1rem', fontWeight: '900', letterSpacing: '0.03em', color: '#1A1A1A', whiteSpace: 'nowrap' }}>
+                              {otherData.headline || 'DOMICILIO'} <span style={{ color: '#B30401' }}>{otherData.highlight || 'GRATIS'}</span>
+                            </strong>
+                            <img src={districStar} alt="" style={{ width: '16px', height: '16px', objectFit: 'contain' }} />
+                          </div>
+
+                          <div style={{ fontSize: '0.74rem', color: '#444444', fontFamily: "'UNIFORMEXTRACONDENSED', 'Bebas Neue', 'Oswald', sans-serif", letterSpacing: '0.02em' }}>
+                            {otherData.condition || 'En compras superiores a'}{' '}
+                            <strong style={{ color: '#B30401', fontSize: '0.88rem' }}>
+                              {otherData.price || '$ 30.000 COP'}
+                            </strong>
+                          </div>
+
+                          <span style={{ fontSize: '0.62rem', color: '#888888', fontStyle: 'italic' }}>
+                            {otherData.terms || '* Términos y condiciones aplican.'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 
@@ -1092,7 +1250,9 @@ export default function AdminAnuncios() {
                     ? 'Clientes nuevos'
                     : 'Clientes recurrentes'}
                 </small>
-                <h3>{campaign.title || 'Título de campaña'}</h3>
+                {campaign.title && (campaign.body || !campaign.image_url) && (
+                  <h3>{campaign.title}</h3>
+                )}
                 <p>{campaign.body || 'Escribe un mensaje claro y atractivo.'}</p>
                 {campaign.coupon_code && <code>{campaign.coupon_code}</code>}
                 <button type="button">{campaign.cta_label || 'Ver más'}</button>

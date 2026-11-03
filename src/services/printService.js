@@ -495,6 +495,12 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
       <div class="obs-text">${order.notes}</div>
     </div>
     ` : ''}
+    ${order.external_delivery_notes ? `
+    <div class="info-stacked" style="margin-top: 2px;">
+      <div class="info-label">Obs. Logística :</div>
+      <div class="obs-text" style="font-weight: 700;">${order.external_delivery_notes}</div>
+    </div>
+    ` : ''}
 
     <div class="dashed-divider"></div>
 

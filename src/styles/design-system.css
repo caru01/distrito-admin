@@ -534,14 +534,15 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 
 /* MODALS */
 .ds-modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.45); backdrop-filter: blur(4px); z-index: 2000; display: flex; align-items: center; justify-content: center; padding: var(--ds-space-md); overflow-y: auto; }
-.ds-modal { background-color: var(--ds-bg-surface); border: 1px solid var(--ds-border); border-radius: var(--ds-radius-xl); width: 100%; max-width: 560px; max-height: 90vh; display: flex; flex-direction: column; box-shadow: var(--ds-shadow-lg); animation: ds-modal-in 0.2s ease; }
+.ds-modal { background-color: var(--ds-bg-surface); border: 1px solid var(--ds-border); border-radius: var(--ds-radius-xl); width: 100%; max-width: 560px; max-height: 90vh; display: flex; flex-direction: column; box-shadow: var(--ds-shadow-lg); animation: ds-modal-in 0.2s ease; overflow: hidden; }
+.ds-modal > form { display: flex; flex-direction: column; flex: 1; min-height: 0; max-height: 100%; overflow: hidden; }
 .ds-modal-lg { max-width: 800px; }
 .ds-modal-xl { max-width: 1100px; }
 .ds-modal-header { padding: var(--ds-space-lg); border-bottom: 1px solid var(--ds-border); display: flex; align-items: center; justify-content: space-between; gap: var(--ds-space-md); flex-shrink: 0; }
 .ds-modal-title { font-family: var(--ds-font-display); font-size: 1.25rem; font-weight: 800; color: var(--ds-text-primary); letter-spacing: -0.01em; }
 .ds-modal-close { background: none; border: none; color: var(--ds-text-muted); display: flex; align-items: center; justify-content: center; padding: 0.4rem; border-radius: var(--ds-radius-md); min-width: 36px; min-height: 36px; transition: var(--ds-transition); flex-shrink: 0; }
 .ds-modal-close:hover { background-color: var(--ds-bg-elevated); color: var(--ds-text-primary); }
-.ds-modal-body { padding: var(--ds-space-lg); overflow-y: auto; flex: 1; -webkit-overflow-scrolling: touch; }
+.ds-modal-body { padding: var(--ds-space-lg); overflow-y: auto; flex: 1; min-height: 0; -webkit-overflow-scrolling: touch; }
 .ds-modal-footer { padding: var(--ds-space-md) var(--ds-space-lg); border-top: 1px solid var(--ds-border); display: flex; align-items: center; justify-content: flex-end; gap: var(--ds-space-sm); flex-wrap: wrap; flex-shrink: 0; }
 @keyframes ds-modal-in { from { opacity: 0; transform: scale(0.95) translateY(-10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
 @media (max-width: 480px) {
@@ -1558,6 +1559,10 @@ canvas,
 .delivery-cost-preview strong { color:var(--ds-text-primary); font-size:16px; }
 .delivery-cost-preview strong.negative { color:#EF4444; }
 @media (max-width: 640px) { .delivery-assignment-types,.delivery-cost-preview { grid-template-columns:1fr; } }
+.delivery-assignment-modal { max-height: min(92vh, 850px) !important; display: flex !important; flex-direction: column !important; overflow: hidden !important; }
+.delivery-assignment-modal form { display: flex !important; flex-direction: column !important; flex: 1 !important; min-height: 0 !important; max-height: 100% !important; overflow: hidden !important; }
+.delivery-assignment-modal .ds-modal-body { flex: 1 !important; min-height: 0 !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch; }
+.delivery-assignment-modal .ds-modal-footer { flex-shrink: 0 !important; position: sticky !important; bottom: 0 !important; background: var(--ds-bg-surface) !important; z-index: 10 !important; border-top: 1px solid var(--ds-border) !important; }
 .order-logistics-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
 .order-logistics-grid > div { display:grid; gap:5px; padding:10px; border:1px solid var(--ds-border); border-radius:9px; min-width:0; }
 .order-logistics-grid span { color:var(--ds-text-secondary); font-size:11px; }

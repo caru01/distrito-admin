@@ -66,7 +66,7 @@ export default function DeliveryAssignmentModal({ order, onClose, onSuccess }) {
         isOwn ? `${API_URL}/admin/delivery/orders/${order.id}/assign` : `${API_URL}/admin/delivery/orders/${order.id}/assign-external`,
         {
           method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-          body: JSON.stringify(isOwn ? { userId: Number(driverId) } : { ...form, companyId: Number(form.companyId), externalDriverId: form.externalDriverId || null }),
+          body: JSON.stringify(isOwn ? { userId: Number(driverId), notes: form.notes } : { ...form, companyId: Number(form.companyId), externalDriverId: form.externalDriverId || null }),
         },
       );
       const data = await readApiJson(response);
@@ -82,7 +82,26 @@ export default function DeliveryAssignmentModal({ order, onClose, onSuccess }) {
     finally { setSaving(false); }
   };
 
-  return <div className="ds-modal-overlay" onMouseDown={(event) => event.target === event.currentTarget && !saving && onClose()}><div className="ds-modal ds-modal-lg delivery-assignment-modal" role="dialog" aria-modal="true"><form onSubmit={submit}><div className="ds-modal-header"><div><span className="ds-page-kicker">Pedido #{String(order?.id || '').padStart(4, '0')}</span><h2 className="ds-modal-title">Asignar entrega</h2></div><button type="button" className="ds-modal-close" onClick={onClose}><X/></button></div><div className="ds-modal-body ds-form">
+  return (
+    <div className="ds-modal-overlay" onMouseDown={(event) => event.target === event.currentTarget && !saving && onClose()}>
+      <div 
+        className="ds-modal ds-modal-lg delivery-assignment-modal" 
+        role="dialog" 
+        aria-modal="true"
+        style={{ maxHeight: '90dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+      >
+        <form 
+          onSubmit={submit}
+          style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, maxHeight: '100%', overflow: 'hidden' }}
+        >
+          <div className="ds-modal-header" style={{ flexShrink: 0 }}>
+            <div>
+              <span className="ds-page-kicker">Pedido #{String(order?.id || '').padStart(4, '0')}</span>
+              <h2 className="ds-modal-title">Asignar entrega</h2>
+            </div>
+            <button type="button" className="ds-modal-close" onClick={onClose}><X/></button>
+          </div>
+          <div className="ds-modal-body ds-form" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
     {loading ? <div className="ds-loader-container"><div className="ds-loader"/><p>Consultando capacidad logística…</p></div> : <>
       <div className="delivery-assignment-summary">
         <span><CheckCircle size={16}/>{eligibleDrivers.length} domiciliario(s) propio(s) activo(s)</span>
@@ -98,18 +117,26 @@ export default function DeliveryAssignmentModal({ order, onClose, onSuccess }) {
           <small>Seguimiento por estados logísticos y aliado externo.</small>
         </button>
       </div>
-      {mode === 'own' ? <label className="ds-form-group">
-        <span className="ds-form-label">Domiciliario de Distric House</span>
-        <select className="ds-select" required value={driverId} onChange={(e) => setDriverId(e.target.value)}>
-          <option value="">Seleccionar domiciliario…</option>
-          {eligibleDrivers.map((driver) => (
-            <option key={driver.id} value={driver.id}>
-              {driver.name || driver.username} {driver.phone ? `· Cel: ${driver.phone}` : ''} {driver.plate ? `· Moto: ${driver.plate}` : ''}
-            </option>
-          ))}
-        </select>
-        {!eligibleDrivers.length && <small className="delivery-assignment-warning">No hay domiciliarios registrados o activos con rol Domiciliario. Puedes registrarlos en el menú de Usuarios o usar una empresa externa.</small>}
-      </label> : <div className="ds-form"><div className="ds-form-grid"><label className="ds-form-group"><span className="ds-form-label">Empresa</span><select className="ds-select" required value={form.companyId} onChange={(e) => selectCompany(e.target.value)}><option value="">Seleccionar…</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.name} · ${Number(company.default_fee || 0).toLocaleString('es-CO')}</option>)}</select></label><label className="ds-form-group"><span className="ds-form-label">Costo externo</span><input className="ds-input" required type="number" min="0" step="100" value={form.externalCost} onChange={(e) => setForm({ ...form, externalCost: Number(e.target.value) })}/></label>
+      {mode === 'own' ? (
+        <div className="ds-form" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <label className="ds-form-group">
+            <span className="ds-form-label">Domiciliario de Distric House</span>
+            <select className="ds-select" required value={driverId} onChange={(e) => setDriverId(e.target.value)}>
+              <option value="">Seleccionar domiciliario…</option>
+              {eligibleDrivers.map((driver) => (
+                <option key={driver.id} value={driver.id}>
+                  {driver.name || driver.username} {driver.phone ? `· Cel: ${driver.phone}` : ''} {driver.plate ? `· Moto: ${driver.plate}` : ''}
+                </option>
+              ))}
+            </select>
+            {!eligibleDrivers.length && <small className="delivery-assignment-warning">No hay domiciliarios registrados o activos con rol Domiciliario. Puedes registrarlos en el menú de Usuarios o usar una empresa externa.</small>}
+          </label>
+          <label className="ds-form-group">
+            <span className="ds-form-label">Observaciones logísticas</span>
+            <textarea className="ds-textarea" placeholder="Ej: Llevar cambio de $50.000, llamar al llegar..." value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}/>
+          </label>
+        </div>
+      ) : <div className="ds-form"><div className="ds-form-grid"><label className="ds-form-group"><span className="ds-form-label">Empresa</span><select className="ds-select" required value={form.companyId} onChange={(e) => selectCompany(e.target.value)}><option value="">Seleccionar…</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.name} · ${Number(company.default_fee || 0).toLocaleString('es-CO')}</option>)}</select></label><label className="ds-form-group"><span className="ds-form-label">Costo externo</span><input className="ds-input" required type="number" min="0" step="100" value={form.externalCost} onChange={(e) => setForm({ ...form, externalCost: Number(e.target.value) })}/></label>
       {selectedCompany && (selectedCompany.active_drivers || []).length > 0 && (
         <label className="ds-form-group" style={{ gridColumn: '1 / -1' }}>
           <span className="ds-form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -152,5 +179,15 @@ export default function DeliveryAssignmentModal({ order, onClose, onSuccess }) {
       <label className="ds-form-group"><span className="ds-form-label">Nombre del Mensajero</span><input className="ds-input" value={form.driverName} onChange={(e) => setForm({ ...form, driverName: e.target.value })} placeholder="Nombre del mensajero"/></label><label className="ds-form-group"><span className="ds-form-label">Teléfono (WhatsApp)</span><input className="ds-input" inputMode="tel" placeholder="Ej: 3001234567" value={form.driverPhone} onChange={(e) => setForm({ ...form, driverPhone: e.target.value })}/></label><label className="ds-form-group"><span className="ds-form-label">Placa / identificación</span><input className="ds-input" value={form.vehicleId} onChange={(e) => setForm({ ...form, vehicleId: e.target.value })}/></label><label className="ds-form-group"><span className="ds-form-label">ETA (minutos)</span><input className="ds-input" type="number" min="1" max="1440" value={form.etaMinutes} onChange={(e) => setForm({ ...form, etaMinutes: e.target.value ? Number(e.target.value) : '' })}/></label></div><label className="ds-form-group"><span className="ds-form-label">Observaciones logísticas</span><textarea className="ds-textarea" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}/></label><div className="delivery-cost-preview"><span>Domicilio cobrado al cliente <strong>${Number(order.delivery_fee || 0).toLocaleString('es-CO')}</strong></span><span>Costo empresa <strong>${Number(form.externalCost || 0).toLocaleString('es-CO')}</strong></span><span>Margen logístico <strong className={Number(order.delivery_fee || 0) - Number(form.externalCost || 0) < 0 ? 'negative' : ''}>${(Number(order.delivery_fee || 0) - Number(form.externalCost || 0)).toLocaleString('es-CO')}</strong></span></div></div>}
     </>}
     {error && <div className="ds-inline-alert ds-inline-alert-danger">{error}</div>}
-  </div><div className="ds-modal-footer"><button type="button" className="ds-btn ds-btn-secondary" onClick={onClose}>Cancelar</button><button className="ds-btn ds-btn-primary" disabled={loading || saving || (mode === 'own' ? !eligibleDrivers.length : !companies.length)}>{saving ? <><Loader2 size={17}/> Asignando…</> : 'Confirmar asignación'}</button></div></form></div></div>;
+          </div>
+          <div className="ds-modal-footer" style={{ flexShrink: 0 }}>
+            <button type="button" className="ds-btn ds-btn-secondary" onClick={onClose}>Cancelar</button>
+            <button className="ds-btn ds-btn-primary" disabled={loading || saving || (mode === 'own' ? !eligibleDrivers.length : !companies.length)}>
+              {saving ? <><Loader2 size={17}/> Asignando…</> : 'Confirmar asignación'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 }

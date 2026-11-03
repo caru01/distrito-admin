@@ -8,9 +8,9 @@ import DeliveryAssignmentModal from '../components/DeliveryAssignmentModal';
 import { readApiJson } from '../utils/http';
 import {
   ShoppingCart, Plus, Search, Filter, Globe, MessageCircle, Store, Phone,
-  Clock, Eye, Pencil, Printer, MoreVertical, CheckCircle, ChefHat, Trash2, MapPin,
-  Banknote, CreditCard, Smartphone, X, ChevronLeft, ChevronRight, Zap, Minus, Wallet, User, AlertCircle, Package, Building2, Truck,
-  Volume2, VolumeX, RefreshCw, Loader2
+  Clock, Eye, EyeOff, Pencil, Printer, MoreVertical, CheckCircle, ChefHat, Trash2, MapPin,
+  Banknote, CreditCard, Smartphone, X, ChevronLeft, ChevronRight, Zap, Minus, Wallet, User, AlertCircle, Package, Building2, Truck, Bike,
+  Volume2, VolumeX, RefreshCw, Loader2, FileText
 } from 'lucide-react';
 
 const formatter = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
@@ -126,6 +126,9 @@ export default function AdminPedidos() {
   });
   const [autoPrintEnabled, setAutoPrintEnabled] = useState(() => {
     return localStorage.getItem('distrito_admin_auto_print') === 'true';
+  });
+  const [showStats, setShowStats] = useState(() => {
+    return localStorage.getItem('distrito_admin_show_stats') !== 'false';
   });
   const autoPrintedOrderIdsRef = useRef(new Set(
     (() => {
@@ -891,28 +894,60 @@ export default function AdminPedidos() {
         </div>
       </div>
 
-      <div className="ds-cards-grid" style={{ marginBottom: '40px' }}>
-        {[
-          { label: filterDate ? 'Pedidos' : 'Total Histórico', value: ordersInDate.length, icon: <ShoppingCart size={24} /> },
-          { label: 'Recién recibidos', value: statNuevos, icon: <Clock size={24} /> },
-          { label: 'En preparación', value: statPreparacion, icon: <ChefHat size={24} /> },
-          { label: 'Pedidos entregados', value: statEntregados, icon: <CheckCircle size={24} /> },
-          { label: 'Ventas del día', value: `$${totalVentas.toLocaleString()}`, icon: <Banknote size={24} /> },
-          { label: 'Domicilios del día', value: `$${totalDomicilios.toLocaleString()}`, icon: <Truck size={24} color="#F59E0B" /> },
-          { label: 'Efectivo', value: `$${totalEfectivo.toLocaleString()}`, icon: <Banknote size={24} color="#10B981" /> },
-          { label: 'Transferencia', value: `$${totalTransferencia.toLocaleString()}`, icon: <Banknote size={24} color="#8B5CF6" /> },
-        ].map((stat, i) => (
-          <div key={i} className="ds-card">
-            <div className="ds-card-body" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{ color: 'var(--ds-primary)' }}>{stat.icon}</div>
-              <div>
-                <div style={{ fontSize: '30px', fontWeight: '700', color: 'var(--ds-text-primary)', lineHeight: '1' }}>{stat.value}</div>
-                <div style={{ color: 'var(--ds-text-secondary)', fontSize: '13px', fontWeight: '500', marginTop: '6px' }}>{stat.label}</div>
+      {/* Control con ojito para ocultar/mostrar los cuadros de valores */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: showStats ? '12px' : '24px' }}>
+        <button
+          type="button"
+          onClick={() => {
+            const next = !showStats;
+            setShowStats(next);
+            localStorage.setItem('distrito_admin_show_stats', String(next));
+          }}
+          className="ds-btn ds-btn-ghost"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '5px 12px',
+            borderRadius: '8px',
+            fontSize: '12px',
+            fontWeight: '600',
+            color: 'var(--ds-text-secondary)',
+            background: 'rgba(255, 255, 255, 0.04)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            cursor: 'pointer'
+          }}
+          title={showStats ? 'Ocultar cuadros de valores' : 'Mostrar cuadros de valores'}
+        >
+          {showStats ? <EyeOff size={15} /> : <Eye size={15} />}
+          <span>{showStats ? 'Ocultar cuadros' : 'Mostrar cuadros'}</span>
+        </button>
+      </div>
+
+      {showStats && (
+        <div className="ds-cards-grid" style={{ marginBottom: '40px' }}>
+          {[
+            { label: filterDate ? 'Pedidos' : 'Total Histórico', value: ordersInDate.length, icon: <ShoppingCart size={24} /> },
+            { label: 'Recién recibidos', value: statNuevos, icon: <Clock size={24} /> },
+            { label: 'En preparación', value: statPreparacion, icon: <ChefHat size={24} /> },
+            { label: 'Pedidos entregados', value: statEntregados, icon: <CheckCircle size={24} /> },
+            { label: 'Ventas del día', value: `$${totalVentas.toLocaleString()}`, icon: <Banknote size={24} /> },
+            { label: 'Domicilios del día', value: `$${totalDomicilios.toLocaleString()}`, icon: <Truck size={24} color="#F59E0B" /> },
+            { label: 'Efectivo', value: `$${totalEfectivo.toLocaleString()}`, icon: <Banknote size={24} color="#10B981" /> },
+            { label: 'Transferencia', value: `$${totalTransferencia.toLocaleString()}`, icon: <Banknote size={24} color="#8B5CF6" /> },
+          ].map((stat, i) => (
+            <div key={i} className="ds-card">
+              <div className="ds-card-body" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <div style={{ color: 'var(--ds-primary)' }}>{stat.icon}</div>
+                <div>
+                  <div style={{ fontSize: '30px', fontWeight: '700', color: 'var(--ds-text-primary)', lineHeight: '1' }}>{stat.value}</div>
+                  <div style={{ color: 'var(--ds-text-secondary)', fontSize: '13px', fontWeight: '500', marginTop: '6px' }}>{stat.label}</div>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       <div className="admin-orders-filters" style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', marginBottom: '24px', alignItems: 'center' }}>
         <div className="ds-search" style={{ flex: 1, minWidth: '300px' }}>
@@ -1152,8 +1187,83 @@ export default function AdminPedidos() {
                     <td>{getSourceIcon(order.source || 'Web')}</td>
                     <td><div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '7px' }}>{getStatusBadge(order.status || 'Nuevo', order)}{order.status === 'Entregado' && getDeliveryDurationText(order) && <small style={{ color: '#10B981', fontWeight: 700 }}>{getDeliveryDurationText(order)}</small>}</div></td>
                     <td style={{ color: 'var(--ds-text-primary)', fontWeight: '700', fontSize: '15px' }}>${((order.total || 0) - (order.delivery_fee || 0)).toLocaleString()}</td>
-                    <td style={{ color: order.delivery_fee ? '#F59E0B' : 'var(--ds-text-muted)', fontWeight: order.delivery_fee ? '700' : '400', fontSize: '15px' }}>
-                      {order.delivery_fee ? `$${(order.delivery_fee || 0).toLocaleString()}` : '—'}
+                    <td style={{ verticalAlign: 'top' }}>
+                      <div style={{ color: order.delivery_fee ? '#F59E0B' : 'var(--ds-text-muted)', fontWeight: order.delivery_fee ? '700' : '400', fontSize: '15px' }}>
+                        {order.delivery_fee ? `$${(order.delivery_fee || 0).toLocaleString()}` : '—'}
+                      </div>
+                      {/* Empresa y domiciliario que se llevó el pedido */}
+                      {String(order.delivery_type || '').toLowerCase() === 'domicilio' && (order.external_company_name || order.external_driver_name || order.delivery_driver_name) && (
+                        <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                          {order.external_company_name ? (
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontSize: '11px',
+                              fontWeight: '700',
+                              color: '#3B82F6',
+                              backgroundColor: 'rgba(59, 130, 246, 0.12)',
+                              padding: '2px 7px',
+                              borderRadius: '6px',
+                              width: 'fit-content'
+                            }}>
+                              <Building2 size={12} />
+                              {order.external_company_name}
+                            </span>
+                          ) : order.delivery_driver_name ? (
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontSize: '11px',
+                              fontWeight: '700',
+                              color: '#10B981',
+                              backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                              padding: '2px 7px',
+                              borderRadius: '6px',
+                              width: 'fit-content'
+                            }}>
+                              <Bike size={12} />
+                              Distric House
+                            </span>
+                          ) : null}
+
+                          {(order.external_driver_name || order.delivery_driver_name) && (
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontSize: '12px',
+                              fontWeight: '600',
+                              color: 'var(--ds-text-primary)'
+                            }} title="Domiciliario / Mensajero">
+                              <Truck size={12} color="var(--ds-primary)" />
+                              {order.external_driver_name || order.delivery_driver_name}
+                            </span>
+                          )}
+
+                          {order.external_delivery_notes && (
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontSize: '11px',
+                              fontWeight: '600',
+                              color: '#B45309',
+                              backgroundColor: 'rgba(245, 158, 11, 0.12)',
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              maxWidth: '190px',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap'
+                            }} title={`Obs. logística: ${order.external_delivery_notes}`}>
+                              <FileText size={11} style={{ flexShrink: 0 }} />
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{order.external_delivery_notes}</span>
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td>
                       {getPaymentIcon(order.payment_method)}
@@ -1240,6 +1350,51 @@ export default function AdminPedidos() {
                   <span className="ds-table-card-label">Tipo Entrega</span>
                   <span className="ds-table-card-value">{getDeliveryTypeBadge(order.delivery_type)}</span>
                 </div>
+                {String(order.delivery_type || '').toLowerCase() === 'domicilio' && (order.external_company_name || order.external_driver_name || order.delivery_driver_name) && (
+                  <div className="ds-table-card-row">
+                    <span className="ds-table-card-label">Empresa / Domiciliario</span>
+                    <span className="ds-table-card-value" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px' }}>
+                      {order.external_company_name ? (
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontSize: '11px',
+                          fontWeight: '700',
+                          color: '#3B82F6',
+                          backgroundColor: 'rgba(59, 130, 246, 0.12)',
+                          padding: '2px 7px',
+                          borderRadius: '6px'
+                        }}>
+                          <Building2 size={12} />
+                          {order.external_company_name}
+                        </span>
+                      ) : order.delivery_driver_name ? (
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontSize: '11px',
+                          fontWeight: '700',
+                          color: '#10B981',
+                          backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                          padding: '2px 7px',
+                          borderRadius: '6px'
+                        }}>
+                          <Bike size={12} />
+                          Distric House (Propio)
+                        </span>
+                      ) : null}
+
+                      {(order.external_driver_name || order.delivery_driver_name) && (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '13px', fontWeight: '600' }}>
+                          <Truck size={13} color="var(--ds-primary)" />
+                          {order.external_driver_name || order.delivery_driver_name}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                )}
                 {String(order.delivery_type || '').toLowerCase() === 'domicilio' && (order.address || order.barrio) && (
                   <div className="ds-table-card-row">
                     <span className="ds-table-card-label">Dirección</span>
@@ -1257,6 +1412,15 @@ export default function AdminPedidos() {
                           ].filter(Boolean).join(' · ')}
                         </span>
                       )}
+                    </span>
+                  </div>
+                )}
+                {order.external_delivery_notes && (
+                  <div className="ds-table-card-row">
+                    <span className="ds-table-card-label">Obs. logística</span>
+                    <span className="ds-table-card-value" style={{ color: '#D97706', fontSize: '12px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <FileText size={12} style={{ flexShrink: 0 }} />
+                      <span>{order.external_delivery_notes}</span>
                     </span>
                   </div>
                 )}
@@ -1403,7 +1567,52 @@ export default function AdminPedidos() {
               </div>
               {String(selectedOrder.delivery_type || '').toLowerCase() === 'domicilio' && (selectedOrder.delivery_provider_type || selectedOrder.delivery_user_id) && <div className="ds-card" style={{ padding: '20px', marginBottom: '24px' }}>
                 <h3 style={{ color: 'var(--ds-text-secondary)', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 12px 0' }}>Logística de entrega</h3>
-                {String(selectedOrder.delivery_provider_type || '').startsWith('external_') ? <div><div className="order-logistics-grid"><div><span>Tipo de entrega</span><strong><Building2 size={15}/> Empresa externa</strong></div><div><span>Empresa</span><strong>{selectedOrder.external_company_name || 'Operador aliado'}</strong></div><div><span>Domiciliario</span><strong>{selectedOrder.external_driver_name || 'Pendiente de informar'}</strong></div><div><span>Teléfono</span><strong>{selectedOrder.external_driver_phone || 'No informado'}</strong></div><div><span>Placa / identificación</span><strong>{selectedOrder.external_vehicle_id || 'No informada'}</strong></div><div><span>ETA</span><strong>{selectedOrder.external_eta_minutes ? `${selectedOrder.external_eta_minutes} min` : 'No informado'}</strong></div><div><span>Domicilio cliente</span><strong>{formatter.format(selectedOrder.delivery_fee || 0)}</strong></div><div><span>Costo externo</span><strong>{formatter.format(selectedOrder.external_delivery_cost || 0)}</strong></div><div><span>Margen logístico</span><strong style={{ color: Number(selectedOrder.logistics_margin ?? ((selectedOrder.delivery_fee || 0) - (selectedOrder.external_delivery_cost || 0))) < 0 ? '#EF4444' : '#22C55E' }}>{formatter.format(selectedOrder.logistics_margin ?? ((selectedOrder.delivery_fee || 0) - (selectedOrder.external_delivery_cost || 0)))}</strong></div></div>{selectedOrder.external_driver_phone && <button type="button" disabled={sendingDriverId === selectedOrder.id} onClick={() => handleSendWhatsAppToDriver(selectedOrder)} className="ds-btn ds-btn-sm" style={{ backgroundColor: '#22C55E', color: '#fff', fontSize: '12px', padding: '5px 12px', marginTop: '10px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>{sendingDriverId === selectedOrder.id ? <><Loader2 size={13} className="animate-spin"/> Enviando…</> : <><MessageCircle size={14}/> Enviar datos al domiciliario por WhatsApp</>}</button>}</div> : <div className="order-logistics-own"><Truck size={20} color="var(--ds-primary)"/><div><strong>Domiciliario Distric House: {selectedOrder.delivery_driver_name || selectedOrder.driver_name || 'Asignado'}</strong>{selectedOrder.delivery_driver_phone && <div style={{ fontSize: '13px', color: 'var(--ds-text-secondary)', marginTop: '2px' }}>Teléfono: {selectedOrder.delivery_driver_phone}</div>}<small style={{ display: 'block', color: 'var(--ds-text-muted)', marginTop: '3px' }}>Entrega directa de Distric House (sin rastreo GPS).</small>{selectedOrder.delivery_driver_phone && <button type="button" disabled={sendingDriverId === selectedOrder.id} onClick={() => handleSendWhatsAppToDriver(selectedOrder)} className="ds-btn ds-btn-sm" style={{ backgroundColor: '#22C55E', color: '#fff', fontSize: '12px', padding: '5px 12px', marginTop: '8px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>{sendingDriverId === selectedOrder.id ? <><Loader2 size={13} className="animate-spin"/> Enviando…</> : <><MessageCircle size={14}/> Enviar datos al domiciliario por WhatsApp</>}</button>}</div></div>}
+                {String(selectedOrder.delivery_provider_type || '').startsWith('external_') ? (
+                  <div>
+                    <div className="order-logistics-grid">
+                      <div><span>Tipo de entrega</span><strong><Building2 size={15}/> Empresa externa</strong></div>
+                      <div><span>Empresa</span><strong>{selectedOrder.external_company_name || 'Operador aliado'}</strong></div>
+                      <div><span>Domiciliario</span><strong>{selectedOrder.external_driver_name || 'Pendiente de informar'}</strong></div>
+                      <div><span>Teléfono</span><strong>{selectedOrder.external_driver_phone || 'No informado'}</strong></div>
+                      <div><span>Placa / identificación</span><strong>{selectedOrder.external_vehicle_id || 'No informada'}</strong></div>
+                      <div><span>ETA</span><strong>{selectedOrder.external_eta_minutes ? `${selectedOrder.external_eta_minutes} min` : 'No informado'}</strong></div>
+                      <div><span>Domicilio cliente</span><strong>{formatter.format(selectedOrder.delivery_fee || 0)}</strong></div>
+                      <div><span>Costo externo</span><strong>{formatter.format(selectedOrder.external_delivery_cost || 0)}</strong></div>
+                      <div><span>Margen logístico</span><strong style={{ color: Number(selectedOrder.logistics_margin ?? ((selectedOrder.delivery_fee || 0) - (selectedOrder.external_delivery_cost || 0))) < 0 ? '#EF4444' : '#22C55E' }}>{formatter.format(selectedOrder.logistics_margin ?? ((selectedOrder.delivery_fee || 0) - (selectedOrder.external_delivery_cost || 0)))}</strong></div>
+                    </div>
+                    {selectedOrder.external_delivery_notes && (
+                      <div style={{ marginTop: '12px', padding: '10px 14px', backgroundColor: 'rgba(245, 158, 11, 0.08)', border: '1px dashed rgba(217, 119, 6, 0.35)', borderRadius: '8px' }}>
+                        <div style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', color: '#D97706', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px' }}>
+                          <FileText size={13} /> Observación logística
+                        </div>
+                        <div style={{ fontSize: '13px', color: 'var(--ds-text-primary)', whiteSpace: 'pre-wrap', lineHeight: '1.4' }}>
+                          {selectedOrder.external_delivery_notes}
+                        </div>
+                      </div>
+                    )}
+                    {selectedOrder.external_driver_phone && <button type="button" disabled={sendingDriverId === selectedOrder.id} onClick={() => handleSendWhatsAppToDriver(selectedOrder)} className="ds-btn ds-btn-sm" style={{ backgroundColor: '#22C55E', color: '#fff', fontSize: '12px', padding: '5px 12px', marginTop: '10px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>{sendingDriverId === selectedOrder.id ? <><Loader2 size={13} className="animate-spin"/> Enviando…</> : <><MessageCircle size={14}/> Enviar datos al domiciliario por WhatsApp</>}</button>}
+                  </div>
+                ) : (
+                  <div className="order-logistics-own">
+                    <Truck size={20} color="var(--ds-primary)"/>
+                    <div style={{ flex: 1 }}>
+                      <strong>Domiciliario Distric House: {selectedOrder.delivery_driver_name || selectedOrder.driver_name || 'Asignado'}</strong>
+                      {selectedOrder.delivery_driver_phone && <div style={{ fontSize: '13px', color: 'var(--ds-text-secondary)', marginTop: '2px' }}>Teléfono: {selectedOrder.delivery_driver_phone}</div>}
+                      <small style={{ display: 'block', color: 'var(--ds-text-muted)', marginTop: '3px' }}>Entrega directa de Distric House (sin rastreo GPS).</small>
+                      {selectedOrder.external_delivery_notes && (
+                        <div style={{ marginTop: '8px', padding: '8px 12px', backgroundColor: 'rgba(245, 158, 11, 0.08)', border: '1px dashed rgba(217, 119, 6, 0.35)', borderRadius: '8px' }}>
+                          <div style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: '700', color: '#D97706', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '3px' }}>
+                            <FileText size={12} /> Observación logística
+                          </div>
+                          <div style={{ fontSize: '13px', color: 'var(--ds-text-primary)', whiteSpace: 'pre-wrap' }}>
+                            {selectedOrder.external_delivery_notes}
+                          </div>
+                        </div>
+                      )}
+                      {selectedOrder.delivery_driver_phone && <button type="button" disabled={sendingDriverId === selectedOrder.id} onClick={() => handleSendWhatsAppToDriver(selectedOrder)} className="ds-btn ds-btn-sm" style={{ backgroundColor: '#22C55E', color: '#fff', fontSize: '12px', padding: '5px 12px', marginTop: '8px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>{sendingDriverId === selectedOrder.id ? <><Loader2 size={13} className="animate-spin"/> Enviando…</> : <><MessageCircle size={14}/> Enviar datos al domiciliario por WhatsApp</>}</button>}
+                    </div>
+                  </div>
+                )}
               </div>}
               <div className="ds-card" style={{ padding: '20px', marginBottom: '24px' }}>
                 <h3 style={{ color: 'var(--ds-text-secondary)', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', margin: '0 0 12px 0' }}>Productos</h3>
