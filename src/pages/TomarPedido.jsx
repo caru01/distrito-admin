@@ -6,7 +6,7 @@ import {
   Zap, Search, ShoppingCart, Trash2, Plus, Minus, ChefHat, Printer,
   MessageCircle, Phone, Globe, Store, Banknote, Wallet, CreditCard,
   MapPin, User, X, CheckCircle, AlertCircle, Clock, TrendingUp,
-  Package, LayoutGrid, PieChart, MessageSquare
+  Package, LayoutGrid, PieChart, MessageSquare, RotateCcw
 } from 'lucide-react';
 
 const formatter = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
@@ -33,7 +33,7 @@ const EMPTY_CUSTOMER = {
   placeId: '', locationAdjusted: false, locationConfirmed: false,
   deliveryType: 'domicilio', source: 'WhatsApp', paymentMethod: 'efectivo',
   cash_split: '', transfer_split: '',
-  voucher_reference: '', created_at: toColombiaDateTimeLocal(),
+  voucher_reference: '', created_at: '', is_custom_date: false,
   crm_contact_id: null, bsuid: null, username: null
 };
 
@@ -136,6 +136,38 @@ export default function TomarPedido() {
   const [customer, setCustomer] = useState(EMPTY_CUSTOMER);
   const [deliveryCost, setDeliveryCost] = useState(0);
 
+  // 🕒 Reloj en vivo para fecha y hora del pedido (actualiza en tiempo real y al volver a la pestaña)
+  useEffect(() => {
+    if (editId || customer.is_custom_date) return;
+
+    const updateTime = () => {
+      setCustomer(c => {
+        if (c.is_custom_date) return c;
+        const nowVal = toColombiaDateTimeLocal();
+        if (c.created_at === nowVal) return c;
+        return { ...c, created_at: nowVal };
+      });
+    };
+
+    updateTime();
+    const timer = setInterval(updateTime, 5000);
+
+    const handleSync = () => {
+      if (document.visibilityState === 'visible') {
+        updateTime();
+      }
+    };
+
+    window.addEventListener('focus', handleSync);
+    document.addEventListener('visibilitychange', handleSync);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', handleSync);
+      document.removeEventListener('visibilitychange', handleSync);
+    };
+  }, [editId, customer.is_custom_date]);
+
   // 🚀 CARGAR PEDIDO EN EDICIÓN EN 0ms
   useEffect(() => {
     if (!editId) return;
@@ -190,7 +222,8 @@ export default function TomarPedido() {
             return '';
           })(),
           voucher_reference: editOrder.voucher_reference || '',
-          created_at: toColombiaDateTimeLocal(editOrder.created_at)
+          created_at: toColombiaDateTimeLocal(editOrder.created_at),
+          is_custom_date: true
         });
         setCart((editOrder.cart_json || []).map(i => ({
           ...i,
@@ -597,7 +630,7 @@ export default function TomarPedido() {
           placeId: customer.placeId,
           locationAdjusted: customer.locationAdjusted,
           locationConfirmed: customer.locationConfirmed,
-          created_at: customer.created_at ? customer.created_at : undefined
+          created_at: customer.is_custom_date && customer.created_at ? customer.created_at : toColombiaDateTimeLocal()
         }
       };
 
@@ -628,7 +661,7 @@ export default function TomarPedido() {
           total: authoritativeTotal,
           delivery_fee: authoritativeDelivery,
           cart_json: cart,
-          created_at: data.order?.created_at || customer.created_at || new Date().toISOString(),
+          created_at: data.order?.created_at || (customer.is_custom_date && customer.created_at ? customer.created_at : toColombiaDateTimeLocal()),
           delivery_reference: customer.reference || '',
           reference: customer.reference || '',
           delivery_apartment: customer.apartment || '',
@@ -665,7 +698,7 @@ export default function TomarPedido() {
         try { sessionStorage.removeItem('distrito_admin_orders_cache'); } catch (e) {}
         showToast(editId ? '✓ Pedido actualizado' : (sendToKitchen ? '📦 Pedido enviado a cocina' : '✓ Pedido guardado'));
         setCart([]);
-        setCustomer({ ...EMPTY_CUSTOMER, created_at: toColombiaDateTimeLocal() });
+        setCustomer({ ...EMPTY_CUSTOMER, created_at: toColombiaDateTimeLocal(), is_custom_date: false });
         if (editId) {
           navigate('/admin/pedidos');
         } else {
@@ -1210,11 +1243,46 @@ export default function TomarPedido() {
               </div>
 
               <div className="ds-form-group" style={{ marginBottom: '12px' }}>
-                <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--ds-text-secondary)', display: 'block', marginBottom: '4px' }}>📅 Fecha y hora del pedido (Colombia, opcional)</span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--ds-text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    📅 Fecha y hora del pedido
+                    {!customer.is_custom_date ? (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: '#059669', background: '#ECFDF5', padding: '1px 6px', borderRadius: '10px', fontWeight: 600, border: '1px solid #A7F3D0' }}>
+                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10B981', display: 'inline-block' }}></span>
+                        En vivo
+                      </span>
+                    ) : (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: '#D97706', background: '#FEF3C7', padding: '1px 6px', borderRadius: '10px', fontWeight: 600, border: '1px solid #FDE68A' }}>
+                        Manual
+                      </span>
+                    )}
+                  </span>
+                  {customer.is_custom_date && !editId && (
+                    <button
+                      type="button"
+                      onClick={() => setCustomer(c => ({ ...c, created_at: toColombiaDateTimeLocal(), is_custom_date: false }))}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--ds-primary, #EF4444)',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '3px',
+                        padding: '2px 4px'
+                      }}
+                      title="Volver a la hora actual en tiempo real"
+                    >
+                      <RotateCcw size={11} /> Usar hora actual
+                    </button>
+                  )}
+                </div>
                 <input 
                   type="datetime-local"
                   value={customer.created_at || toColombiaDateTimeLocal()} 
-                  onChange={e => setCustomer(c => ({ ...c, created_at: e.target.value }))}
+                  onChange={e => setCustomer(c => ({ ...c, created_at: e.target.value, is_custom_date: true }))}
                   onClick={e => { try { e.target.showPicker?.(); } catch {} }}
                   className="ds-input" 
                   style={{ height: '42px', fontSize: '13px', colorScheme: 'light', cursor: 'pointer', width: '100%' }} 
