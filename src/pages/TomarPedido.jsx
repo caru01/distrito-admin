@@ -1,7 +1,7 @@
 import { API_URL } from '../config/api';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { printTicket } from '../services/printService';
+import { printTicket, dispatchPrint } from '../services/printService';
 import {
   Zap, Search, ShoppingCart, Trash2, Plus, Minus, ChefHat, Printer,
   MessageCircle, Phone, Globe, Store, Banknote, Wallet, CreditCard,
@@ -685,7 +685,7 @@ export default function TomarPedido() {
 
         // 🖨️ Generar e imprimir comanda de cocina automáticamente si está habilitado en este dispositivo
         if (printOnDevice) {
-          printTicket(printOrder, 58);
+          dispatchPrint(printOrder, { paperWidth: 58 });
         }
 
         // Registrar en caché de sesión para evitar que la PC del local duplique la impresión si está en esta misma sesión

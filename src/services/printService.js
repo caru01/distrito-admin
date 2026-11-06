@@ -88,6 +88,11 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
   const formattedTime = orderDate.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
   const formattedDateTime = `${formattedDate} ${formattedTime}`;
 
+  const printDate = new Date();
+  const printFormattedDate = printDate.toLocaleDateString('es-CO', { timeZone: 'America/Bogota' });
+  const printFormattedTime = printDate.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'America/Bogota' });
+  const printDateTimeStr = `${printFormattedDate} ${printFormattedTime}`;
+
   const orderNumber = String(order.id || '1').padStart(4, '0');
   const customerName = order.customer_name || order.customer?.name || order.name || 'Cliente';
   const customerPhone = order.customer_phone || order.customer?.phone || order.phone || 'Sin teléfono';
@@ -613,8 +618,72 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
       <div>© 2026 Distric House. Todos los derechos reservados</div>
       <div style="margin-top: 2px;"><span style="font-weight: 400;">Instagram :</span> <span style="font-weight: 700;">districhouse</span></div>
       <div><span style="font-weight: 400;">TikTok :</span> <span style="font-weight: 700;">districhouse</span></div>
+      <div style="margin-top: 4px; border-top: 1px dotted #000; padding-top: 3px;">
+        <span style="font-weight: 400;">Impresión :</span> <span style="font-weight: 700;">${printDateTimeStr}</span>
+      </div>
     </div>
   </div>
 </body>
 </html>`;
+};
+
+/**
+ * Despachador inteligente de impresión de Distric House:
+ * - Si está en modo 'agent_single' o 'agent_dual', envía el trabajo al Print Agent centralizado.
+ * - Si el agente está desconectado o el servidor indica fallback, imprime por iframe local mostrando aviso de respaldo.
+ * - Si está en modo 'browser', imprime directamente vía iframe local como siempre.
+ * - Respeta 100% el diseño de generateSingleComandaHTML.
+ */
+export const dispatchPrint = async (order, options = {}) => {
+  if (!order) return { success: false };
+  const paperWidth = options.paperWidth || 58;
+  const auto = options.auto === true;
+
+  // Generar HTML idéntico sin modificar una sola coma
+  const htmlContent = generateSingleComandaHTML(order, paperWidth);
+
+  try {
+    const token = sessionStorage.getItem('distrito_admin_token');
+    const apiUrl = options.apiUrl || (typeof window !== 'undefined' && window.location.origin.includes('localhost') ? 'http://localhost:3000/api/pedidos' : '/api/pedidos');
+
+    const idempotencyKey = `order:${order.id}:comanda:${Date.now()}`;
+    const response = await fetch(`${apiUrl}/admin/print-jobs`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        idempotency_key: idempotencyKey,
+        order_id: Number(order.id),
+        html: htmlContent,
+        paper_width: paperWidth,
+        auto,
+      }),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+
+      if (data.skipped) {
+        return { success: true, skipped: true };
+      }
+
+      if (data.print_in_browser) {
+        printTicket(order, paperWidth);
+        if (data.warning) {
+          console.warn('[PrintService] Respaldo en navegador:', data.warning);
+        }
+        return { success: true, fallback: Boolean(data.warning), warning: data.warning };
+      }
+
+      return { success: true, job: data.job };
+    }
+  } catch (err) {
+    console.warn('[PrintService] Error conectando con API de impresión, usando fallback local:', err.message);
+  }
+
+  // Fallback de contingencia: si la red falla, imprimir vía iframe local
+  printTicket(order, paperWidth);
+  return { success: true, fallback: true };
 };

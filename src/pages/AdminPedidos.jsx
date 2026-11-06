@@ -2,7 +2,7 @@ import { API_URL, STOREFRONT_URL } from '../config/api';
 import React, { useState, useEffect, useMemo, useCallback, useContext, useRef } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { printTicket } from '../services/printService';
+import { printTicket, dispatchPrint } from '../services/printService';
 import { buildReadyOrderWhatsAppMessage, createWhatsAppUrl, orderStatusMeta } from '@distrito/shared-ui';
 import DeliveryAssignmentModal from '../components/DeliveryAssignmentModal';
 import { readApiJson } from '../utils/http';
@@ -10,7 +10,7 @@ import {
   ShoppingCart, Plus, Search, Filter, Globe, MessageCircle, Store, Phone,
   Clock, Eye, EyeOff, Pencil, Printer, MoreVertical, CheckCircle, ChefHat, Trash2, MapPin,
   Banknote, CreditCard, Smartphone, X, ChevronLeft, ChevronRight, Zap, Minus, Wallet, User, AlertCircle, Package, Building2, Truck, Bike,
-  Volume2, VolumeX, RefreshCw, Loader2, FileText
+  Volume2, VolumeX, RefreshCw, Loader2, FileText, TrendingUp, Utensils
 } from 'lucide-react';
 
 const formatter = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
@@ -180,7 +180,7 @@ export default function AdminPedidos() {
                   sessionStorage.setItem('distrito_printed_orders', JSON.stringify([...autoPrintedOrderIdsRef.current]));
                 } catch (e) {}
                 setTimeout(() => {
-                  printTicket(newOrder, 58);
+                  dispatchPrint(newOrder, { paperWidth: 58, auto: true });
                 }, idx * 750);
               }
             });
@@ -366,7 +366,7 @@ export default function AdminPedidos() {
         sessionStorage.setItem('distrito_printed_orders', JSON.stringify([...autoPrintedOrderIdsRef.current]));
       } catch (e) {}
     }
-    printTicket(order, 58);
+    dispatchPrint(order, { paperWidth: 58 });
   };
 
   const handlePrepareOrder = async (order) => {
@@ -532,6 +532,8 @@ export default function AdminPedidos() {
         (order.customer_name && order.customer_name.toLowerCase().includes(searchLower)) ||
         (order.customer_phone && order.customer_phone.includes(searchLower)) ||
         (order.source && order.source.toLowerCase().includes(searchLower)) ||
+        (order.delivery_driver_name && order.delivery_driver_name.toLowerCase().includes(searchLower)) ||
+        (order.external_driver_name && order.external_driver_name.toLowerCase().includes(searchLower)) ||
         (order.external_provider_reference && order.external_provider_reference.toLowerCase().includes(searchLower));
 
       // Filtro de fecha o rango de fechas
@@ -741,8 +743,19 @@ export default function AdminPedidos() {
   const statPreparacion = ordersInDate.filter(o => o.status === 'En preparación').length;
   const statEntregados = ordersInDate.filter(o => o.status === 'Entregado').length;
   const completedOrders = ordersInDate.filter(o => o.status === 'Entregado' || o.status === 'Completado');
+  const totalFacturado = completedOrders.reduce((s, o) => s + (o.total || 0), 0);
   const totalDomicilios = completedOrders.reduce((s, o) => s + (o.delivery_fee || 0), 0);
-  const totalVentas = completedOrders.reduce((s, o) => s + ((o.total || 0) - (o.delivery_fee || 0)), 0);
+  const totalSoloProductos = completedOrders.reduce((s, o) => s + ((o.total || 0) - (o.delivery_fee || 0)), 0);
+  const totalVentas = totalSoloProductos;
+  const totalProductosVendidos = completedOrders.reduce((sum, o) => {
+    let items = [];
+    if (Array.isArray(o.cart_json)) items = o.cart_json;
+    else if (typeof o.cart_json === 'string') {
+      try { items = JSON.parse(o.cart_json || '[]'); } catch { items = []; }
+    }
+    const orderItemsCount = items.reduce((iSum, item) => iSum + (Number(item.quantity || item.qty || 1) || 0), 0);
+    return sum + orderItemsCount;
+  }, 0);
   let totalEfectivo = 0;
   let totalTransferencia = 0;
 
@@ -931,10 +944,12 @@ export default function AdminPedidos() {
             { label: 'Recién recibidos', value: statNuevos, icon: <Clock size={24} /> },
             { label: 'En preparación', value: statPreparacion, icon: <ChefHat size={24} /> },
             { label: 'Pedidos entregados', value: statEntregados, icon: <CheckCircle size={24} /> },
-            { label: 'Ventas del día', value: `$${totalVentas.toLocaleString()}`, icon: <Banknote size={24} /> },
-            { label: 'Domicilios del día', value: `$${totalDomicilios.toLocaleString()}`, icon: <Truck size={24} color="#F59E0B" /> },
+            { label: filterDate ? 'Total Facturado' : 'Facturado Período', value: `$${totalFacturado.toLocaleString()}`, icon: <TrendingUp size={24} color="#10B981" />, hint: 'Comida + domicilios' },
+            { label: 'Solo Productos', value: `$${totalSoloProductos.toLocaleString()}`, icon: <Banknote size={24} color="#3B82F6" />, hint: 'Ventas sin domicilio' },
+            { label: 'Productos Vendidos', value: `${totalProductosVendidos} und.`, icon: <Utensils size={24} color="#EC4899" />, hint: 'Unidades de comida' },
+            { label: filterDate ? 'Domicilios del día' : 'Total Domicilios', value: `$${totalDomicilios.toLocaleString()}`, icon: <Truck size={24} color="#F59E0B" /> },
             { label: 'Efectivo', value: `$${totalEfectivo.toLocaleString()}`, icon: <Banknote size={24} color="#10B981" /> },
-            { label: 'Transferencia', value: `$${totalTransferencia.toLocaleString()}`, icon: <Banknote size={24} color="#8B5CF6" /> },
+            { label: 'Transferencia', value: `$${totalTransferencia.toLocaleString()}`, icon: <Wallet size={24} color="#8B5CF6" /> },
           ].map((stat, i) => (
             <div key={i} className="ds-card">
               <div className="ds-card-body" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -942,6 +957,9 @@ export default function AdminPedidos() {
                 <div>
                   <div style={{ fontSize: '30px', fontWeight: '700', color: 'var(--ds-text-primary)', lineHeight: '1' }}>{stat.value}</div>
                   <div style={{ color: 'var(--ds-text-secondary)', fontSize: '13px', fontWeight: '500', marginTop: '6px' }}>{stat.label}</div>
+                  {stat.hint && (
+                    <div style={{ color: 'var(--ds-text-muted)', fontSize: '11px', marginTop: '3px', fontWeight: '500' }}>{stat.hint}</div>
+                  )}
                 </div>
               </div>
             </div>

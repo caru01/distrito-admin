@@ -1,12 +1,13 @@
 import { API_URL } from '../config/api';
 import React, { useState, useEffect } from 'react';
 import RappiConfigTab from '../components/RappiConfigTab';
+import PrintersConfigTab from '../components/PrintersConfigTab';
 import { DeliveryAddressPicker, NOTIFICATION_LANGUAGES, NOTIFICATION_VOICES, speakNotification, unlockNotificationAudio } from '@distrito/shared-ui';
 import { 
   Settings, Building2, CreditCard, Bike,
   Upload, Save, Clock, Phone,
   Mail, MapPin, Globe, Check, Palette, LocateFixed, BellRing, Volume2,
-  CheckCircle2, AlertTriangle, Navigation, ExternalLink, RefreshCw, Zap, BatteryCharging, Compass
+  CheckCircle2, AlertTriangle, Navigation, ExternalLink, RefreshCw, Zap, BatteryCharging, Compass, Printer
 } from 'lucide-react';
 
 
@@ -345,6 +346,7 @@ export default function AdminConfiguracion() {
     { id: 'Apariencia', icon: <Palette size={18} /> },
     { id: 'Pagos', icon: <CreditCard size={18} /> },
     { id: 'Domicilios', icon: <Bike size={18} /> },
+    { id: 'Impresoras', icon: <Printer size={18} /> },
     { id: 'Rappi', icon: <Zap size={18} color="#FF441F" /> }
   ];
 
@@ -1348,6 +1350,11 @@ export default function AdminConfiguracion() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* TAB IMPRESORAS */}
+        {activeTab === 'Impresoras' && (
+          <PrintersConfigTab />
         )}
 
         {/* TAB RAPPI */}

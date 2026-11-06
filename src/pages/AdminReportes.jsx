@@ -2015,7 +2015,13 @@ export default function AdminReportes() {
                             </div>
                           </td>
                           <td>
-                            <span className="ds-badge ds-badge-neutral">{m.company || 'Sin empresa'}</span>
+                            {m.is_internal || (m.company && m.company.includes('Interno')) ? (
+                              <span className="ds-badge ds-badge-success" style={{ fontWeight: 600 }}>
+                                🛵 Interno
+                              </span>
+                            ) : (
+                              <span className="ds-badge ds-badge-neutral">{m.company || 'Sin empresa'}</span>
+                            )}
                           </td>
                           <td>
                             {m.phone ? (
@@ -2221,7 +2227,11 @@ export default function AdminReportes() {
                             </small>
                           </td>
                           <td>
-                            <span className="ds-badge ds-badge-neutral">{d.company_name}</span>
+                            {d.is_internal || (d.company_name && d.company_name.includes('Interno')) ? (
+                              <span className="ds-badge ds-badge-success" style={{ fontSize: '11px', fontWeight: 600 }}>🛵 Interno</span>
+                            ) : (
+                              <span className="ds-badge ds-badge-neutral" style={{ fontSize: '11px' }}>{d.company_name}</span>
+                            )}
                           </td>
                           <td>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
