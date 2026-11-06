@@ -5,6 +5,8 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
+import { API_URL } from '../config/api';
+
 const formatter = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
 
 /**
@@ -644,7 +646,7 @@ export const dispatchPrint = async (order, options = {}) => {
 
   try {
     const token = sessionStorage.getItem('distrito_admin_token');
-    const apiUrl = options.apiUrl || (typeof window !== 'undefined' && window.location.origin.includes('localhost') ? 'http://localhost:3000/api/pedidos' : '/api/pedidos');
+    const apiUrl = options.apiUrl || API_URL;
 
     const idempotencyKey = `order:${order.id}:comanda:${Date.now()}`;
     const response = await fetch(`${apiUrl}/admin/print-jobs`, {
