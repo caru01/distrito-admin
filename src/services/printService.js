@@ -82,7 +82,7 @@ const fallbackWindowPrint = (htmlContent) => {
  */
 export const generateSingleComandaHTML = (order, paperWidth = 58) => {
   const is58 = paperWidth === 58;
-  const printableWidth = is58 ? '41mm' : '72mm';
+  const printableWidth = is58 ? '48mm' : '72mm';
   const items = Array.isArray(order.cart_json) ? order.cart_json : (order.cart || []);
 
   const orderDate = order.created_at ? new Date(order.created_at) : new Date();
@@ -217,7 +217,7 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
       html, body {
         width: 100% !important;
         max-width: ${printableWidth} !important;
-        margin: 0 auto !important;
+        margin: 0 !important;
         padding: 0 !important;
         height: auto !important;
         overflow-x: hidden !important;
@@ -227,7 +227,7 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
         max-width: ${printableWidth} !important;
         margin: 0 !important;
         padding-left: 0.5mm !important;
-        padding-right: 1.5mm !important;
+        padding-right: 0.5mm !important;
         height: auto !important;
         box-sizing: border-box !important;
       }
@@ -237,7 +237,7 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
       width: 100%;
       max-width: ${printableWidth};
       margin: 0;
-      padding: 1px 1.5mm 0 0.5mm;
+      padding: 1px 0.5mm 0 0.5mm;
       box-sizing: border-box;
       overflow-x: hidden;
     }
