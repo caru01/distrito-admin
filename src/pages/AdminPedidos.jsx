@@ -124,9 +124,6 @@ export default function AdminPedidos() {
   const [soundEnabled, setSoundEnabled] = useState(() => {
     return localStorage.getItem('distrito_admin_order_sound') !== 'false';
   });
-  const [autoPrintEnabled, setAutoPrintEnabled] = useState(() => {
-    return localStorage.getItem('distrito_admin_auto_print') === 'true';
-  });
   const [showStats, setShowStats] = useState(() => {
     return localStorage.getItem('distrito_admin_show_stats') !== 'false';
   });
@@ -171,20 +168,6 @@ export default function AdminPedidos() {
           if (soundEnabled) {
             playNewOrderChime();
           }
-          if (autoPrintEnabled) {
-            incomingOrders.forEach((newOrder, idx) => {
-              const orderId = Number(newOrder.id);
-              if (!autoPrintedOrderIdsRef.current.has(orderId)) {
-                autoPrintedOrderIdsRef.current.add(orderId);
-                try {
-                  sessionStorage.setItem('distrito_printed_orders', JSON.stringify([...autoPrintedOrderIdsRef.current]));
-                } catch (e) {}
-                setTimeout(() => {
-                  dispatchPrint(newOrder, { paperWidth: 58, auto: true });
-                }, idx * 750);
-              }
-            });
-          }
         }
       }
 
@@ -206,7 +189,7 @@ export default function AdminPedidos() {
       setIsFetching(false);
       setLoading(false);
     }
-  }, [soundEnabled, autoPrintEnabled]);
+  }, [soundEnabled]);
 
   useEffect(() => {
     fetchOrders();
@@ -861,26 +844,6 @@ export default function AdminPedidos() {
             <div className="pedidos-live-divider" />
 
             {/* Botón de Auto-Impresión */}
-            <button
-              type="button"
-              onClick={() => {
-                const next = !autoPrintEnabled;
-                setAutoPrintEnabled(next);
-                localStorage.setItem('distrito_admin_auto_print', String(next));
-              }}
-              className={`pedidos-live-btn ${autoPrintEnabled ? 'active' : ''}`}
-              style={autoPrintEnabled ? { color: '#10B981', borderColor: '#10B981', background: 'rgba(16, 185, 129, 0.12)' } : {}}
-              title={autoPrintEnabled 
-                ? '🖨️ Auto-impresión ACTIVADA: cada nuevo pedido se imprimirá automáticamente en la impresora térmica' 
-                : '🖨️ Auto-impresión desactivada (clic para activar en esta PC)'}
-              aria-label={autoPrintEnabled ? 'Desactivar auto-impresión' : 'Activar auto-impresión'}
-            >
-              <Printer size={16} />
-              <span style={{ fontSize: '0.75rem', fontWeight: 600, marginLeft: '4px', display: isMobile ? 'none' : 'inline' }}>
-                {autoPrintEnabled ? 'Auto-Print ON' : 'Auto-Print'}
-              </span>
-            </button>
-
             <div className="pedidos-live-divider" />
 
             {/* Botón Refrescar Manual */}
