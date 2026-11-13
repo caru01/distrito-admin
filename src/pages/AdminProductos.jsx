@@ -8,12 +8,14 @@ import {
 import { API_URL } from '../config/api';
 import { formatCurrency, formatNumber } from '../utils/formatters';
 import { optimizeImageFile } from '../utils/imageOptimizer';
+import { authFetch } from '../utils/http';
 
 const PAGE_SIZE = 10;
 const EMPTY_PRODUCT = {
   id: null, title: '', description: '', price: '', category: '', image: '',
   status: 'Activo', is_featured: false, stock: 0, barcode: '', track_stock: false,
   low_stock_threshold: 5, inventory_unit: 'unidad', inventory_unit_cost: 0,
+  adicionales_ids: [],
 };
 
 function productStockState(product) {
@@ -50,13 +52,11 @@ export default function AdminProductos() {
 
   const saveReorderedProducts = async (newProductsList) => {
     setReordering(true);
-    const token = sessionStorage.getItem('distrito_admin_token');
     try {
-      const res = await fetch(`${API_URL}/admin/products/reorder`, {
+      const res = await authFetch(`${API_URL}/admin/products/reorder`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ orderedIds: newProductsList.map((p) => p.id) }),
       });
@@ -126,11 +126,9 @@ export default function AdminProductos() {
     if (!silent) setLoading(true);
     setNotice(null);
     try {
-      const token = sessionStorage.getItem('distrito_admin_token');
-      const headers = { Authorization: `Bearer ${token}` };
       const [productsResponse, categoriesResponse] = await Promise.all([
-        fetch(`${API_URL}/admin/products`, { headers }),
-        fetch(`${API_URL}/admin/categories`, { headers }),
+        authFetch(`${API_URL}/admin/products`),
+        authFetch(`${API_URL}/admin/categories`),
       ]);
       const [productsData, categoriesData] = await Promise.all([productsResponse.json(), categoriesResponse.json()]);
       if (!productsResponse.ok || productsData.status !== 'ok') throw new Error(productsData.error || 'No fue posible cargar los productos.');
@@ -176,6 +174,10 @@ export default function AdminProductos() {
   useEffect(() => { if (page > pageCount) setPage(pageCount); }, [page, pageCount]);
   const visibleProducts = filteredProducts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
+  const allAdicionales = useMemo(() => {
+    return products.filter((p) => p.category === 'Adicionales' && p.id !== currentProduct.id && p.status === 'Activo');
+  }, [products, currentProduct.id]);
+
   const stats = useMemo(() => ({
     total: products.length,
     active: products.filter((product) => product.status === 'Activo').length,
@@ -185,7 +187,14 @@ export default function AdminProductos() {
 
   const openProduct = (product = null, duplicate = false) => {
     if (!product) setCurrentProduct(EMPTY_PRODUCT);
-    else setCurrentProduct({ ...EMPTY_PRODUCT, ...product, id: duplicate ? null : product.id, title: duplicate ? `${product.title} (copia)` : product.title, barcode: duplicate ? '' : (product.barcode || '') });
+    else setCurrentProduct({
+      ...EMPTY_PRODUCT,
+      ...product,
+      id: duplicate ? null : product.id,
+      title: duplicate ? `${product.title} (copia)` : product.title,
+      barcode: duplicate ? '' : (product.barcode || ''),
+      adicionales_ids: Array.isArray(product.adicionales_ids) ? product.adicionales_ids : []
+    });
     setIsModalOpen(true);
   };
 
@@ -223,10 +232,9 @@ export default function AdminProductos() {
     }
     setSaving(true);
     try {
-      const token = sessionStorage.getItem('distrito_admin_token');
-      const response = await fetch(currentProduct.id ? `${API_URL}/admin/products/${currentProduct.id}` : `${API_URL}/admin/products`, {
+      const response = await authFetch(currentProduct.id ? `${API_URL}/admin/products/${currentProduct.id}` : `${API_URL}/admin/products`, {
         method: currentProduct.id ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...currentProduct,
           title: currentProduct.title.trim(), description: currentProduct.description.trim(),
@@ -234,6 +242,7 @@ export default function AdminProductos() {
           low_stock_threshold: Number(currentProduct.low_stock_threshold || 0),
           inventory_unit_cost: Number(currentProduct.inventory_unit_cost || 0),
           barcode: currentProduct.barcode.trim(),
+          adicionales_ids: Array.isArray(currentProduct.adicionales_ids) ? currentProduct.adicionales_ids : [],
         }),
       });
 
@@ -265,10 +274,9 @@ export default function AdminProductos() {
     setBusyId(product.id);
     setNotice(null);
     try {
-      const token = sessionStorage.getItem('distrito_admin_token');
-      const response = await fetch(`${API_URL}/admin/products/${product.id}`, {
+      const response = await authFetch(`${API_URL}/admin/products/${product.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...product, ...changes }),
       });
       const data = await response.json();
@@ -285,8 +293,7 @@ export default function AdminProductos() {
     if (!window.confirm(`¿Eliminar “${product.title}”? Esta acción no se puede deshacer.`)) return;
     setBusyId(product.id);
     try {
-      const token = sessionStorage.getItem('distrito_admin_token');
-      const response = await fetch(`${API_URL}/admin/products/${product.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+      const response = await authFetch(`${API_URL}/admin/products/${product.id}`, { method: 'DELETE' });
       const data = await response.json();
       if (!response.ok || data.status !== 'ok') throw new Error(data.error || 'No fue posible eliminar el producto.');
       setProducts((current) => current.filter((item) => item.id !== product.id));
@@ -432,6 +439,49 @@ export default function AdminProductos() {
           </section>
           <section className="ds-form"><div className="product-form-section"><strong>Imagen</strong><span>Archivo o URL del producto.</span></div><div className="product-image-editor">{currentProduct.image ? <img key={currentProduct.image} src={currentProduct.image} alt="Vista previa" /> : <div><ImageIcon size={40} /><span>Sin imagen</span></div>}<div><label className="ds-btn ds-btn-secondary" style={{ opacity: optimizingImage ? 0.7 : 1, pointerEvents: optimizingImage ? 'none' : 'auto' }}>{optimizingImage ? <RefreshCw size={17} className="ds-spin" /> : <Upload size={17} />} {optimizingImage ? 'Optimizando…' : 'Subir imagen'}<input type="file" accept="image/*" onChange={uploadImage} disabled={optimizingImage} /></label>{currentProduct.image && <button type="button" className="ds-btn ds-btn-ghost" disabled={optimizingImage} onClick={() => updateProduct('image', '')}><Trash2 size={17} /> Quitar</button>}</div></div><div className="ds-form-group"><label className="ds-form-label" htmlFor="product-image-url">URL de imagen</label><input id="product-image-url" className="ds-input" value={currentProduct.image?.startsWith('data:') ? '' : currentProduct.image} onChange={(event) => updateProduct('image', event.target.value)} placeholder="https://…" /></div>
           </section>
+          {allAdicionales.length > 0 && currentProduct.category !== 'Adicionales' && (
+            <section className="ds-form product-adicionales-section" style={{ gridColumn: '1 / -1', borderTop: '1px solid var(--ds-border, #333)', paddingTop: '12px', marginTop: '4px' }}>
+              <div className="product-form-section">
+                <strong>🏷️ Adicionales y Salsas permitidos</strong>
+                <span>Elige qué adicionales o salsas deseas ofrecer al cliente al agregar este producto. Si dejas todos desmarcados, se ofrecerán todos los adicionales activos disponibles.</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: '8px', maxHeight: '180px', overflowY: 'auto', padding: '6px 2px' }}>
+                {allAdicionales.map((adicion) => {
+                  const isChecked = Array.isArray(currentProduct.adicionales_ids) && currentProduct.adicionales_ids.includes(adicion.id);
+                  return (
+                    <label
+                      key={adicion.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '8px 12px',
+                        borderRadius: '10px',
+                        border: isChecked ? '1px solid var(--ds-primary, #B30401)' : '1px solid var(--ds-border, #333)',
+                        backgroundColor: isChecked ? 'rgba(179, 4, 1, 0.12)' : 'var(--ds-bg-elevated, #1E1E1E)',
+                        cursor: 'pointer',
+                        fontSize: '13px'
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={(e) => {
+                          const cur = Array.isArray(currentProduct.adicionales_ids) ? [...currentProduct.adicionales_ids] : [];
+                          const next = e.target.checked ? [...cur, adicion.id] : cur.filter((i) => i !== adicion.id);
+                          updateProduct('adicionales_ids', next);
+                        }}
+                      />
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: '600', color: 'var(--ds-text-primary, #FFF)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{adicion.title}</div>
+                        <div style={{ fontSize: '11px', color: 'var(--ds-text-muted, #AAA)' }}>{formatCurrency(adicion.price)}</div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            </section>
+          )}
           <section className="ds-form product-inventory-section"><div className="product-form-section"><strong>Inventario</strong><span>La misma información usada por el módulo de existencias.</span></div><label className="announcement-publish-toggle"><input type="checkbox" checked={currentProduct.track_stock} onChange={(event) => updateProduct('track_stock', event.target.checked)} /><span className="ds-switch" aria-hidden="true"><i /></span><span><strong>Controlar existencias</strong><small>Impide vender cuando no hay stock.</small></span></label>{currentProduct.track_stock && <><div className="ds-form-grid-3"><div className="ds-form-group"><label className="ds-form-label" htmlFor="product-stock">Existencia</label><input id="product-stock" type="number" min="0" step="0.01" className="ds-input" value={currentProduct.stock} onChange={(event) => updateProduct('stock', event.target.value)} /></div><div className="ds-form-group"><label className="ds-form-label" htmlFor="product-threshold">Alerta mínima</label><input id="product-threshold" type="number" min="0" step="0.01" className="ds-input" value={currentProduct.low_stock_threshold} onChange={(event) => updateProduct('low_stock_threshold', event.target.value)} /></div><div className="ds-form-group"><label className="ds-form-label" htmlFor="product-unit">Unidad</label><select id="product-unit" className="ds-select" value={currentProduct.inventory_unit} onChange={(event) => updateProduct('inventory_unit', event.target.value)}><option value="unidad">Unidad</option><option value="porción">Porción</option><option value="gramo">Gramo</option><option value="mililitro">Mililitro</option></select></div></div><div className="ds-form-grid"><div className="ds-form-group"><label className="ds-form-label" htmlFor="product-cost">Costo unitario</label><input id="product-cost" type="number" min="0" step="1" className="ds-input" value={currentProduct.inventory_unit_cost} onChange={(event) => updateProduct('inventory_unit_cost', event.target.value)} /></div><div className="ds-form-group"><label className="ds-form-label" htmlFor="product-barcode">Código de barras</label><input id="product-barcode" inputMode="numeric" className="ds-input" value={currentProduct.barcode} onChange={(event) => updateProduct('barcode', event.target.value.replace(/\D/g, '').slice(0, 14))} placeholder="8 a 14 dígitos" /></div></div></>}
           </section>
         </div></div>
