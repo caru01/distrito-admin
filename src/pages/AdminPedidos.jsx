@@ -79,7 +79,14 @@ export default function AdminPedidos() {
   };
 
   const [orders, setOrders] = useState(getInitialOrders);
-  const [productsMap, setProductsMap] = useState({});
+  const [productsMap, setProductsMap] = useState(() => {
+    try {
+      const cached = sessionStorage.getItem('distrito_products_map_cache');
+      return cached ? JSON.parse(cached) : {};
+    } catch {
+      return {};
+    }
+  });
   const [loading, setLoading] = useState(orders.length === 0);
   const [activeTab, setActiveTab] = useState('Todos');
   const [searchQuery, setSearchQuery] = useState('');
@@ -199,7 +206,7 @@ export default function AdminPedidos() {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener('resize', handleResize);
 
-    // Cargar mapa de equivalencia de unidades de comida por producto
+    // Cargar mapa de equivalencia de unidades de comida por producto con persistencia en caché
     fetch(`${API_URL}/pedidos/products`)
       .then(r => r.json())
       .then(d => {
@@ -210,6 +217,9 @@ export default function AdminPedidos() {
             if (p.title) map[p.title.trim().toLowerCase()] = Number(p.units_count ?? 1);
           });
           setProductsMap(map);
+          try {
+            sessionStorage.setItem('distrito_products_map_cache', JSON.stringify(map));
+          } catch {}
         }
       })
       .catch(() => {});
@@ -515,10 +525,29 @@ export default function AdminPedidos() {
 
   const tabs = ['Todos', 'Recibidos', 'En cocina', 'Listos para despacho', 'En reparto', 'Entregados', 'Pago pendiente', 'Cancelados'];
 
-  // 🚀 OPTIMIZACIÓN 2: Filtrado memoizado ultra-rápido a 60 FPS con Más Filtros
+  // 🚀 OPTIMIZACIÓN 1: Rango de fecha memoizado para pedidos
+  const ordersInDate = useMemo(() => {
+    return orders.filter(o => {
+      if (!o.created_at) return true;
+      const orderDate = new Date(o.created_at);
+      if (isNaN(orderDate.getTime())) return false;
+      const dateKey = colombiaDateKey(orderDate);
+      if (filterDateFrom || filterDateTo) {
+        if (filterDateFrom && dateKey < filterDateFrom) return false;
+        if (filterDateTo && dateKey > filterDateTo) return false;
+        return true;
+      }
+      if (filterDate) {
+        return dateKey === filterDate;
+      }
+      return true;
+    });
+  }, [orders, filterDate, filterDateFrom, filterDateTo]);
+
+  // 🚀 OPTIMIZACIÓN 2: Filtrado memoizado ultra-rápido a 60 FPS sobre el conjunto de fecha
   const filteredOrders = useMemo(() => {
     const searchLower = searchQuery.toLowerCase().trim();
-    let result = orders.filter(order => {
+    let result = ordersInDate.filter(order => {
       const matchesTab = activeTab === 'Todos' ||
         (activeTab === 'Recibidos' && order.status === 'Nuevo') ||
         (activeTab === 'En cocina' && order.status === 'En preparación') ||
@@ -527,6 +556,8 @@ export default function AdminPedidos() {
         (activeTab === 'Entregados' && (order.status === 'Entregado' || order.status === 'Completado')) ||
         (activeTab === 'Pago pendiente' && order.status === 'Pendiente Pago') ||
         (activeTab === 'Cancelados' && order.status === 'Cancelado');
+
+      if (!matchesTab) return false;
 
       const matchesSearch = !searchLower ||
         String(order?.id || '').includes(searchLower) ||
@@ -537,47 +568,32 @@ export default function AdminPedidos() {
         (order.external_driver_name && order.external_driver_name.toLowerCase().includes(searchLower)) ||
         (order.external_provider_reference && order.external_provider_reference.toLowerCase().includes(searchLower));
 
-      // Filtro de fecha o rango de fechas
-      let matchesDate = true;
-      if (order.created_at) {
-        const orderDate = new Date(order.created_at);
-        if (!Number.isNaN(orderDate.getTime())) {
-          const dateKey = colombiaDateKey(orderDate);
-          if (filterDateFrom || filterDateTo) {
-            if (filterDateFrom && dateKey < filterDateFrom) matchesDate = false;
-            if (filterDateTo && dateKey > filterDateTo) matchesDate = false;
-          } else if (filterDate) {
-            matchesDate = dateKey === filterDate;
-          }
-        }
-      }
+      if (!matchesSearch) return false;
 
       // Filtro por tipo de entrega (domicilio / recoger)
-      let matchesDelivery = true;
       if (filterDeliveryType !== 'todos') {
         const dType = String(order.delivery_type || '').toLowerCase();
         if (filterDeliveryType === 'domicilio') {
-          matchesDelivery = dType === 'domicilio';
+          if (dType !== 'domicilio') return false;
         } else if (filterDeliveryType === 'recoger') {
-          matchesDelivery = ['recoger', 'mostrador', 'mesa'].includes(dType);
+          if (!['recoger', 'mostrador', 'mesa'].includes(dType)) return false;
         }
       }
 
       // Filtro por origen del pedido
-      let matchesSource = true;
       if (filterSource !== 'todos') {
         const src = String(order.source || '').toLowerCase();
         const targetSrc = filterSource.toLowerCase();
         if (targetSrc === 'presencial') {
-          matchesSource = src === 'presencial' || src === 'mostrador';
+          if (src !== 'presencial' && src !== 'mostrador') return false;
         } else if (targetSrc === 'rappi') {
-          matchesSource = src.includes('rappi');
+          if (!src.includes('rappi')) return false;
         } else {
-          matchesSource = src === targetSrc;
+          if (src !== targetSrc) return false;
         }
       }
 
-      return matchesTab && matchesSearch && matchesDate && matchesDelivery && matchesSource;
+      return true;
     });
 
     // Ordenar por valor (menor a mayor / mayor a menor)
@@ -588,7 +604,7 @@ export default function AdminPedidos() {
     }
 
     return result;
-  }, [orders, activeTab, searchQuery, filterDate, filterDateFrom, filterDateTo, filterDeliveryType, filterSource, sortByValue]);
+  }, [ordersInDate, searchQuery, activeTab, filterDeliveryType, filterSource, sortByValue]);
 
   const getStatusBadge = (status, order = null) => {
     const meta = orderStatusMeta(status, {
@@ -722,137 +738,165 @@ export default function AdminPedidos() {
     );
   };
 
-  const ordersInDate = useMemo(() => {
-    return orders.filter(o => {
-      if (!o.created_at) return true;
-      const orderDate = new Date(o.created_at);
-      if (isNaN(orderDate.getTime())) return false;
-      const dateKey = colombiaDateKey(orderDate);
-      if (filterDateFrom || filterDateTo) {
-        if (filterDateFrom && dateKey < filterDateFrom) return false;
-        if (filterDateTo && dateKey > filterDateTo) return false;
-        return true;
-      }
-      if (filterDate) {
-        return dateKey === filterDate;
-      }
-      return true;
-    });
-  }, [orders, filterDate, filterDateFrom, filterDateTo]);
+  // 🚀 OPTIMIZACIÓN 3: Cálculo memoizado de estadísticas y finanzas en una sola pasada lineal
+  const {
+    statNuevos,
+    statPreparacion,
+    statEntregados,
+    totalFacturado,
+    totalDomicilios,
+    totalSoloProductos,
+    totalItemsFacturados,
+    totalProductosVendidos,
+    totalEfectivo,
+    totalTransferencia,
+    domiEfectivo,
+    domiEfectivoCount,
+    domiTransferencia,
+    domiTransferenciaCount,
+    domiTotalCount,
+  } = useMemo(() => {
+    let statNuevos = 0;
+    let statPreparacion = 0;
+    let statEntregados = 0;
+    let totalFacturado = 0;
+    let totalDomicilios = 0;
+    let totalSoloProductos = 0;
+    let totalItemsFacturados = 0;
+    let totalProductosVendidos = 0;
+    let totalEfectivo = 0;
+    let totalTransferencia = 0;
+    let domiEfectivo = 0;
+    let domiEfectivoCount = 0;
+    let domiTransferencia = 0;
+    let domiTransferenciaCount = 0;
+    let domiTotalCount = 0;
 
-  const statNuevos = ordersInDate.filter(o => o.status === 'Nuevo').length;
-  const statPreparacion = ordersInDate.filter(o => o.status === 'En preparación').length;
-  const statEntregados = ordersInDate.filter(o => o.status === 'Entregado').length;
-  const completedOrders = ordersInDate.filter(o => o.status === 'Entregado' || o.status === 'Completado');
-  const totalFacturado = completedOrders.reduce((s, o) => s + (o.total || 0), 0);
-  const totalDomicilios = completedOrders.reduce((s, o) => s + (o.delivery_fee || 0), 0);
-  const totalSoloProductos = completedOrders.reduce((s, o) => s + ((o.total || 0) - (o.delivery_fee || 0)), 0);
-  const totalVentas = totalSoloProductos;
-  let totalItemsFacturados = 0;
-  const totalProductosVendidos = completedOrders.reduce((sum, o) => {
-    let items = [];
-    if (Array.isArray(o.cart_json)) items = o.cart_json;
-    else if (typeof o.cart_json === 'string') {
-      try { items = JSON.parse(o.cart_json || '[]'); } catch { items = []; }
-    }
-    const orderItemsCount = items.reduce((iSum, item) => {
-      const qty = Number(item.quantity || item.qty || 1) || 0;
-      totalItemsFacturados += qty;
-      const itemId = item.id ? String(item.id) : null;
-      const itemTitle = (item.title || item.name || '').trim().toLowerCase();
-      let unitsPerItem = 1;
-      if (itemId && productsMap[itemId] !== undefined) {
-        unitsPerItem = productsMap[itemId];
-      } else if (itemTitle && productsMap[itemTitle] !== undefined) {
-        unitsPerItem = productsMap[itemTitle];
-      } else {
-        // Fallback inteligente para combos conocidos
-        if (/trio|trío/i.test(itemTitle)) unitsPerItem = 3;
-        else if (/\b(4|familiar)\b/i.test(itemTitle)) unitsPerItem = 4;
-        else if (/\b3\b/i.test(itemTitle)) unitsPerItem = 3;
-        else if (/\b(2|dúo|duo|xl|burgerdog|dogburger|salchiburger|salchidog)\b/i.test(itemTitle) && !itemTitle.includes('1.250')) unitsPerItem = 2;
+    for (let i = 0; i < ordersInDate.length; i++) {
+      const o = ordersInDate[i];
+      if (o.status === 'Nuevo') statNuevos++;
+      else if (o.status === 'En preparación') statPreparacion++;
+      else if (o.status === 'Entregado') statEntregados++;
+
+      const isCompleted = o.status === 'Entregado' || o.status === 'Completado';
+      if (!isCompleted) continue;
+
+      const total = o.total || 0;
+      const fee = Number(o.delivery_fee || 0);
+      const net = total - fee;
+      totalFacturado += total;
+      totalDomicilios += fee;
+      totalSoloProductos += net;
+
+      // Cart items con equivalencia de unidades de comida
+      let items = [];
+      if (Array.isArray(o.cart_json)) items = o.cart_json;
+      else if (typeof o.cart_json === 'string') {
+        try { items = JSON.parse(o.cart_json || '[]'); } catch { items = []; }
       }
-      return iSum + (qty * unitsPerItem);
-    }, 0);
-    return sum + orderItemsCount;
-  }, 0);
-  let totalEfectivo = 0;
-  let totalTransferencia = 0;
-  let domiEfectivo = 0;
-  let domiEfectivoCount = 0;
-  let domiTransferencia = 0;
-  let domiTransferenciaCount = 0;
-  let domiTotalCount = 0;
+      for (let j = 0; j < items.length; j++) {
+        const item = items[j];
+        const qty = Number(item.quantity || item.qty || 1) || 0;
+        totalItemsFacturados += qty;
+        const itemId = item.id ? String(item.id) : null;
+        const itemTitle = (item.title || item.name || '').trim().toLowerCase();
+        let unitsPerItem = 1;
+        if (itemId && productsMap[itemId] !== undefined) {
+          unitsPerItem = productsMap[itemId];
+        } else if (itemTitle && productsMap[itemTitle] !== undefined) {
+          unitsPerItem = productsMap[itemTitle];
+        } else {
+          if (/trio|trío/i.test(itemTitle)) unitsPerItem = 3;
+          else if (/\b(4|familiar)\b/i.test(itemTitle)) unitsPerItem = 4;
+          else if (/\b3\b/i.test(itemTitle)) unitsPerItem = 3;
+          else if (/\b(2|dúo|duo|xl|burgerdog|dogburger|salchiburger|salchidog)\b/i.test(itemTitle) && !itemTitle.includes('1.250')) unitsPerItem = 2;
+        }
+        totalProductosVendidos += (qty * unitsPerItem);
+      }
 
-  completedOrders.forEach(o => {
-    const net = (o.total || 0) - (o.delivery_fee || 0);
-    const fee = Number(o.delivery_fee || 0);
-    const pm = (o.payment_method || '').toLowerCase();
-    
-    if (fee > 0) {
-      domiTotalCount++;
-    }
-
-    if (pm === 'efectivo') {
-      totalEfectivo += net;
       if (fee > 0) {
-        domiEfectivo += fee;
-        domiEfectivoCount++;
+        domiTotalCount++;
       }
-    } else if (['transferencia', 'nequi', 'daviplata', 'tarjeta', 'bancolombia'].includes(pm)) {
-      totalTransferencia += net;
-      if (fee > 0) {
-        domiTransferencia += fee;
-        domiTransferenciaCount++;
-      }
-    } else if (pm === 'compartido') {
-      let ef = 0;
-      let tr = 0;
-      if (o.notes) {
-        const efMatch = o.notes.match(/\$([\d.,]+)\s*efectivo/i);
-        const trMatch = o.notes.match(/\$([\d.,]+)\s*transferencia/i);
-        if (efMatch) ef = parseInt(efMatch[1].replace(/[.,]/g, ''), 10);
-        if (trMatch) tr = parseInt(trMatch[1].replace(/[.,]/g, ''), 10);
-      }
-      
-      const splitTotal = ef + tr;
-      if (splitTotal > 0 && splitTotal === (o.total || 0)) {
-        const efNet = Math.round(ef * (net / splitTotal));
-        const trNet = net - efNet;
-        totalEfectivo += efNet;
-        totalTransferencia += trNet;
+
+      const pm = (o.payment_method || '').toLowerCase();
+      if (pm === 'efectivo') {
+        totalEfectivo += net;
         if (fee > 0) {
-          const efDomi = Math.round(fee * (ef / splitTotal));
-          const trDomi = fee - efDomi;
-          domiEfectivo += efDomi;
-          domiTransferencia += trDomi;
-          if (efDomi > 0 && trDomi > 0) {
+          domiEfectivo += fee;
+          domiEfectivoCount++;
+        }
+      } else if (['transferencia', 'nequi', 'daviplata', 'tarjeta', 'bancolombia'].includes(pm)) {
+        totalTransferencia += net;
+        if (fee > 0) {
+          domiTransferencia += fee;
+          domiTransferenciaCount++;
+        }
+      } else if (pm === 'compartido') {
+        let ef = 0;
+        let tr = 0;
+        if (o.notes) {
+          const efMatch = o.notes.match(/\$([\d.,]+)\s*efectivo/i);
+          const trMatch = o.notes.match(/\$([\d.,]+)\s*transferencia/i);
+          if (efMatch) ef = parseInt(efMatch[1].replace(/[.,]/g, ''), 10);
+          if (trMatch) tr = parseInt(trMatch[1].replace(/[.,]/g, ''), 10);
+        }
+        const splitTotal = ef + tr;
+        if (splitTotal > 0 && splitTotal === total) {
+          const efNet = Math.round(ef * (net / splitTotal));
+          const trNet = net - efNet;
+          totalEfectivo += efNet;
+          totalTransferencia += trNet;
+          if (fee > 0) {
+            const efDomi = Math.round(fee * (ef / splitTotal));
+            const trDomi = fee - efDomi;
+            domiEfectivo += efDomi;
+            domiTransferencia += trDomi;
+            if (efDomi > 0 && trDomi > 0) {
+              domiEfectivoCount += 0.5;
+              domiTransferenciaCount += 0.5;
+            } else if (efDomi > 0) {
+              domiEfectivoCount++;
+            } else {
+              domiTransferenciaCount++;
+            }
+          }
+        } else {
+          totalEfectivo += Math.round(net / 2);
+          totalTransferencia += net - Math.round(net / 2);
+          if (fee > 0) {
+            const half = Math.round(fee / 2);
+            domiEfectivo += half;
+            domiTransferencia += (fee - half);
             domiEfectivoCount += 0.5;
             domiTransferenciaCount += 0.5;
-          } else if (efDomi > 0) {
-            domiEfectivoCount++;
-          } else {
-            domiTransferenciaCount++;
           }
         }
       } else {
-        totalEfectivo += Math.round(net / 2);
-        totalTransferencia += net - Math.round(net / 2);
         if (fee > 0) {
-          const half = Math.round(fee / 2);
-          domiEfectivo += half;
-          domiTransferencia += (fee - half);
-          domiEfectivoCount += 0.5;
-          domiTransferenciaCount += 0.5;
+          domiTransferencia += fee;
+          domiTransferenciaCount++;
         }
       }
-    } else {
-      if (fee > 0) {
-        domiTransferencia += fee;
-        domiTransferenciaCount++;
-      }
     }
-  });
+
+    return {
+      statNuevos,
+      statPreparacion,
+      statEntregados,
+      totalFacturado,
+      totalDomicilios,
+      totalSoloProductos,
+      totalItemsFacturados,
+      totalProductosVendidos,
+      totalEfectivo,
+      totalTransferencia,
+      domiEfectivo,
+      domiEfectivoCount,
+      domiTransferencia,
+      domiTransferenciaCount,
+      domiTotalCount,
+    };
+  }, [ordersInDate, productsMap]);
 
   return (
     <div className="ds-page">
