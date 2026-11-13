@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { printTicket, dispatchPrint } from '../services/printService';
 import { buildReadyOrderWhatsAppMessage, createWhatsAppUrl, orderStatusMeta } from '@distrito/shared-ui';
 import DeliveryAssignmentModal from '../components/DeliveryAssignmentModal';
+import DriverSettlementModal from '../components/DriverSettlementModal';
 import { readApiJson } from '../utils/http';
 import {
   ShoppingCart, Plus, Search, Filter, Globe, MessageCircle, Store, Phone,
@@ -82,6 +83,7 @@ export default function AdminPedidos() {
   const [activeTab, setActiveTab] = useState('Todos');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDate, setFilterDate] = useState(() => colombiaDateKey());
+  const [showDriverReportModal, setShowDriverReportModal] = useState(false);
 
   // Más filtros states
   const [showMoreFilters, setShowMoreFilters] = useState(false);
@@ -486,12 +488,11 @@ export default function AdminPedidos() {
     }
   };
 
-  const handleOpenWhatsAppChat = (phone, customerName = '') => {
+  const handleOpenWhatsAppChat = (phone) => {
     if (!phone) return;
     const digits = String(phone).replace(/\D/g, '');
     const fullPhone = digits.length === 10 ? `57${digits}` : digits;
-    const greeting = customerName?.trim() ? `Hola ${customerName.trim()}, te escribimos de Distric House.` : 'Hola, te escribimos de Distric House.';
-    const url = `https://api.whatsapp.com/send/?phone=${fullPhone}&text=${encodeURIComponent(greeting)}`;
+    const url = `https://api.whatsapp.com/send/?phone=${fullPhone}`;
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
@@ -858,6 +859,29 @@ export default function AdminPedidos() {
               <RefreshCw size={15} className={isFetching ? 'animate-spin' : ''} />
             </button>
           </div>
+
+          {/* Botón Reporte Domiciliarios */}
+          <button
+            type="button"
+            className="ds-btn ds-btn-secondary"
+            onClick={() => setShowDriverReportModal(true)}
+            style={{
+              height: '42px',
+              padding: '0 16px',
+              fontWeight: '600',
+              borderRadius: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              border: '1px solid rgba(16, 185, 129, 0.4)',
+              backgroundColor: 'rgba(16, 185, 129, 0.08)',
+              color: '#10B981'
+            }}
+            title="Generar y enviar reporte de domicilios a domiciliarios internos"
+          >
+            <Bike size={18} />
+            <span>Reporte Domicilios</span>
+          </button>
 
           {/* Botón Principal Nuevo Pedido */}
           <button
@@ -1681,6 +1705,14 @@ export default function AdminPedidos() {
           }
         }}
       />}
+      {showDriverReportModal && (
+        <DriverSettlementModal
+          isOpen={showDriverReportModal}
+          onClose={() => setShowDriverReportModal(false)}
+          orders={orders}
+          activeDate={filterDate || colombiaDateKey()}
+        />
+      )}
       {toastMessage && (
         <div style={{
           position: 'fixed',
