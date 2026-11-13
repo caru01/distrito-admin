@@ -79,6 +79,7 @@ export default function AdminPedidos() {
   };
 
   const [orders, setOrders] = useState(getInitialOrders);
+  const [productsMap, setProductsMap] = useState({});
   const [loading, setLoading] = useState(orders.length === 0);
   const [activeTab, setActiveTab] = useState('Todos');
   const [searchQuery, setSearchQuery] = useState('');
@@ -197,6 +198,22 @@ export default function AdminPedidos() {
     fetchOrders();
     const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener('resize', handleResize);
+
+    // Cargar mapa de equivalencia de unidades de comida por producto
+    fetch(`${API_URL}/pedidos/products`)
+      .then(r => r.json())
+      .then(d => {
+        if (d && Array.isArray(d.products)) {
+          const map = {};
+          d.products.forEach(p => {
+            if (p.id) map[String(p.id)] = Number(p.units_count ?? 1);
+            if (p.title) map[p.title.trim().toLowerCase()] = Number(p.units_count ?? 1);
+          });
+          setProductsMap(map);
+        }
+      })
+      .catch(() => {});
+
     return () => window.removeEventListener('resize', handleResize);
   }, [fetchOrders]);
 
@@ -731,13 +748,32 @@ export default function AdminPedidos() {
   const totalDomicilios = completedOrders.reduce((s, o) => s + (o.delivery_fee || 0), 0);
   const totalSoloProductos = completedOrders.reduce((s, o) => s + ((o.total || 0) - (o.delivery_fee || 0)), 0);
   const totalVentas = totalSoloProductos;
+  let totalItemsFacturados = 0;
   const totalProductosVendidos = completedOrders.reduce((sum, o) => {
     let items = [];
     if (Array.isArray(o.cart_json)) items = o.cart_json;
     else if (typeof o.cart_json === 'string') {
       try { items = JSON.parse(o.cart_json || '[]'); } catch { items = []; }
     }
-    const orderItemsCount = items.reduce((iSum, item) => iSum + (Number(item.quantity || item.qty || 1) || 0), 0);
+    const orderItemsCount = items.reduce((iSum, item) => {
+      const qty = Number(item.quantity || item.qty || 1) || 0;
+      totalItemsFacturados += qty;
+      const itemId = item.id ? String(item.id) : null;
+      const itemTitle = (item.title || item.name || '').trim().toLowerCase();
+      let unitsPerItem = 1;
+      if (itemId && productsMap[itemId] !== undefined) {
+        unitsPerItem = productsMap[itemId];
+      } else if (itemTitle && productsMap[itemTitle] !== undefined) {
+        unitsPerItem = productsMap[itemTitle];
+      } else {
+        // Fallback inteligente para combos conocidos
+        if (/trio|trío/i.test(itemTitle)) unitsPerItem = 3;
+        else if (/\b(4|familiar)\b/i.test(itemTitle)) unitsPerItem = 4;
+        else if (/\b3\b/i.test(itemTitle)) unitsPerItem = 3;
+        else if (/\b(2|dúo|duo|xl|burgerdog|dogburger|salchiburger|salchidog)\b/i.test(itemTitle) && !itemTitle.includes('1.250')) unitsPerItem = 2;
+      }
+      return iSum + (qty * unitsPerItem);
+    }, 0);
     return sum + orderItemsCount;
   }, 0);
   let totalEfectivo = 0;
@@ -1000,7 +1036,12 @@ export default function AdminPedidos() {
               transferenciaConDomi: totalTransferencia + domiTransferencia,
               totalTransferencia,
             },
-            { label: 'Productos Vendidos', value: `${totalProductosVendidos} und.`, icon: <Utensils size={24} color="#EC4899" />, hint: 'Unidades de comida' },
+            { 
+              label: 'Productos Vendidos', 
+              value: `${totalProductosVendidos} und.`, 
+              icon: <Utensils size={24} color="#EC4899" />, 
+              hint: totalItemsFacturados > 0 ? `${totalItemsFacturados} ítems en comandas` : 'Unidades reales de comida' 
+            },
           ].map((stat, i) => (
             stat.isFacturadoCard ? (
               <div key={i} className="ds-card" style={{ borderColor: 'rgba(16, 185, 129, 0.4)', background: 'linear-gradient(180deg, rgba(16, 185, 129, 0.05) 0%, var(--ds-bg-surface) 100%)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
