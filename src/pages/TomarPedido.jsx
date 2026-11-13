@@ -116,6 +116,7 @@ export default function TomarPedido() {
     if (saved !== null) return saved === 'true';
     return window.innerWidth >= 768;
   });
+  const [editOrderStatus, setEditOrderStatus] = useState(null);
 
   const isSendingRef = useRef(false);
   const cartRef = useRef(cart);
@@ -175,6 +176,7 @@ export default function TomarPedido() {
     const loadOrderToEdit = (ordersList) => {
       const editOrder = ordersList.find(o => String(o.id) === String(editId));
       if (editOrder) {
+        setEditOrderStatus(editOrder.status || 'Nuevo');
         setCustomer({
           name: editOrder.customer_name || '',
           phone: editOrder.customer_phone || '',
@@ -643,6 +645,10 @@ export default function TomarPedido() {
 
       if (res.ok || data.status === 'ok') {
         const orderIdToPrint = data.order?.id || data.order_id || data.id || editId || nextOrderId || 1;
+        const currentStatus = data.order?.status || editOrderStatus;
+        // Si estamos editando un pedido que aún no ha pasado a cocina (ej: 'Nuevo' o 'Pendiente Pago'),
+        // NO se debe imprimir comanda porque aún no ha sido enviado a preparación.
+        const isPendingKitchen = Boolean(editId && (!currentStatus || ['Nuevo', 'Pendiente Pago'].includes(currentStatus)));
         const authoritativeDelivery = Number(data.order?.delivery_fee ?? data.delivery_fee ?? delivery);
         const authoritativeTotal = Number(data.order?.total ?? data.total ?? total);
         const printOrder = {
@@ -684,16 +690,17 @@ export default function TomarPedido() {
         };
 
         // 🖨️ Generar e imprimir comanda de cocina automáticamente si está habilitado en este dispositivo
-        if (printOnDevice) {
+        // y el pedido no está en espera de envío a cocina (Nuevo o Pendiente Pago al editar)
+        if (printOnDevice && !isPendingKitchen) {
           dispatchPrint(printOrder, { paperWidth: 58 });
-        }
 
-        // Registrar en caché de sesión para evitar que la PC del local duplique la impresión si está en esta misma sesión
-        try {
-          const printed = JSON.parse(sessionStorage.getItem('distrito_printed_orders') || '[]');
-          printed.push(Number(orderIdToPrint));
-          sessionStorage.setItem('distrito_printed_orders', JSON.stringify(printed));
-        } catch (e) {}
+          // Registrar en caché de sesión para evitar que la PC del local duplique la impresión si está en esta misma sesión
+          try {
+            const printed = JSON.parse(sessionStorage.getItem('distrito_printed_orders') || '[]');
+            printed.push(Number(orderIdToPrint));
+            sessionStorage.setItem('distrito_printed_orders', JSON.stringify(printed));
+          } catch (e) {}
+        }
 
         try { sessionStorage.removeItem('distrito_admin_orders_cache'); } catch (e) {}
         showToast(editId ? '✓ Pedido actualizado' : (sendToKitchen ? '📦 Pedido enviado a cocina' : '✓ Pedido guardado'));
@@ -770,8 +777,24 @@ export default function TomarPedido() {
 
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h1 className="ds-page-title" style={{ margin: 0, fontSize: '20px' }}>Tomar Pedido</h1>
-              <Zap size={20} color="var(--ds-primary)" fill="var(--ds-primary)" />
+              <h1 className="ds-page-title" style={{ margin: 0, fontSize: '20px' }}>
+                {editId ? `Editar Pedido #${editId}` : 'Tomar Pedido'}
+              </h1>
+              {editId ? (
+                editOrderStatus && (
+                  <span className="ds-badge" style={{ 
+                    backgroundColor: ['Nuevo', 'Pendiente Pago'].includes(editOrderStatus) ? 'rgba(245, 158, 11, 0.2)' : 'rgba(16, 185, 129, 0.2)', 
+                    color: ['Nuevo', 'Pendiente Pago'].includes(editOrderStatus) ? '#F59E0B' : '#10B981', 
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    border: ['Nuevo', 'Pendiente Pago'].includes(editOrderStatus) ? '1px solid #F59E0B' : '1px solid #10B981'
+                  }}>
+                    {editOrderStatus === 'Nuevo' ? 'Recibido' : editOrderStatus}
+                  </span>
+                )
+              ) : (
+                <Zap size={20} color="var(--ds-primary)" fill="var(--ds-primary)" />
+              )}
             </div>
             {!isMobile && stats && (
               <div style={{ display: 'flex', gap: '8px', marginLeft: '12px' }}>
@@ -1463,21 +1486,45 @@ export default function TomarPedido() {
 
             {/* BOTÓN ENVIAR A COCINA / ACTUALIZAR PEDIDO */}
             <div style={{ padding: '14px 16px', borderTop: '1px solid var(--ds-border)', backgroundColor: 'var(--ds-bg-elevated)', flexShrink: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, color: 'var(--ds-text-secondary)', userSelect: 'none' }}>
-                  <input 
-                    type="checkbox" 
-                    checked={printOnDevice} 
-                    onChange={e => {
-                      const next = e.target.checked;
-                      setPrintOnDevice(next);
-                      localStorage.setItem('distrito_print_on_device', String(next));
-                    }}
-                    style={{ accentColor: '#10B981', width: '15px', height: '15px', cursor: 'pointer' }}
-                  />
-                  <span>🖨️ Imprimir ticket en este dispositivo al guardar</span>
-                </label>
-              </div>
+              {!editId ? (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, color: 'var(--ds-text-secondary)', userSelect: 'none' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={printOnDevice} 
+                      onChange={e => {
+                        const next = e.target.checked;
+                        setPrintOnDevice(next);
+                        localStorage.setItem('distrito_print_on_device', String(next));
+                      }}
+                      style={{ accentColor: '#10B981', width: '15px', height: '15px', cursor: 'pointer' }}
+                    />
+                    <span>🖨️ Imprimir ticket en este dispositivo al enviar a cocina</span>
+                  </label>
+                </div>
+              ) : (
+                <div style={{ marginBottom: '10px', fontSize: '12px' }}>
+                  {['Nuevo', 'Pendiente Pago'].includes(editOrderStatus) || !editOrderStatus ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#F59E0B', fontWeight: 600, padding: '4px 8px', borderRadius: '4px', backgroundColor: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.25)' }}>
+                      <span>⚠️ Pedido en "{editOrderStatus === 'Nuevo' ? 'Recibido' : (editOrderStatus || 'Recibido')}": no se imprimirá comanda al actualizar (se imprimirá al enviarlo a cocina).</span>
+                    </div>
+                  ) : (
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 600, color: 'var(--ds-text-secondary)', userSelect: 'none' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={printOnDevice} 
+                        onChange={e => {
+                          const next = e.target.checked;
+                          setPrintOnDevice(next);
+                          localStorage.setItem('distrito_print_on_device', String(next));
+                        }}
+                        style={{ accentColor: '#10B981', width: '15px', height: '15px', cursor: 'pointer' }}
+                      />
+                      <span>🖨️ Reimprimir ticket al actualizar</span>
+                    </label>
+                  )}
+                </div>
+              )}
 
               <button 
                 onClick={() => handleSubmit(true)} 
