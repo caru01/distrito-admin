@@ -975,9 +975,12 @@ export default function AdminPedidos() {
             { label: 'Recién recibidos', value: statNuevos, icon: <Clock size={24} /> },
             { label: 'En preparación', value: statPreparacion, icon: <ChefHat size={24} /> },
             { label: 'Pedidos entregados', value: statEntregados, icon: <CheckCircle size={24} /> },
-            { label: filterDate ? 'Total Facturado' : 'Facturado Período', value: `$${totalFacturado.toLocaleString()}`, icon: <TrendingUp size={24} color="#10B981" />, hint: 'Comida + domicilios' },
-            { label: 'Solo Productos', value: `$${totalSoloProductos.toLocaleString()}`, icon: <Banknote size={24} color="#3B82F6" />, hint: 'Ventas sin domicilio' },
-            { label: 'Productos Vendidos', value: `${totalProductosVendidos} und.`, icon: <Utensils size={24} color="#EC4899" />, hint: 'Unidades de comida' },
+            { 
+              isFacturadoCard: true,
+              label: filterDate ? 'Total Facturado' : 'Facturado Período',
+              totalFacturado,
+              totalSoloProductos,
+            },
             { 
               isDeliveryCard: true,
               label: filterDate ? 'Domicilios del día' : 'Total Domicilios',
@@ -988,10 +991,58 @@ export default function AdminPedidos() {
               domiTransferencia,
               domiTransferenciaCount
             },
-            { label: 'Efectivo', value: `$${totalEfectivo.toLocaleString()}`, icon: <Banknote size={24} color="#10B981" />, hint: domiEfectivo > 0 ? `Con domi: $${(totalEfectivo + domiEfectivo).toLocaleString()}` : 'Ventas en efectivo' },
-            { label: 'Transferencia', value: `$${totalTransferencia.toLocaleString()}`, icon: <Wallet size={24} color="#8B5CF6" />, hint: domiTransferencia > 0 ? `Con domi: $${(totalTransferencia + domiTransferencia).toLocaleString()}` : 'Ventas por transferencia' },
+            { 
+              isPaymentMethodsCard: true,
+              label: 'Métodos de Pago',
+              totalFacturado,
+              efectivoConDomi: totalEfectivo + domiEfectivo,
+              totalEfectivo,
+              transferenciaConDomi: totalTransferencia + domiTransferencia,
+              totalTransferencia,
+            },
+            { label: 'Productos Vendidos', value: `${totalProductosVendidos} und.`, icon: <Utensils size={24} color="#EC4899" />, hint: 'Unidades de comida' },
           ].map((stat, i) => (
-            stat.isDeliveryCard ? (
+            stat.isFacturadoCard ? (
+              <div key={i} className="ds-card" style={{ borderColor: 'rgba(16, 185, 129, 0.4)', background: 'linear-gradient(180deg, rgba(16, 185, 129, 0.05) 0%, var(--ds-bg-surface) 100%)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div className="ds-card-body" style={{ padding: '16px', display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(16, 185, 129, 0.15)', color: '#10B981', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <TrendingUp size={22} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '26px', fontWeight: '800', color: 'var(--ds-text-primary)', lineHeight: '1' }}>
+                          ${stat.totalFacturado.toLocaleString()}
+                        </div>
+                        <div style={{ color: 'var(--ds-text-secondary)', fontSize: '13px', fontWeight: '600', marginTop: '4px' }}>
+                          {stat.label}
+                        </div>
+                      </div>
+                    </div>
+                    <span style={{ fontSize: '11px', fontWeight: '700', color: '#10B981', background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.25)', padding: '3px 8px', borderRadius: '12px', whiteSpace: 'nowrap' }}>
+                      Comida + domi
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px', paddingTop: '10px', borderTop: '1px solid var(--ds-border)' }}>
+                    <div style={{ background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.25)', borderRadius: '8px', padding: '6px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#3B82F6', fontSize: '11px', fontWeight: '700', textTransform: 'uppercase' }}>
+                          <Banknote size={12} />
+                          <span>Solo Productos</span>
+                        </div>
+                        <div style={{ fontSize: '10px', color: 'var(--ds-text-muted)', marginTop: '1px' }}>
+                          Ventas sin domicilio
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '16px', fontWeight: '800', color: 'var(--ds-text-primary)' }}>
+                        ${stat.totalSoloProductos.toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : stat.isDeliveryCard ? (
               <div key={i} className="ds-card" style={{ borderColor: 'rgba(245, 158, 11, 0.4)', background: 'linear-gradient(180deg, rgba(245, 158, 11, 0.05) 0%, var(--ds-bg-surface) 100%)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                 <div className="ds-card-body" style={{ padding: '16px', display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', gap: '12px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1037,6 +1088,57 @@ export default function AdminPedidos() {
                       </div>
                       <div style={{ fontSize: '10px', color: 'var(--ds-text-muted)', marginTop: '1px' }}>
                         {Math.round(stat.domiTransferenciaCount)} {Math.round(stat.domiTransferenciaCount) === 1 ? 'envío' : 'envíos'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : stat.isPaymentMethodsCard ? (
+              <div key={i} className="ds-card" style={{ borderColor: 'rgba(139, 92, 246, 0.4)', background: 'linear-gradient(180deg, rgba(139, 92, 246, 0.05) 0%, var(--ds-bg-surface) 100%)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div className="ds-card-body" style={{ padding: '16px', display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(139, 92, 246, 0.15)', color: '#8B5CF6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <Wallet size={22} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '26px', fontWeight: '800', color: 'var(--ds-text-primary)', lineHeight: '1' }}>
+                          ${stat.totalFacturado.toLocaleString()}
+                        </div>
+                        <div style={{ color: 'var(--ds-text-secondary)', fontSize: '13px', fontWeight: '600', marginTop: '4px' }}>
+                          {stat.label}
+                        </div>
+                      </div>
+                    </div>
+                    <span style={{ fontSize: '11px', fontWeight: '700', color: '#8B5CF6', background: 'rgba(139, 92, 246, 0.12)', border: '1px solid rgba(139, 92, 246, 0.25)', padding: '3px 8px', borderRadius: '12px', whiteSpace: 'nowrap' }}>
+                      Total Recaudado
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', paddingTop: '10px', borderTop: '1px solid var(--ds-border)' }}>
+                    <div style={{ background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)', borderRadius: '8px', padding: '6px 8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#10B981', fontSize: '11px', fontWeight: '700', textTransform: 'uppercase' }}>
+                        <Banknote size={12} />
+                        <span>Efectivo</span>
+                      </div>
+                      <div style={{ fontSize: '15px', fontWeight: '800', color: 'var(--ds-text-primary)', marginTop: '2px' }}>
+                        ${stat.efectivoConDomi.toLocaleString()}
+                      </div>
+                      <div style={{ fontSize: '10px', color: 'var(--ds-text-muted)', marginTop: '1px' }}>
+                        Con domi (Sin: ${stat.totalEfectivo.toLocaleString()})
+                      </div>
+                    </div>
+
+                    <div style={{ background: 'rgba(139, 92, 246, 0.08)', border: '1px solid rgba(139, 92, 246, 0.25)', borderRadius: '8px', padding: '6px 8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#8B5CF6', fontSize: '11px', fontWeight: '700', textTransform: 'uppercase' }}>
+                        <Wallet size={12} />
+                        <span>Transferencia</span>
+                      </div>
+                      <div style={{ fontSize: '15px', fontWeight: '800', color: 'var(--ds-text-primary)', marginTop: '2px' }}>
+                        ${stat.transferenciaConDomi.toLocaleString()}
+                      </div>
+                      <div style={{ fontSize: '10px', color: 'var(--ds-text-muted)', marginTop: '1px' }}>
+                        Con domi (Sin: ${stat.totalTransferencia.toLocaleString()})
                       </div>
                     </div>
                   </div>
