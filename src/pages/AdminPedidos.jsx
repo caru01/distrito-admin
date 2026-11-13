@@ -742,15 +742,33 @@ export default function AdminPedidos() {
   }, 0);
   let totalEfectivo = 0;
   let totalTransferencia = 0;
+  let domiEfectivo = 0;
+  let domiEfectivoCount = 0;
+  let domiTransferencia = 0;
+  let domiTransferenciaCount = 0;
+  let domiTotalCount = 0;
 
   completedOrders.forEach(o => {
     const net = (o.total || 0) - (o.delivery_fee || 0);
+    const fee = Number(o.delivery_fee || 0);
     const pm = (o.payment_method || '').toLowerCase();
     
+    if (fee > 0) {
+      domiTotalCount++;
+    }
+
     if (pm === 'efectivo') {
       totalEfectivo += net;
-    } else if (['transferencia', 'nequi', 'tarjeta'].includes(pm)) {
+      if (fee > 0) {
+        domiEfectivo += fee;
+        domiEfectivoCount++;
+      }
+    } else if (['transferencia', 'nequi', 'daviplata', 'tarjeta', 'bancolombia'].includes(pm)) {
       totalTransferencia += net;
+      if (fee > 0) {
+        domiTransferencia += fee;
+        domiTransferenciaCount++;
+      }
     } else if (pm === 'compartido') {
       let ef = 0;
       let tr = 0;
@@ -767,9 +785,35 @@ export default function AdminPedidos() {
         const trNet = net - efNet;
         totalEfectivo += efNet;
         totalTransferencia += trNet;
+        if (fee > 0) {
+          const efDomi = Math.round(fee * (ef / splitTotal));
+          const trDomi = fee - efDomi;
+          domiEfectivo += efDomi;
+          domiTransferencia += trDomi;
+          if (efDomi > 0 && trDomi > 0) {
+            domiEfectivoCount += 0.5;
+            domiTransferenciaCount += 0.5;
+          } else if (efDomi > 0) {
+            domiEfectivoCount++;
+          } else {
+            domiTransferenciaCount++;
+          }
+        }
       } else {
         totalEfectivo += Math.round(net / 2);
         totalTransferencia += net - Math.round(net / 2);
+        if (fee > 0) {
+          const half = Math.round(fee / 2);
+          domiEfectivo += half;
+          domiTransferencia += (fee - half);
+          domiEfectivoCount += 0.5;
+          domiTransferenciaCount += 0.5;
+        }
+      }
+    } else {
+      if (fee > 0) {
+        domiTransferencia += fee;
+        domiTransferenciaCount++;
       }
     }
   });
@@ -934,22 +978,84 @@ export default function AdminPedidos() {
             { label: filterDate ? 'Total Facturado' : 'Facturado Período', value: `$${totalFacturado.toLocaleString()}`, icon: <TrendingUp size={24} color="#10B981" />, hint: 'Comida + domicilios' },
             { label: 'Solo Productos', value: `$${totalSoloProductos.toLocaleString()}`, icon: <Banknote size={24} color="#3B82F6" />, hint: 'Ventas sin domicilio' },
             { label: 'Productos Vendidos', value: `${totalProductosVendidos} und.`, icon: <Utensils size={24} color="#EC4899" />, hint: 'Unidades de comida' },
-            { label: filterDate ? 'Domicilios del día' : 'Total Domicilios', value: `$${totalDomicilios.toLocaleString()}`, icon: <Truck size={24} color="#F59E0B" /> },
-            { label: 'Efectivo', value: `$${totalEfectivo.toLocaleString()}`, icon: <Banknote size={24} color="#10B981" /> },
-            { label: 'Transferencia', value: `$${totalTransferencia.toLocaleString()}`, icon: <Wallet size={24} color="#8B5CF6" /> },
+            { 
+              isDeliveryCard: true,
+              label: filterDate ? 'Domicilios del día' : 'Total Domicilios',
+              totalDomicilios,
+              domiTotalCount,
+              domiEfectivo,
+              domiEfectivoCount,
+              domiTransferencia,
+              domiTransferenciaCount
+            },
+            { label: 'Efectivo', value: `$${totalEfectivo.toLocaleString()}`, icon: <Banknote size={24} color="#10B981" />, hint: domiEfectivo > 0 ? `Con domi: $${(totalEfectivo + domiEfectivo).toLocaleString()}` : 'Ventas en efectivo' },
+            { label: 'Transferencia', value: `$${totalTransferencia.toLocaleString()}`, icon: <Wallet size={24} color="#8B5CF6" />, hint: domiTransferencia > 0 ? `Con domi: $${(totalTransferencia + domiTransferencia).toLocaleString()}` : 'Ventas por transferencia' },
           ].map((stat, i) => (
-            <div key={i} className="ds-card">
-              <div className="ds-card-body" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <div style={{ color: 'var(--ds-primary)' }}>{stat.icon}</div>
-                <div>
-                  <div style={{ fontSize: '30px', fontWeight: '700', color: 'var(--ds-text-primary)', lineHeight: '1' }}>{stat.value}</div>
-                  <div style={{ color: 'var(--ds-text-secondary)', fontSize: '13px', fontWeight: '500', marginTop: '6px' }}>{stat.label}</div>
-                  {stat.hint && (
-                    <div style={{ color: 'var(--ds-text-muted)', fontSize: '11px', marginTop: '3px', fontWeight: '500' }}>{stat.hint}</div>
-                  )}
+            stat.isDeliveryCard ? (
+              <div key={i} className="ds-card" style={{ borderColor: 'rgba(245, 158, 11, 0.4)', background: 'linear-gradient(180deg, rgba(245, 158, 11, 0.05) 0%, var(--ds-bg-surface) 100%)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div className="ds-card-body" style={{ padding: '16px', display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(245, 158, 11, 0.15)', color: '#F59E0B', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <Truck size={22} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '26px', fontWeight: '800', color: 'var(--ds-text-primary)', lineHeight: '1' }}>
+                          ${stat.totalDomicilios.toLocaleString()}
+                        </div>
+                        <div style={{ color: 'var(--ds-text-secondary)', fontSize: '13px', fontWeight: '600', marginTop: '4px' }}>
+                          {stat.label}
+                        </div>
+                      </div>
+                    </div>
+                    <span style={{ fontSize: '11px', fontWeight: '700', color: '#F59E0B', background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.25)', padding: '3px 8px', borderRadius: '12px', whiteSpace: 'nowrap' }}>
+                      {stat.domiTotalCount} envíos
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', paddingTop: '10px', borderTop: '1px solid var(--ds-border)' }}>
+                    <div style={{ background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)', borderRadius: '8px', padding: '6px 8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#10B981', fontSize: '11px', fontWeight: '700', textTransform: 'uppercase' }}>
+                        <Banknote size={12} />
+                        <span>Domi Efectivo</span>
+                      </div>
+                      <div style={{ fontSize: '15px', fontWeight: '800', color: 'var(--ds-text-primary)', marginTop: '2px' }}>
+                        ${stat.domiEfectivo.toLocaleString()}
+                      </div>
+                      <div style={{ fontSize: '10px', color: 'var(--ds-text-muted)', marginTop: '1px' }}>
+                        {Math.round(stat.domiEfectivoCount)} {Math.round(stat.domiEfectivoCount) === 1 ? 'envío' : 'envíos'}
+                      </div>
+                    </div>
+
+                    <div style={{ background: 'rgba(139, 92, 246, 0.08)', border: '1px solid rgba(139, 92, 246, 0.25)', borderRadius: '8px', padding: '6px 8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#8B5CF6', fontSize: '11px', fontWeight: '700', textTransform: 'uppercase' }}>
+                        <Wallet size={12} />
+                        <span>Domi Transf.</span>
+                      </div>
+                      <div style={{ fontSize: '15px', fontWeight: '800', color: 'var(--ds-text-primary)', marginTop: '2px' }}>
+                        ${stat.domiTransferencia.toLocaleString()}
+                      </div>
+                      <div style={{ fontSize: '10px', color: 'var(--ds-text-muted)', marginTop: '1px' }}>
+                        {Math.round(stat.domiTransferenciaCount)} {Math.round(stat.domiTransferenciaCount) === 1 ? 'envío' : 'envíos'}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div key={i} className="ds-card">
+                <div className="ds-card-body" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                  <div style={{ color: 'var(--ds-primary)' }}>{stat.icon}</div>
+                  <div>
+                    <div style={{ fontSize: '30px', fontWeight: '700', color: 'var(--ds-text-primary)', lineHeight: '1' }}>{stat.value}</div>
+                    <div style={{ color: 'var(--ds-text-secondary)', fontSize: '13px', fontWeight: '500', marginTop: '6px' }}>{stat.label}</div>
+                    {stat.hint && (
+                      <div style={{ color: 'var(--ds-text-muted)', fontSize: '11px', marginTop: '3px', fontWeight: '500' }}>{stat.hint}</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )
           ))}
         </div>
       )}
