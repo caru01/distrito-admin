@@ -51,7 +51,7 @@ export default function DriverSettlementModal({ isOpen, onClose, orders = [], ac
   const [driverPhone, setDriverPhone] = useState('');
   const [feePerDelivery, setFeePerDelivery] = useState(() => {
     const saved = localStorage.getItem('distrito_driver_fee_rate');
-    return saved ? Number(saved) : 4000;
+    return saved ? Number(saved) : 6000;
   });
   const [selectedOrderIds, setSelectedOrderIds] = useState([]);
   const [copied, setCopied] = useState(false);
@@ -236,7 +236,15 @@ export default function DriverSettlementModal({ isOpen, onClose, orders = [], ac
           o.delivery_reference && `Ref: ${o.delivery_reference}`
         ].filter(Boolean).join(' · ');
         const fullAddress = complements ? `${mainAddress} (${complements})` : mainAddress;
-        return `${idx + 1}. Orden #${orderIdPadded} – Dirección: ${fullAddress}`;
+        
+        const rawMethod = String(o.payment_method || 'efectivo').trim().toLowerCase();
+        const paymentMethodLabel = rawMethod === 'transferencia' 
+          ? 'Transferencia' 
+          : rawMethod === 'compartido' 
+            ? 'Compartido' 
+            : 'Efectivo';
+
+        return `${idx + 1}. *Orden #${orderIdPadded}* – Dirección: ${fullAddress} – Pago: *${paymentMethodLabel}*`;
       }).join('\n');
     } else {
       ordersListText = '(No hay órdenes seleccionadas)';
@@ -563,9 +571,19 @@ Gracias por su trabajo y compromiso.`
                             <strong style={{ fontSize: '13px', color: 'var(--ds-text-primary)' }}>
                               #{idx + 1}. Orden #{orderNum}
                             </strong>
-                            <span className="ds-badge ds-badge-neutral" style={{ fontSize: '10px' }}>
-                              {ord.status}
-                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <span className="ds-badge" style={{
+                                backgroundColor: String(ord.payment_method || '').toLowerCase() === 'transferencia' ? 'rgba(139, 92, 246, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                                color: String(ord.payment_method || '').toLowerCase() === 'transferencia' ? '#8B5CF6' : '#10B981',
+                                fontSize: '10px',
+                                fontWeight: 700
+                              }}>
+                                {String(ord.payment_method || '').toLowerCase() === 'transferencia' ? 'Transferencia' : (String(ord.payment_method || '').toLowerCase() === 'compartido' ? 'Compartido' : 'Efectivo')}
+                              </span>
+                              <span className="ds-badge ds-badge-neutral" style={{ fontSize: '10px' }}>
+                                {ord.status}
+                              </span>
+                            </div>
                           </div>
                           <div style={{ fontSize: '12px', color: 'var(--ds-text-secondary)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                             <MapPin size={11} style={{ flexShrink: 0 }} />
