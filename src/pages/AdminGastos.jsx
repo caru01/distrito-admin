@@ -216,18 +216,23 @@ export default function AdminGastos() {
     }));
   };
 
+  const roundTwo = (n) => {
+    const num = Number(n);
+    return Number.isFinite(num) ? Math.round((num + Number.EPSILON) * 100) / 100 : 0;
+  };
+
   const handleRemoveItem = (index) => {
     setFormData(prev => {
       const newItems = prev.items.filter((_, i) => i !== index);
       const newSubtotal = newItems.reduce((sum, item) => sum + ((Number(item.price) || 0) * (Number(item.quantity) || 1)), 0);
       const sub = newItems.length > 0 ? newSubtotal : (prev.subtotal || 0);
-      const calcIva = prev.iva_percentage ? (sub * (Number(prev.iva_percentage) / 100)) : 0;
+      const calcIva = prev.iva_percentage ? roundTwo(sub * (Number(prev.iva_percentage) / 100)) : 0;
       return { 
         ...prev, 
         items: newItems, 
         subtotal: sub,
         iva: calcIva || '',
-        amount: Number(sub || 0) + Number(calcIva || 0)
+        amount: roundTwo(Number(sub || 0) + Number(calcIva || 0))
       };
     });
   };
@@ -237,13 +242,13 @@ export default function AdminGastos() {
       const newItems = [...prev.items];
       newItems[index][field] = value;
       const newSubtotal = newItems.reduce((sum, item) => sum + ((Number(item.price) || 0) * (Number(item.quantity) || 1)), 0);
-      const calcIva = prev.iva_percentage ? (newSubtotal * (Number(prev.iva_percentage) / 100)) : 0;
+      const calcIva = prev.iva_percentage ? roundTwo(newSubtotal * (Number(prev.iva_percentage) / 100)) : 0;
       return { 
         ...prev, 
         items: newItems, 
         subtotal: newSubtotal,
         iva: calcIva || '',
-        amount: Number(newSubtotal || 0) + Number(calcIva || 0)
+        amount: roundTwo(Number(newSubtotal || 0) + Number(calcIva || 0))
       };
     });
   };
@@ -251,12 +256,12 @@ export default function AdminGastos() {
   const handleSubtotalChange = (val) => {
     setFormData(prev => {
       const sub = val;
-      const calcIva = prev.iva_percentage ? (Number(sub) * (Number(prev.iva_percentage) / 100)) : 0;
+      const calcIva = prev.iva_percentage ? roundTwo(Number(sub || 0) * (Number(prev.iva_percentage) / 100)) : 0;
       return {
         ...prev,
         subtotal: sub,
         iva: calcIva || '',
-        amount: Number(sub || 0) + Number(calcIva || 0)
+        amount: roundTwo(Number(sub || 0) + Number(calcIva || 0))
       };
     });
   };
@@ -264,12 +269,12 @@ export default function AdminGastos() {
   const handleIvaChange = (perc) => {
     setFormData(prev => {
       const p = perc;
-      const calcIva = p ? (Number(prev.subtotal || 0) * (Number(p) / 100)) : 0;
+      const calcIva = p ? roundTwo(Number(prev.subtotal || 0) * (Number(p) / 100)) : 0;
       return {
         ...prev,
         iva_percentage: p,
         iva: calcIva || '',
-        amount: Number(prev.subtotal || 0) + Number(calcIva || 0)
+        amount: roundTwo(Number(prev.subtotal || 0) + Number(calcIva || 0))
       };
     });
   };

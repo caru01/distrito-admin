@@ -563,7 +563,7 @@ export default function AdminPedidos() {
         String(order?.id || '').includes(searchLower) ||
         (order.customer_name && order.customer_name.toLowerCase().includes(searchLower)) ||
         (order.customer_phone && order.customer_phone.includes(searchLower)) ||
-        (order.source && order.source.toLowerCase().includes(searchLower)) ||
+        (order.source && (order.source.toLowerCase().includes(searchLower) || (searchLower === 'app' && (order.source.toLowerCase().includes('mobile') || order.source.toLowerCase().includes('movil') || order.source.toLowerCase().includes('móvil'))))) ||
         (order.delivery_driver_name && order.delivery_driver_name.toLowerCase().includes(searchLower)) ||
         (order.external_driver_name && order.external_driver_name.toLowerCase().includes(searchLower)) ||
         (order.external_provider_reference && order.external_provider_reference.toLowerCase().includes(searchLower));
@@ -584,7 +584,9 @@ export default function AdminPedidos() {
       if (filterSource !== 'todos') {
         const src = String(order.source || '').toLowerCase();
         const targetSrc = filterSource.toLowerCase();
-        if (targetSrc === 'presencial') {
+        if (targetSrc === 'app') {
+          if (!src.includes('app') && !src.includes('mobile') && !src.includes('movil') && !src.includes('móvil')) return false;
+        } else if (targetSrc === 'presencial') {
           if (src !== 'presencial' && src !== 'mostrador') return false;
         } else if (targetSrc === 'rappi') {
           if (!src.includes('rappi')) return false;
@@ -625,7 +627,8 @@ export default function AdminPedidos() {
   };
 
   const getSourceIcon = (source) => {
-    if (source === 'Rappi' || (source && source.toLowerCase().includes('rappi'))) {
+    const s = String(source || '').toLowerCase().trim();
+    if (s === 'rappi' || s.includes('rappi')) {
       return (
         <span style={{ 
           display: 'inline-flex', 
@@ -643,9 +646,27 @@ export default function AdminPedidos() {
         </span>
       );
     }
-    if (source === 'WhatsApp') return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><MessageCircle size={16} color="#22C55E" /> WhatsApp</div>;
-    if (source === 'Presencial' || source === 'Mostrador') return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Store size={16} color="#B30401" /> {source}</div>;
-    if (source === 'Teléfono') return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={16} color="#60A5FA" /> Teléfono</div>;
+    if (s === 'app' || s === 'mobile' || s.includes('app') || s.includes('móvil') || s.includes('movil')) {
+      return (
+        <span style={{ 
+          display: 'inline-flex', 
+          alignItems: 'center', 
+          gap: '5px', 
+          backgroundColor: 'rgba(37, 99, 235, 0.12)', 
+          color: '#2563EB', 
+          fontWeight: '700', 
+          fontSize: '12px', 
+          padding: '3px 8px', 
+          borderRadius: '6px',
+          border: '1px solid rgba(37, 99, 235, 0.3)'
+        }}>
+          <Smartphone size={13} strokeWidth={2.4} /> APP
+        </span>
+      );
+    }
+    if (s.includes('whatsapp')) return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><MessageCircle size={16} color="#22C55E" /> WhatsApp</div>;
+    if (s === 'presencial' || s === 'mostrador') return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Store size={16} color="#B30401" /> {source || 'Mostrador'}</div>;
+    if (s.includes('tel')) return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={16} color="#60A5FA" /> Teléfono</div>;
     return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Globe size={16} color="#A78BFA" /> Web</div>;
   };
 
@@ -1379,6 +1400,7 @@ export default function AdminPedidos() {
               >
                 <option value="todos">Todos los orígenes</option>
                 <option value="Web">Web</option>
+                <option value="APP">APP</option>
                 <option value="WhatsApp">WhatsApp</option>
                 <option value="Presencial">Presencial / Mostrador</option>
                 <option value="Teléfono">Teléfono</option>

@@ -825,7 +825,11 @@ export default function AdminDashboard() {
                   <span className="dashboard-order-id">#{String(order.id).padStart(4, '0')}</span>
                   <span className="dashboard-order-customer">
                     <strong>{order.customer_name || 'Cliente sin nombre'}</strong>
-                    <small>{order.source || 'Web'} · {relativeTime(order.created_at)}</small>
+                    <small>{(() => {
+                      const s = String(order.source || '').toLowerCase().trim();
+                      if (s === 'app' || s === 'mobile' || s.includes('app') || s.includes('movil') || s.includes('móvil')) return 'APP';
+                      return order.source || 'Web';
+                    })()} · {relativeTime(order.created_at)}</small>
                   </span>
                   <span className={`ds-badge order-status-${meta.tone}`} title={meta.description}>{meta.label}</span>
                   <strong className="dashboard-order-total">{money.format(Number(order.total || 0))}</strong>

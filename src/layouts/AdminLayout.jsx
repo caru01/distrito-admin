@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState, useContext } from 'react';
 import { Outlet, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ShoppingBag, Package, List, Users, Archive, BarChart3, Settings, LogOut, Megaphone, Menu, X, DollarSign, FileSpreadsheet, Clock, Zap, MapPin, BellRing, Building2, Contact, AlertTriangle, ChevronRight, Banknote, Bot } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Package, List, Users, Archive, BarChart3, Settings, LogOut, Megaphone, Menu, X, DollarSign, FileSpreadsheet, Clock, Zap, MapPin, BellRing, Building2, Contact, AlertTriangle, ChevronRight, Banknote, Bot, Smartphone } from 'lucide-react';
 import { API_URL } from '../config/api';
 import { AuthContext } from '../context/AuthContext';
 import { playAttentionAlert, speakNotification, unlockNotificationAudio } from '@distrito/shared-ui';
@@ -168,6 +168,7 @@ export default function AdminLayout() {
     { name: 'Dashboard', path: '/admin', icon: <LayoutDashboard size={20} />, module: 'Dashboard' },
     { name: 'Tomar Pedido', path: '/admin/tomar-pedido', icon: <Zap size={20} />, module: 'Pedidos' },
     { name: 'Pedidos', path: '/admin/pedidos', icon: <ShoppingBag size={20} />, module: 'Pedidos' },
+    { name: 'APP', path: '/admin/app', icon: <Smartphone size={20} />, module: 'Configuracion', fallbackModule: 'Dashboard' },
     // { name: 'Mapa de Domicilios', path: '/admin/mapa-domicilios', icon: <MapPin size={20} />, module: 'Domicilios' },
     { name: 'Empresas de Domicilios', path: '/admin/empresas-domicilios', icon: <Building2 size={20} />, module: 'Empresas Domicilios', fallbackModule: 'Domicilios' },
     { name: 'Categorías', path: '/admin/categorias', icon: <List size={20} />, module: 'Categorias' },

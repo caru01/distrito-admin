@@ -17,6 +17,7 @@ const AdminReportes = lazy(() => import('./pages/AdminReportes.jsx'))
 const AdminGastos = lazy(() => import('./pages/AdminGastos.jsx'))
 const AdminCierreContable = lazy(() => import('./pages/AdminCierreContable.jsx'))
 const AdminAnuncios = lazy(() => import('./pages/AdminAnuncios.jsx'))
+const AdminApp = lazy(() => import('./pages/AdminApp.jsx'))
 const AdminConfiguracion = lazy(() => import('./pages/AdminConfiguracion.jsx'))
 const AdminHorarios = lazy(() => import('./pages/AdminHorarios.jsx'))
 const TomarPedido = lazy(() => import('./pages/TomarPedido.jsx'))
@@ -51,6 +52,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route index element={<AdminDashboard />} />
             <Route path="bony" element={<AdminBony />} />
             <Route path="pedidos" element={<AdminPedidos />} />
+            <Route path="app" element={<AdminApp />} />
             <Route path="mapa-domicilios" element={<AdminDeliveryMap />} />
             <Route path="empresas-domicilios" element={<AdminDeliveryCompanies />} />
             <Route path="productos" element={<AdminProductos />} />

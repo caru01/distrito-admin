@@ -4,7 +4,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { printTicket, dispatchPrint } from '../services/printService';
 import {
   Zap, Search, ShoppingCart, Trash2, Plus, Minus, ChefHat, Printer,
-  MessageCircle, Phone, Globe, Store, Banknote, Wallet, CreditCard,
+  MessageCircle, Phone, Globe, Store, Smartphone, Banknote, Wallet, CreditCard,
   MapPin, User, X, CheckCircle, AlertCircle, Clock, TrendingUp,
   Package, LayoutGrid, PieChart, MessageSquare, RotateCcw
 } from 'lucide-react';
@@ -39,6 +39,7 @@ const EMPTY_CUSTOMER = {
 
 const SOURCE_OPTIONS = [
   { key: 'WhatsApp',  label: 'WhatsApp',  icon: <MessageCircle size={15} />, color: '#25D366' },
+  { key: 'APP',       label: 'APP',       icon: <Smartphone size={15} />,    color: '#0284C7' },
   { key: 'Teléfono', label: 'Teléfono',  icon: <Phone size={15} />,         color: '#3B82F6' },
   { key: 'Web',      label: 'Web',        icon: <Globe size={15} />,         color: '#8B5CF6' },
   { key: 'Mostrador',label: 'Mostrador', icon: <Store size={15} />,         color: '#F59E0B' },
@@ -202,6 +203,7 @@ export default function TomarPedido() {
           })(),
           source: (() => {
             const src = String(editOrder.source || '').toLowerCase().trim();
+            if (src.includes('app') || src.includes('mobile') || src.includes('movil')) return 'APP';
             if (src.includes('whatsapp') || editOrder.crm_contact_id) return 'WhatsApp';
             if (src.includes('tel') || src === 'telefono') return 'Teléfono';
             if (src.includes('web')) return 'Web';
@@ -1353,6 +1355,7 @@ export default function TomarPedido() {
                   {SOURCE_OPTIONS.map(s => {
                     const isSourceActive = (() => {
                       const src = String(customer.source || '').toLowerCase().trim();
+                      if (s.key === 'APP') return src === 'app' || src.includes('app') || src.includes('mobile') || src.includes('movil');
                       if (s.key === 'WhatsApp') return src.includes('whatsapp') || (!src && !customer.source);
                       if (s.key === 'Teléfono') return src.includes('tel');
                       if (s.key === 'Web') return src.includes('web');

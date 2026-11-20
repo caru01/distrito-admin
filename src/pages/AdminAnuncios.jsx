@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   BarChart3, Bell, CalendarClock, CheckCircle, CopyPlus, Eye, Image as ImageIcon,
   Megaphone, MousePointerClick, RefreshCw, Save, Send, Sparkles, Smartphone, Monitor,
-  ToggleLeft, ToggleRight, Trash2, Upload, Users, XCircle, Tag, Truck
+  ToggleLeft, ToggleRight, Trash2, Upload, Users, XCircle, Tag, Truck, ArrowRight, Flame, Check, Copy, X
 } from 'lucide-react';
 import { API_URL } from '../config/api';
 import { readApiJson } from '../utils/http';
@@ -20,6 +20,7 @@ const EMPTY = {
   ends_at: '',
   display_frequency: 'session',
   campaign_type: 'modal',
+  popup_style: 'modern_card',
   audience: 'all',
   priority: 50,
   coupon_code: '',
@@ -63,6 +64,7 @@ function normalize(value = {}) {
   return {
     ...EMPTY,
     ...value,
+    popup_style: value.popup_style || 'modern_card',
     starts_at: toInput(value.starts_at),
     ends_at: toInput(value.ends_at),
     is_active: Boolean(value.is_active),
@@ -111,6 +113,7 @@ export default function AdminAnuncios() {
   const status = statusOf(campaign);
   const isPromoCard = campaign.campaign_type === 'promo_card';
   const promoData = useMemo(() => parsePromoBody(campaign.body), [campaign.body]);
+  const hasPreviewText = Boolean(campaign.title?.trim() || campaign.body?.trim() || campaign.coupon_code?.trim());
 
   const otherActivePromoCards = useMemo(() => {
     return campaigns.filter(
@@ -416,11 +419,15 @@ export default function AdminAnuncios() {
                           fontWeight: 700,
                         }}
                       >
-                        {isItemPromo ? 'Tarjeta de Anuncio' : item.campaign_type === 'banner' ? 'Banner' : 'Ventana'}
+                        {isItemPromo
+    ? 'Tarjeta de Anuncio'
+    : item.campaign_type === 'banner'
+    ? 'Banner'
+    : `Ventana (${normItem.popup_style === 'poster_full' ? 'Póster' : normItem.popup_style === 'dark_street' ? 'Dark' : 'Cristal'})`}
                       </span>
                     </div>
 
-                    <strong style={{ marginTop: '0.2rem', display: 'block' }}>{item.title}</strong>
+                    <strong style={{ marginTop: '0.2rem', display: 'block' }}>{item.title || '(Sin título)'}</strong>
                     
                     <small>
                       {item.audience === 'all' ? 'Todos' : item.audience === 'new' ? 'Nuevos' : 'Recurrentes'}
@@ -638,21 +645,26 @@ export default function AdminAnuncios() {
             ) : (
               <>
                 <label className="ds-form-group">
-                  <span className="ds-form-label">Título</span>
+                  <span className="ds-form-label">
+                    Título <small style={{ color: 'var(--ds-text-muted)', fontWeight: 400 }}>(opcional si hay imagen)</small>
+                  </span>
                   <input
                     className="ds-input"
-                    required
                     maxLength={255}
+                    placeholder="Ej. ¡Llegó nueva promo! (Opcional)"
                     value={campaign.title}
                     onChange={(e) => edit('title', e.target.value)}
                   />
                 </label>
 
                 <label className="ds-form-group">
-                  <span className="ds-form-label">Mensaje</span>
+                  <span className="ds-form-label">
+                    Mensaje <small style={{ color: 'var(--ds-text-muted)', fontWeight: 400 }}>(opcional)</small>
+                  </span>
                   <textarea
                     className="ds-textarea"
                     maxLength={2000}
+                    placeholder="Escribe un mensaje o déjalo en blanco si tu flyer ya incluye la información."
                     value={campaign.body}
                     onChange={(e) => edit('body', e.target.value)}
                   />
@@ -815,8 +827,7 @@ export default function AdminAnuncios() {
         <aside className="campaign-preview">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="ds-page-kicker">Vista previa en vivo</span>
-            {isPromoCard && (
-              <div style={{ display: 'flex', gap: '0.35rem', background: 'var(--ds-bg-elevated)', padding: '0.2rem', borderRadius: '8px' }}>
+            <div style={{ display: 'flex', gap: '0.35rem', background: 'var(--ds-bg-elevated)', padding: '0.2rem', borderRadius: '8px' }}>
                 <button
                   type="button"
                   onClick={() => setPreviewDevice('desktop')}
@@ -846,7 +857,6 @@ export default function AdminAnuncios() {
                   <Smartphone size={14} /> Móvil
                 </button>
               </div>
-            )}
           </div>
 
           {/* VISTA PREVIA SI ES TARJETA PROMOCIONAL */}
@@ -1232,32 +1242,447 @@ export default function AdminAnuncios() {
               </div>
             </div>
           ) : (
-            /* VISTA PREVIA SI ES MODAL O BANNER */
-            <article className={`announcement-preview-card preview-${campaign.campaign_type}`}>
-              {campaign.image_url ? (
-                <img src={campaign.image_url} alt="" />
-              ) : (
-                <div className="announcement-preview-empty">
-                  <ImageIcon />
-                  <span>Sin imagen</span>
-                </div>
-              )}
-              <div>
-                <small>
-                  {campaign.audience === 'all'
-                    ? 'Para todos'
-                    : campaign.audience === 'new'
-                    ? 'Clientes nuevos'
-                    : 'Clientes recurrentes'}
-                </small>
-                {campaign.title && (campaign.body || !campaign.image_url) && (
-                  <h3>{campaign.title}</h3>
+            /* VISTA PREVIA MODERNA DE VENTANA EMERGENTE O BANNER */
+            <div
+              style={{
+                width: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '1rem',
+              }}
+            >
+              {/* Contenedor del Modal con fondo de tienda simulado */}
+              <div
+                style={{
+                  width: '100%',
+                  maxWidth: previewDevice === 'mobile' ? '320px' : '380px',
+                  background: 'rgba(10, 10, 14, 0.72)',
+                  backdropFilter: 'blur(8px)',
+                  WebkitBackdropFilter: 'blur(8px)',
+                  padding: previewDevice === 'mobile' ? '0.75rem' : '1.2rem',
+                  borderRadius: '24px',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  boxShadow: '0 20px 40px rgba(0, 0, 0, 0.35)',
+                  position: 'relative',
+                  transition: 'all 0.3s ease',
+                }}
+              >
+                {/* PLANTILLA 2: POSTER FULL */}
+                {campaign.popup_style === 'poster_full' ? (
+                  <div
+                    style={{
+                      width: '100%',
+                      background: 'transparent',
+                      borderRadius: '22px',
+                      overflow: 'visible',
+                      position: 'relative',
+                      boxShadow: 'none',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                    }}
+                  >
+                    {/* Botón flotante cerrar */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '12px',
+                        right: '12px',
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '50%',
+                        background: 'rgba(255, 255, 255, 0.9)',
+                        color: '#111827',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 10,
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                      }}
+                    >
+                      <X size={16} />
+                    </div>
+
+                    {campaign.image_url ? (
+                      <div style={{ width: '100%', maxHeight: previewDevice === 'mobile' ? '280px' : '340px', overflow: 'hidden', background: 'transparent', borderRadius: '20px', boxShadow: '0 15px 40px rgba(0,0,0,0.5)' }}>
+                        <img
+                          src={campaign.image_url}
+                          alt=""
+                          style={{ width: '100%', height: 'auto', maxHeight: previewDevice === 'mobile' ? '280px' : '340px', objectFit: 'contain', display: 'block', borderRadius: '20px' }}
+                        />
+                      </div>
+                    ) : (
+                      <div style={{ padding: '2.5rem 1rem', textAlign: 'center', color: '#9CA3AF', background: '#18191E', borderRadius: '20px' }}>
+                        <ImageIcon size={32} style={{ margin: '0 auto 0.5rem', display: 'block', opacity: 0.5 }} />
+                        <span style={{ fontSize: '0.82rem' }}>Póster Full: Sube un flyer o afiche publicitario</span>
+                      </div>
+                    )}
+
+                    <div
+                      style={{
+                        width: '100%',
+                        padding: hasPreviewText ? '12px 16px 14px' : '10px 0 0',
+                        background: 'transparent',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: hasPreviewText ? '8px' : '0',
+                        textAlign: 'center',
+                        borderTop: 'none',
+                      }}
+                    >
+                      {campaign.title && (
+                        <h4 style={{ margin: 0, color: '#FFF', fontSize: '1.15rem', fontWeight: 900, textTransform: 'uppercase' }}>
+                          {campaign.title}
+                        </h4>
+                      )}
+                      {campaign.body && (
+                        <p style={{ margin: 0, color: '#9CA3AF', fontSize: '0.85rem', lineHeight: '1.45', whiteSpace: 'pre-line' }}>
+                          {campaign.body}
+                        </p>
+                      )}
+
+                      {campaign.coupon_code && (
+                        <div
+                          style={{
+                            background: 'rgba(255, 255, 255, 0.06)',
+                            border: '1.5px dashed rgba(245, 158, 11, 0.6)',
+                            borderRadius: '10px',
+                            padding: '6px 10px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <Tag size={14} color="#FBBF24" />
+                            <span style={{ fontFamily: 'monospace', fontWeight: 900, color: '#FBBF24', fontSize: '0.9rem' }}>
+                              {campaign.coupon_code}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: '0.72rem', background: '#F59E0B', color: '#000', fontWeight: 800, padding: '2px 6px', borderRadius: '4px' }}>
+                            COPIAR
+                          </span>
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        style={{
+                          background: 'linear-gradient(135deg, #B30401 0%, #D80401 100%)',
+                          color: '#FFF',
+                          border: 'none',
+                          borderRadius: '999px',
+                          padding: '8px 20px',
+                          fontWeight: 700,
+                          fontSize: '0.88rem',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          alignSelf: 'center',
+                          margin: '0 auto',
+                          width: 'auto',
+                          minWidth: '130px',
+                          gap: '6px',
+                          boxShadow: '0 4px 14px rgba(179, 4, 1, 0.3)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <span>{campaign.cta_label || 'Ver menú'}</span>
+                        <ArrowRight size={15} />
+                      </button>
+                    </div>
+                  </div>
+                ) : campaign.popup_style === 'dark_street' ? (
+                  /* PLANTILLA 3: DARK STREET FOOD */
+                  <div
+                    style={{
+                      width: '100%',
+                      background: 'linear-gradient(180deg, #18191E 0%, #101114 100%)',
+                      borderRadius: '22px',
+                      overflow: 'hidden',
+                      position: 'relative',
+                      boxShadow: '0 20px 50px rgba(0, 0, 0, 0.8), 0 0 20px rgba(179, 4, 1, 0.3), 0 0 0 1.5px rgba(179, 4, 1, 0.4)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                    }}
+                  >
+                    {/* Botón flotante cerrar */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '12px',
+                        right: '12px',
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '50%',
+                        background: 'rgba(255, 255, 255, 0.9)',
+                        color: '#111827',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 10,
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                      }}
+                    >
+                      <X size={16} />
+                    </div>
+
+                    <div style={{ padding: '14px 16px 8px' }}>
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          padding: '3px 10px',
+                          background: 'rgba(179, 4, 1, 0.25)',
+                          border: '1px solid rgba(239, 68, 68, 0.4)',
+                          borderRadius: '999px',
+                          color: '#F87171',
+                          fontSize: '0.72rem',
+                          fontWeight: 800,
+                          letterSpacing: '0.04em',
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        <Flame size={12} /> DISTRIC HOUSE • NOVEDAD
+                      </span>
+                    </div>
+
+                    {campaign.image_url && (
+                      <div style={{ width: 'calc(100% - 20px)', margin: '0 auto', maxHeight: '220px', borderRadius: '14px', overflow: 'hidden', background: '#0B0B0E', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                        <img
+                          src={campaign.image_url}
+                          alt=""
+                          style={{ width: '100%', height: 'auto', maxHeight: '220px', objectFit: 'cover', display: 'block' }}
+                        />
+                      </div>
+                    )}
+
+                    <div style={{ padding: hasPreviewText ? '14px 16px 18px' : '8px 16px 10px', display: 'flex', flexDirection: 'column', gap: hasPreviewText ? '10px' : '0', textAlign: 'center' }}>
+                      {campaign.title && (
+                        <h4 style={{ margin: 0, color: '#FFF', fontSize: '1.2rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '-0.01em' }}>
+                          {campaign.title}
+                        </h4>
+                      )}
+                      {campaign.body && (
+                        <p style={{ margin: 0, color: '#D1D5DB', fontSize: '0.85rem', lineHeight: '1.5', whiteSpace: 'pre-line' }}>
+                          {campaign.body}
+                        </p>
+                      )}
+
+                      {campaign.coupon_code && (
+                        <div
+                          style={{
+                            background: 'rgba(255, 255, 255, 0.04)',
+                            border: '1.5px dashed rgba(245, 158, 11, 0.6)',
+                            borderRadius: '10px',
+                            padding: '6px 10px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <Tag size={14} color="#FCD34D" />
+                            <span style={{ fontFamily: 'monospace', fontWeight: 900, color: '#FCD34D', fontSize: '0.9rem' }}>
+                              {campaign.coupon_code}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: '0.72rem', background: '#D97706', color: '#FFF', fontWeight: 800, padding: '2px 6px', borderRadius: '4px' }}>
+                            COPIAR
+                          </span>
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        style={{
+                          background: 'linear-gradient(135deg, #B30401 0%, #EF4444 100%)',
+                          color: '#FFF',
+                          border: 'none',
+                          borderRadius: '999px',
+                          padding: '8px 20px',
+                          fontWeight: 700,
+                          fontSize: '0.88rem',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          alignSelf: 'center',
+                          margin: '0 auto',
+                          width: 'auto',
+                          minWidth: '130px',
+                          gap: '6px',
+                          boxShadow: '0 4px 18px rgba(179, 4, 1, 0.45)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <span>{campaign.cta_label || 'Pedir ahora'}</span>
+                        <ArrowRight size={15} />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* PLANTILLA 1: TARJETA CRISTAL MODERNA (DEFAULT) */
+                  <div
+                    style={{
+                      width: '100%',
+                      background: '#FFFFFF',
+                      borderRadius: '22px',
+                      overflow: 'hidden',
+                      position: 'relative',
+                      boxShadow: '0 20px 50px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(179, 4, 1, 0.12)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                    }}
+                  >
+                    {/* Botón flotante cerrar */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '12px',
+                        right: '12px',
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '50%',
+                        background: 'rgba(255, 255, 255, 0.95)',
+                        color: '#111827',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 10,
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.18)',
+                        border: '1px solid rgba(0,0,0,0.06)',
+                      }}
+                    >
+                      <X size={16} />
+                    </div>
+
+                    <div style={{ padding: '14px 16px 8px' }}>
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          padding: '3px 10px',
+                          background: 'rgba(179, 4, 1, 0.08)',
+                          border: '1px solid rgba(179, 4, 1, 0.2)',
+                          borderRadius: '999px',
+                          color: '#B30401',
+                          fontSize: '0.72rem',
+                          fontWeight: 800,
+                          letterSpacing: '0.04em',
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        <img src={districStar} alt="" style={{ width: '12px', height: '12px' }} />
+                        <span>DISTRITO HOUSE • ESPECIAL</span>
+                      </span>
+                    </div>
+
+                    {campaign.image_url ? (
+                      <div style={{ width: 'calc(100% - 20px)', margin: '0 auto', maxHeight: '220px', borderRadius: '14px', overflow: 'hidden', background: '#F9FAFB', border: '1px solid rgba(0, 0, 0, 0.04)' }}>
+                        <img
+                          src={campaign.image_url}
+                          alt=""
+                          style={{ width: '100%', height: 'auto', maxHeight: '220px', objectFit: 'cover', display: 'block' }}
+                        />
+                      </div>
+                    ) : (
+                      <div style={{ padding: '1.8rem 1rem', textAlign: 'center', color: '#9CA3AF', background: '#F9FAFB' }}>
+                        <ImageIcon size={28} style={{ margin: '0 auto 0.4rem', display: 'block', opacity: 0.5 }} />
+                        <span style={{ fontSize: '0.8rem' }}>Puedes añadir una imagen atractiva</span>
+                      </div>
+                    )}
+
+                    <div style={{ padding: hasPreviewText ? '14px 16px 18px' : '8px 16px 10px', display: 'flex', flexDirection: 'column', gap: hasPreviewText ? '10px' : '0', textAlign: 'center' }}>
+                      {campaign.title && (
+                        <h4 style={{ margin: 0, color: '#111827', fontSize: '1.2rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '-0.01em' }}>
+                          {campaign.title}
+                        </h4>
+                      )}
+                      {campaign.body && (
+                        <p style={{ margin: 0, color: '#4B5563', fontSize: '0.85rem', lineHeight: '1.5', whiteSpace: 'pre-line' }}>
+                          {campaign.body}
+                        </p>
+                      )}
+
+                      {campaign.coupon_code && (
+                        <div
+                          style={{
+                            background: '#FFFDF0',
+                            border: '1.5px dashed #F59E0B',
+                            borderRadius: '10px',
+                            padding: '6px 10px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <Tag size={14} color="#D97706" />
+                            <span style={{ fontFamily: 'monospace', fontWeight: 900, color: '#1F2937', fontSize: '0.9rem' }}>
+                              {campaign.coupon_code}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: '0.72rem', background: '#D97706', color: '#FFF', fontWeight: 800, padding: '2px 6px', borderRadius: '4px' }}>
+                            COPIAR
+                          </span>
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        style={{
+                          background: 'linear-gradient(135deg, #B30401 0%, #D80401 100%)',
+                          color: '#FFF',
+                          border: 'none',
+                          borderRadius: '999px',
+                          padding: '8px 20px',
+                          fontWeight: 700,
+                          fontSize: '0.88rem',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          alignSelf: 'center',
+                          margin: '0 auto',
+                          width: 'auto',
+                          minWidth: '130px',
+                          gap: '6px',
+                          boxShadow: '0 4px 14px rgba(179, 4, 1, 0.28)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Sparkles size={14} />
+                        <span>{campaign.cta_label || 'Ver más'}</span>
+                        <ArrowRight size={15} />
+                      </button>
+                    </div>
+                  </div>
                 )}
-                <p>{campaign.body || 'Escribe un mensaje claro y atractivo.'}</p>
-                {campaign.coupon_code && <code>{campaign.coupon_code}</code>}
-                <button type="button">{campaign.cta_label || 'Ver más'}</button>
               </div>
-            </article>
+
+              {/* Indicador de Estado Activo/Inactivo */}
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  padding: '0.4rem 0.85rem',
+                  borderRadius: '999px',
+                  background: campaign.is_active ? 'rgba(34, 197, 94, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                  color: campaign.is_active ? '#16a34a' : '#ef4444',
+                  fontSize: '0.8rem',
+                  fontWeight: '700',
+                  border: campaign.is_active ? '1px solid rgba(34, 197, 94, 0.25)' : '1px solid rgba(239, 68, 68, 0.25)',
+                }}
+              >
+                {campaign.is_active ? <CheckCircle size={15} /> : <XCircle size={15} />}
+                {campaign.is_active ? 'ACTIVA: Visible en Tienda' : 'DESACTIVADA: Oculta'}
+              </div>
+            </div>
           )}
         </aside>
       </div>
