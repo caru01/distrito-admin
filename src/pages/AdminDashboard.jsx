@@ -75,12 +75,12 @@ export default function AdminDashboard() {
 
   // Rentabilidad
   const PROFITABILITY_PERIODS = [
-    { value: '15d', label: 'Últ. 15 días' },
+    { value: 'today', label: 'Hoy' },
     { value: 'weekly', label: 'Esta semana' },
     { value: 'monthly', label: 'Este mes' },
     { value: 'custom', label: 'Personalizado' },
   ];
-  const [profPeriod, setProfPeriod] = useState('15d');
+  const [profPeriod, setProfPeriod] = useState('today');
   const [profDateFrom, setProfDateFrom] = useState('');
   const [profDateTo, setProfDateTo] = useState('');
   const [profData, setProfData] = useState(null);
@@ -504,10 +504,7 @@ export default function AdminDashboard() {
                     setProfPeriod(value);
                     if (value === 'custom' && (!profDateFrom || !profDateTo)) {
                       const today = getTodayColombia();
-                      const past = new Date();
-                      past.setDate(past.getDate() - 14);
-                      const pastStr = past.toISOString().slice(0, 10);
-                      setProfDateFrom(pastStr);
+                      setProfDateFrom(today);
                       setProfDateTo(today);
                     }
                   }}
@@ -608,7 +605,7 @@ export default function AdminDashboard() {
             return (
               <>
                 <p className="dashboard-profitability-range">
-                  {periodLabel} · {startFmt}–{endFmt}
+                  {periodLabel}{startFmt ? ` · ${startFmt === endFmt ? startFmt : `${startFmt}–${endFmt}`}` : ''}
                 </p>
 
                 {profData.cogsIsPartial && Number(profData.completedCount) > 0 && (
