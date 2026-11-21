@@ -1633,73 +1633,43 @@ export default function AdminApp() {
                       </div>
                     </div>
 
-                    {/* Banner Restaurante Cerrado (DISEÑO BLANCO LIMPIO) */}
+                    {/* Banner Restaurante Cerrado Oficial (Image 1) */}
                     <div style={{
-                      margin: '6px 12px',
-                      backgroundColor: '#FFFFFF',
-                      borderRadius: '14px',
-                      border: '1.2px solid #FECACA',
-                      padding: '10px 12px',
+                      margin: '6px 12px 10px 12px',
+                      backgroundColor: '#DC2626',
+                      borderRadius: '16px',
+                      padding: '11px 12px',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '10px',
-                      boxShadow: '0 4px 12px rgba(220, 38, 38, 0.08)'
+                      boxShadow: '0 4px 12px rgba(220, 38, 38, 0.25)'
                     }}>
-                      {/* Contenedor Rojo Pastel con Tienda */}
+                      {/* Círculo blanco translúcido con tienda */}
                       <div style={{
                         width: '36px',
                         height: '36px',
-                        borderRadius: '10px',
-                        backgroundColor: '#FEF2F2',
-                        border: '1px solid #FCA5A5',
+                        borderRadius: '50%',
+                        backgroundColor: 'rgba(255, 255, 255, 0.2)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         flexShrink: 0
                       }}>
-                        <Clock size={18} color="#DC2626" />
+                        <Store size={18} color="#FFFFFF" />
                       </div>
 
                       {/* Texto Central */}
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                          <span style={{ fontSize: '11px', fontWeight: 800, color: '#1F2937', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            Actualmente estamos...
-                          </span>
-                          <span style={{
-                            backgroundColor: '#FEF2F2',
-                            color: '#DC2626',
-                            border: '0.8px solid #FCA5A5',
-                            borderRadius: '4px',
-                            padding: '1px 5px',
-                            fontSize: '7.5px',
-                            fontWeight: 900
-                          }}>
-                            EN PAUSA
-                          </span>
+                        <div style={{ fontSize: '11.5px', fontWeight: 800, color: '#FFFFFF', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          Actualmente estamos cerrados
                         </div>
-                        <div style={{ fontSize: '9px', color: '#6B7280', marginTop: '2px', lineHeight: 1.2 }}>
-                          Hoy: Cerrado (fuera del horario de pedidos).
+                        <div style={{ fontSize: '9px', color: 'rgba(255, 255, 255, 0.88)', marginTop: '2px', lineHeight: 1.25 }}>
+                          Hoy: Cerrado (fuera del horario de pedidos). Toca para ver horarios.
                         </div>
                       </div>
 
-                      {/* Botón Horarios Pill */}
-                      <div style={{
-                        backgroundColor: '#F9FAFB',
-                        border: '1px solid #E5E7EB',
-                        borderRadius: '14px',
-                        padding: '4px 8px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '2px',
-                        fontSize: '9.5px',
-                        fontWeight: 700,
-                        color: '#374151',
-                        flexShrink: 0
-                      }}>
-                        <span>Horarios</span>
-                        <ChevronRight size={12} color="#9CA3AF" />
-                      </div>
+                      {/* Chevron Derecho Blanco */}
+                      <ChevronRight size={18} color="#FFFFFF" style={{ flexShrink: 0 }} />
                     </div>
 
                     {/* Banner Publicitario Auto-deslizante de la APP */}
