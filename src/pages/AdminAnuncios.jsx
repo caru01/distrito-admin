@@ -140,7 +140,7 @@ export default function AdminAnuncios() {
       });
       const data = await readApiJson(response);
       if (!response.ok) throw new Error(data.error || 'No fue posible cargar las campañas.');
-      const items = data.announcements || [];
+      const items = (data.announcements || []).filter(item => !String(item.popup_style || '').startsWith('app_banner'));
       setCampaigns(items);
       setCampaign((current) =>
         current.id ? normalize(items.find((item) => item.id === current.id) || EMPTY) : current
@@ -327,10 +327,10 @@ export default function AdminAnuncios() {
     <div className="ds-page announcement-page">
       <header className="ds-page-header">
         <div>
-          <span className="ds-page-kicker">Comunicación con clientes</span>
-          <h1 className="ds-page-title">Anuncios y notificaciones</h1>
+          <span className="ds-page-kicker">Comunicación Web</span>
+          <h1 className="ds-page-title">Anuncios y Ventanas (Tienda Web)</h1>
           <p className="ds-page-subtitle">
-            Diseña, programa, segmenta y edita las promociones y tarjetas de la tienda virtual.
+            Diseña, programa, segmenta y edita las ventanas emergentes (popups), tarjetas promocionales y banners de la tienda web.
           </p>
         </div>
         <div className="ds-page-actions" style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
@@ -345,6 +345,37 @@ export default function AdminAnuncios() {
           </button>
         </div>
       </header>
+
+      {/* Banner informativo de separación App vs Web */}
+      <div style={{
+        background: 'rgba(59, 130, 246, 0.08)',
+        border: '1px solid rgba(59, 130, 246, 0.22)',
+        borderRadius: '10px',
+        padding: '0.8rem 1.1rem',
+        marginBottom: '1.2rem',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '0.75rem'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <Smartphone size={20} color="#3b82f6" />
+          <div style={{ fontSize: '0.86rem' }}>
+            <strong style={{ color: '#60a5fa' }}>Banners de la Aplicación Móvil:</strong>
+            <span style={{ color: '#94a3b8', marginLeft: '0.4rem' }}>
+              Los banners auto-deslizantes de la APP se gestionan de forma independiente en la sección dedicada.
+            </span>
+          </div>
+        </div>
+        <a
+          href="/admin/app"
+          className="ds-btn ds-btn-secondary"
+          style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem', borderColor: '#3b82f6', color: '#60a5fa', textDecoration: 'none' }}
+        >
+          Ir a Banners en App &rarr;
+        </a>
+      </div>
 
       {notice && (
         <div className={`ds-inline-alert ds-inline-alert-${notice.type === 'success' ? 'success' : 'danger'}`}>
@@ -1237,7 +1268,7 @@ export default function AdminAnuncios() {
               >
                 {campaign.is_active ? <CheckCircle size={16} /> : <XCircle size={16} />}
                 {campaign.is_active
-                  ? 'ACTIVA: Visible en Tienda Web y Móvil'
+                  ? 'ACTIVA: Visible en Tienda Web'
                   : 'DESACTIVADA: Oculta en la Tienda'}
               </div>
             </div>
