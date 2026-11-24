@@ -29,6 +29,18 @@ export default function AdminApp() {
   });
   const [creatingBanner, setCreatingBanner] = useState(false);
 
+  // Splash Ad state (Ventana de Anuncio Inicial para Android e iOS)
+  const [splashAd, setSplashAd] = useState({
+    id: null,
+    title: 'Promo Exclusiva App',
+    image_url: '',
+    is_active: false,
+    duration: 3,
+    cta_url: ''
+  });
+  const [savingSplashAd, setSavingSplashAd] = useState(false);
+  const splashFileInputRef = useRef(null);
+
   // Push Notifications state
   const [pushStats, setPushStats] = useState({ total: 0, customers: 0 });
   const [pushForm, setPushForm] = useState({
@@ -125,6 +137,24 @@ export default function AdminApp() {
           setBannerInterval(dataBanners.interval);
         }
       }
+
+      // Cargar Ventana de Anuncio Inicial (Splash Ad) de la APP
+      try {
+        const resSplash = await fetch(`${API_URL}/admin/app-splash-ad`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const dataSplash = await resSplash.json();
+        if (dataSplash.status === 'ok' && dataSplash.splashAd) {
+          setSplashAd({
+            id: dataSplash.splashAd.id,
+            title: dataSplash.splashAd.title || '',
+            image_url: dataSplash.splashAd.image_url || '',
+            is_active: Boolean(dataSplash.splashAd.is_active),
+            duration: dataSplash.splashAd.duration || 3,
+            cta_url: dataSplash.splashAd.cta_url || ''
+          });
+        }
+      } catch (_) {}
 
       // Cargar conteo de suscriptores Push
       const resPush = await fetch(`${API_URL}/admin/push/subscriptions/count`, {
@@ -304,6 +334,56 @@ export default function AdminApp() {
     }
   };
 
+  const handleSaveSplashAd = async (e) => {
+    if (e) e.preventDefault();
+    setSavingSplashAd(true);
+    setStatusMessage({ text: '', type: '' });
+    const token = sessionStorage.getItem('distrito_admin_token');
+    try {
+      const res = await fetch(`${API_URL}/admin/app-splash-ad`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(splashAd)
+      });
+      const data = await res.json();
+      if (data.status === 'ok' && data.splashAd) {
+        setSplashAd(prev => ({
+          ...prev,
+          id: data.splashAd.id,
+          image_url: data.splashAd.image_url,
+          is_active: data.splashAd.is_active,
+          duration: data.splashAd.duration || prev.duration
+        }));
+        setStatusMessage({ text: '¡Ventana de Anuncio Inicial guardada exitosamente!', type: 'success' });
+      } else {
+        setStatusMessage({ text: data.error || 'Error al guardar la ventana de anuncio', type: 'error' });
+      }
+    } catch (err) {
+      console.error(err);
+      setStatusMessage({ text: 'Error de conexión al guardar el anuncio de inicio', type: 'error' });
+    } finally {
+      setSavingSplashAd(false);
+    }
+  };
+
+  const handleSplashImageUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setStatusMessage({ text: 'La imagen del anuncio no debe superar 5 MB', type: 'error' });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setSplashAd(prev => ({ ...prev, image_url: reader.result }));
+      setStatusMessage({ text: 'Imagen de anuncio cargada en vista previa. Recuerda hacer clic en "Guardar Ventana de Anuncio".', type: 'info' });
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSendPush = async (e) => {
     e.preventDefault();
     if (!pushForm.title || !pushForm.message) {
@@ -470,7 +550,7 @@ export default function AdminApp() {
               { id: 'apariencia', label: 'Marca & Apariencia', icon: <Palette size={16} /> },
               { id: 'pedidos', label: 'Pedidos & Pagos', icon: <ShoppingBag size={16} /> },
               { id: 'distribucion', label: 'Descarga & APK', icon: <Download size={16} /> },
-              { id: 'banners', label: 'Banners en App', icon: <Megaphone size={16} /> },
+              { id: 'banners', label: 'Anuncios & Banners', icon: <Megaphone size={16} /> },
               { id: 'push', label: 'Notificaciones Push', icon: <Bell size={16} /> },
             ].map(tab => (
               <button
@@ -1086,6 +1166,273 @@ export default function AdminApp() {
                 </div>
               </div>
 
+              {/* SECCIÓN 1: VENTANA DE ANUNCIO AL INICIAR LA APP (Android & iOS) */}
+              <div style={{
+                border: '1.5px solid var(--ds-border)',
+                borderRadius: '16px',
+                padding: '24px',
+                marginBottom: '32px',
+                backgroundColor: 'var(--ds-bg-card)',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.05)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '14px', marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{
+                      width: '42px',
+                      height: '42px',
+                      borderRadius: '12px',
+                      backgroundColor: splashAd.is_active ? 'rgba(16, 185, 129, 0.15)' : 'rgba(107, 114, 128, 0.15)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: splashAd.is_active ? '#10B981' : '#6B7280'
+                    }}>
+                      <Sparkles size={22} />
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '17px', fontWeight: 800, margin: 0, color: 'var(--ds-text-primary)' }}>
+                        Ventana de Anuncio al Iniciar la APP (Android & iOS)
+                      </h3>
+                      <p style={{ fontSize: '13px', color: 'var(--ds-text-secondary)', margin: '2px 0 0 0' }}>
+                        Publicidad emergente en pantalla completa que verán los clientes en la app apenas la abren, antes del mensaje bíblico.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Switch Activar / Desactivar Anuncio de Inicio */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{
+                      fontSize: '12px',
+                      fontWeight: 800,
+                      padding: '4px 10px',
+                      borderRadius: '20px',
+                      backgroundColor: splashAd.is_active ? '#DCFCE7' : '#F3F4F6',
+                      color: splashAd.is_active ? '#15803D' : '#6B7280',
+                      border: `1px solid ${splashAd.is_active ? '#86EFAC' : '#E5E7EB'}`
+                    }}>
+                      {splashAd.is_active ? '● ANUNCIO ACTIVO EN APP' : '○ ANUNCIO DESACTIVADO'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSplashAd(prev => ({ ...prev, is_active: !prev.is_active }))}
+                      className={`ds-btn ds-btn-sm ${splashAd.is_active ? 'ds-btn-danger' : 'ds-btn-success'}`}
+                      style={{ fontWeight: 700 }}
+                    >
+                      {splashAd.is_active ? 'Desactivar Anuncio' : 'Activar Anuncio'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* NOTA DESTACADA DE TAMAÑO Y CALIDAD RECOMENDADA */}
+                <div style={{
+                  backgroundColor: '#EFF6FF',
+                  border: '1.5px solid #BFDBFE',
+                  borderRadius: '12px',
+                  padding: '16px 18px',
+                  marginBottom: '20px',
+                  display: 'flex',
+                  gap: '14px',
+                  alignItems: 'flex-start'
+                }}>
+                  <div style={{ color: '#2563EB', flexShrink: 0, marginTop: '2px' }}>
+                    <AlertCircle size={22} />
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#1E3A8A', lineHeight: 1.5 }}>
+                    <div style={{ fontWeight: 800, fontSize: '14px', marginBottom: '4px', color: '#1E40AF' }}>
+                      📐 Especificaciones de Tamaño y Calidad de la Imagen:
+                    </div>
+                    <div>
+                      • <strong>Tamaño recomendado:</strong> <strong>1080 x 1920 píxeles</strong> (Formato vertical 9:16 Full HD) o <strong>1080 x 2340 píxeles</strong> (para celulares alargados modernos).
+                    </div>
+                    <div>
+                      • <strong>Calidad y Formato:</strong> Formato <strong>PNG</strong> o <strong>WebP</strong> de alta fidelidad, con peso optimizado (menor a 2.5 MB) para que cargue al instante y no pierda nitidez.
+                    </div>
+                    <div>
+                      • <strong>Área Segura:</strong> Mantén los textos, logos y ofertas en el 80% central de la imagen para que no queden tapados por la barra superior de Android/iOS ni la barra de gestos inferior.
+                    </div>
+                  </div>
+                </div>
+
+                {/* Campos de Configuración del Anuncio */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(260px, 0.8fr)', gap: '22px' }}>
+                  <div>
+                    <div className="ds-form-group" style={{ marginBottom: '14px' }}>
+                      <label className="ds-label">Título descriptivo de la Campaña (Interno)</label>
+                      <input
+                        type="text"
+                        className="ds-input"
+                        placeholder="Ej: Promo Combo Doble Burger Fin de Semana"
+                        value={splashAd.title}
+                        onChange={(e) => setSplashAd(prev => ({ ...prev, title: e.target.value }))}
+                      />
+                    </div>
+
+                    <div className="ds-form-group" style={{ marginBottom: '14px' }}>
+                      <label className="ds-label">Cargar Imagen del Anuncio</label>
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                        <input
+                          type="file"
+                          ref={splashFileInputRef}
+                          accept="image/*"
+                          style={{ display: 'none' }}
+                          onChange={handleSplashImageUpload}
+                        />
+                        <button
+                          type="button"
+                          className="ds-btn ds-btn-secondary"
+                          onClick={() => splashFileInputRef.current?.click()}
+                          style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                        >
+                          <Upload size={16} /> Subir Imagen desde el PC
+                        </button>
+                        {splashAd.image_url && (
+                          <button
+                            type="button"
+                            className="ds-btn ds-btn-sm"
+                            style={{ color: '#EF4444', border: '1px solid #FCA5A5' }}
+                            onClick={() => setSplashAd(prev => ({ ...prev, image_url: '' }))}
+                          >
+                            Quitar Imagen
+                          </button>
+                        )}
+                      </div>
+                      <div style={{ marginTop: '8px' }}>
+                        <span style={{ fontSize: '11px', color: 'var(--ds-text-secondary)' }}>O pega una URL directa de imagen web:</span>
+                        <input
+                          type="text"
+                          className="ds-input"
+                          style={{ marginTop: '4px' }}
+                          placeholder="https://... imagen vertical para el anuncio"
+                          value={splashAd.image_url}
+                          onChange={(e) => setSplashAd(prev => ({ ...prev, image_url: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
+                      <div className="ds-form-group">
+                        <label className="ds-label">Tiempo de visualización (Segundos)</label>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          {[2, 3, 4, 5].map(sec => (
+                            <button
+                              key={sec}
+                              type="button"
+                              onClick={() => setSplashAd(prev => ({ ...prev, duration: sec }))}
+                              className="ds-btn ds-btn-sm"
+                              style={{
+                                flex: 1,
+                                backgroundColor: splashAd.duration === sec ? '#2563EB' : 'var(--ds-bg-elevated)',
+                                color: splashAd.duration === sec ? '#fff' : 'var(--ds-text-primary)',
+                                fontWeight: 700,
+                                border: '1px solid var(--ds-border)'
+                              }}
+                            >
+                              {sec}s
+                            </button>
+                          ))}
+                        </div>
+                        <span style={{ fontSize: '11px', color: 'var(--ds-text-secondary)', marginTop: '4px', display: 'block' }}>
+                          El cliente siempre tendrá visible el botón <strong>"Omitir"</strong> para saltarlo cuando desee.
+                        </span>
+                      </div>
+
+                      <div className="ds-form-group">
+                        <label className="ds-label">Categoría o Enlace al Tocar (Opcional)</label>
+                        <input
+                          type="text"
+                          className="ds-input"
+                          placeholder="Ej: Combo Buger"
+                          value={splashAd.cta_url}
+                          onChange={(e) => setSplashAd(prev => ({ ...prev, cta_url: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: '18px' }}>
+                      <button
+                        type="button"
+                        onClick={handleSaveSplashAd}
+                        disabled={savingSplashAd}
+                        className="ds-btn ds-btn-primary"
+                        style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', fontWeight: 800 }}
+                      >
+                        <Save size={18} /> {savingSplashAd ? 'Guardando Anuncio...' : 'Guardar Ventana de Anuncio'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Vista Previa de la Imagen del Anuncio */}
+                  <div>
+                    <label className="ds-label" style={{ marginBottom: '8px', display: 'block' }}>Vista Previa de la Imagen:</label>
+                    <div style={{
+                      width: '100%',
+                      height: '280px',
+                      borderRadius: '14px',
+                      overflow: 'hidden',
+                      border: '1.5px dashed var(--ds-border)',
+                      backgroundColor: '#0F172A',
+                      position: 'relative',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      {splashAd.image_url ? (
+                        <>
+                          <img
+                            src={splashAd.image_url}
+                            alt="Vista previa anuncio"
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+                          <div style={{
+                            position: 'absolute',
+                            top: '10px',
+                            right: '10px',
+                            backgroundColor: 'rgba(0,0,0,0.7)',
+                            color: '#fff',
+                            fontSize: '10px',
+                            fontWeight: 700,
+                            padding: '3px 8px',
+                            borderRadius: '12px',
+                            border: '1px solid rgba(255,255,255,0.3)'
+                          }}>
+                            Omitir {splashAd.duration || 3}s ❯
+                          </div>
+                          <div style={{
+                            position: 'absolute',
+                            bottom: '10px',
+                            left: '10px',
+                            backgroundColor: '#B30401',
+                            color: '#fff',
+                            fontSize: '9px',
+                            fontWeight: 900,
+                            padding: '2px 6px',
+                            borderRadius: '4px'
+                          }}>
+                            ANUNCIO DE INICIO APP
+                          </div>
+                        </>
+                      ) : (
+                        <div style={{ textAlign: 'center', padding: '20px', color: '#94A3B8' }}>
+                          <ImageIcon size={40} style={{ opacity: 0.5, marginBottom: '8px' }} />
+                          <div style={{ fontSize: '13px', fontWeight: 700 }}>Sin Imagen de Anuncio</div>
+                          <div style={{ fontSize: '11px', marginTop: '4px' }}>Sube una imagen o pega una URL para activar la ventana</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* SECCIÓN 2: BANNERS PROMOCIONALES EN MENÚ */}
+              <div style={{ borderTop: '1px solid var(--ds-border)', paddingTop: '24px', marginBottom: '20px' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: 800, margin: '0 0 6px 0', color: 'var(--ds-text-primary)' }}>
+                  Banners Promocionales en Menú (Carrusel de Categorías)
+                </h3>
+                <p style={{ fontSize: '13px', color: 'var(--ds-text-secondary)', margin: 0 }}>
+                  Gestiona los banners que se deslizan horizontalmente arriba de "Lo más vendido" en la aplicación móvil.
+                </p>
+              </div>
+
               {/* Selector de Intervalo de Transición Automática */}
               <div style={{
                 backgroundColor: 'var(--ds-bg-elevated)',
@@ -1433,6 +1780,22 @@ export default function AdminApp() {
                 </button>
                 <button
                   type="button"
+                  onClick={() => setPreviewMode('splash_ad')}
+                  style={{
+                    padding: '3px 8px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    borderRadius: '6px',
+                    border: 'none',
+                    backgroundColor: previewMode === 'splash_ad' ? '#2563EB' : 'var(--ds-bg-elevated)',
+                    color: previewMode === 'splash_ad' ? '#fff' : 'var(--ds-text-secondary)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  📢 Anuncio
+                </button>
+                <button
+                  type="button"
                   onClick={() => setPreviewMode('maintenance')}
                   style={{
                     padding: '3px 8px',
@@ -1513,7 +1876,86 @@ export default function AdminApp() {
                   </div>
                 </div>
 
-                {previewMode === 'maintenance' || !settings.app_is_active ? (
+                {previewMode === 'splash_ad' ? (
+                  /* Vista Anuncio Inicial en Pantalla Completa (1:1 Móvil) */
+                  <div style={{
+                    flex: 1,
+                    position: 'relative',
+                    backgroundColor: '#000000',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    overflow: 'hidden'
+                  }}>
+                    {splashAd.image_url ? (
+                      <img
+                        src={splashAd.image_url}
+                        alt="Anuncio Inicial"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0 }}
+                      />
+                    ) : (
+                      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF', padding: '20px', textAlign: 'center' }}>
+                        <Sparkles size={36} color="#F59E0B" style={{ marginBottom: '10px' }} />
+                        <span style={{ fontSize: '13px', fontWeight: 800, color: '#fff' }}>Ventana de Anuncio Inicial</span>
+                        <span style={{ fontSize: '11px', marginTop: '4px', color: '#9CA3AF' }}>Sube una imagen vertical en la pestaña "Anuncios & Banners" para verla aquí</span>
+                      </div>
+                    )}
+                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, transparent 25%, transparent 75%, rgba(0,0,0,0.85) 100%)' }} />
+
+                    {/* Botón Omitir Superior */}
+                    <div style={{ position: 'relative', zIndex: 10, padding: '14px', display: 'flex', justifyContent: 'flex-end' }}>
+                      <div style={{
+                        backgroundColor: 'rgba(0,0,0,0.7)',
+                        border: '1px solid rgba(255,255,255,0.4)',
+                        color: '#fff',
+                        borderRadius: '20px',
+                        padding: '4px 10px',
+                        fontSize: '10px',
+                        fontWeight: 800,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}>
+                        <span>Omitir {splashAd.duration || 3}s</span>
+                        <ChevronRight size={12} />
+                      </div>
+                    </div>
+
+                    {/* Información Inferior */}
+                    <div style={{ position: 'relative', zIndex: 10, padding: '16px 14px' }}>
+                      <span style={{
+                        backgroundColor: '#B30401',
+                        color: '#fff',
+                        fontSize: '8px',
+                        fontWeight: 900,
+                        padding: '2px 6px',
+                        borderRadius: '4px'
+                      }}>
+                        PROMO EXCLUSIVA APP
+                      </span>
+                      <div style={{ color: '#fff', fontSize: '13px', fontWeight: 800, marginTop: '4px' }}>
+                        {splashAd.title || '¡Aprovecha nuestras ofertas exclusivas!'}
+                      </div>
+                      {splashAd.cta_url && (
+                        <div style={{
+                          marginTop: '8px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          backgroundColor: '#fff',
+                          color: '#000',
+                          padding: '4px 10px',
+                          borderRadius: '14px',
+                          fontSize: '10px',
+                          fontWeight: 800
+                        }}>
+                          <span>Ver Oferta</span>
+                          <ChevronRight size={12} />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : previewMode === 'maintenance' || !settings.app_is_active ? (
                   /* Modo Mantenimiento */
                   <div style={{ flex: 1, padding: '30px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', backgroundColor: '#FFFFFF' }}>
                     <div style={{
