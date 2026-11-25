@@ -4,7 +4,8 @@ import {
   Smartphone, Save, RefreshCw, AlertCircle, CheckCircle, Upload, Eye,
   Sliders, Palette, ShoppingBag, Download, QrCode, ExternalLink, Sparkles,
   Phone, ShieldCheck, ShieldAlert, Store, Clock, DollarSign, Wallet, Banknote,
-  RotateCcw, Megaphone, Check, Copy, Flame, Bell, Trash2, Plus, Send, ChevronRight, Image as ImageIcon
+  RotateCcw, Megaphone, Check, Copy, Flame, Bell, Trash2, Plus, Send, ChevronRight, Image as ImageIcon,
+  Ticket, Tag, Edit2
 } from 'lucide-react';
 
 export default function AdminApp() {
@@ -40,6 +41,24 @@ export default function AdminApp() {
   });
   const [savingSplashAd, setSavingSplashAd] = useState(false);
   const splashFileInputRef = useRef(null);
+
+  // Cupones de la App Móvil state
+  const [coupons, setCoupons] = useState([]);
+  const [loadingCoupons, setLoadingCoupons] = useState(false);
+  const [couponModalOpen, setCouponModalOpen] = useState(false);
+  const [editingCoupon, setEditingCoupon] = useState(null);
+  const [savingCoupon, setSavingCoupon] = useState(false);
+  const [couponForm, setCouponForm] = useState({
+    code: '',
+    title: '',
+    description: '',
+    discount_type: 'free_delivery',
+    discount_value: 0,
+    min_order_total: 0,
+    max_uses_per_customer: 1,
+    is_active: true,
+    expires_at: ''
+  });
 
   // Push Notifications state
   const [pushStats, setPushStats] = useState({ total: 0, customers: 0 });
@@ -164,6 +183,9 @@ export default function AdminApp() {
       if (dataPush.status === 'ok') {
         setPushStats(dataPush);
       }
+
+      // Cargar cupones de la app móvil
+      fetchCoupons();
     } catch (err) {
       console.error('Error cargando configuración de la app:', err);
       setStatusMessage({ text: 'Error al conectar con el servidor', type: 'error' });
@@ -415,6 +437,134 @@ export default function AdminApp() {
     }
   };
 
+  // Cupones de la App Móvil handlers
+  const fetchCoupons = async () => {
+    try {
+      setLoadingCoupons(true);
+      const token = sessionStorage.getItem('distrito_admin_token') || localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/admin/coupons`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.status === 'ok') {
+        setCoupons(data.coupons || []);
+      }
+    } catch (err) {
+      console.error('Error cargando cupones:', err);
+    } finally {
+      setLoadingCoupons(false);
+    }
+  };
+
+  const handleOpenCreateCoupon = () => {
+    setEditingCoupon(null);
+    setCouponForm({
+      code: '',
+      title: '',
+      description: '',
+      discount_type: 'free_delivery',
+      discount_value: 0,
+      min_order_total: 0,
+      max_uses_per_customer: 1,
+      is_active: true,
+      expires_at: ''
+    });
+    setCouponModalOpen(true);
+  };
+
+  const handleOpenEditCoupon = (coupon) => {
+    setEditingCoupon(coupon);
+    setCouponForm({
+      code: coupon.code,
+      title: coupon.title,
+      description: coupon.description || '',
+      discount_type: coupon.discount_type,
+      discount_value: coupon.discount_value || 0,
+      min_order_total: coupon.min_order_total || 0,
+      max_uses_per_customer: coupon.max_uses_per_customer || 1,
+      is_active: coupon.is_active,
+      expires_at: coupon.expires_at ? coupon.expires_at.slice(0, 10) : ''
+    });
+    setCouponModalOpen(true);
+  };
+
+  const handleSaveCoupon = async (e) => {
+    if (e) e.preventDefault();
+    if (!couponForm.code.trim() || !couponForm.title.trim()) {
+      setStatusMessage({ text: 'El código y el título del cupón son obligatorios', type: 'error' });
+      return;
+    }
+    setSavingCoupon(true);
+    const token = sessionStorage.getItem('distrito_admin_token') || localStorage.getItem('token');
+    try {
+      const url = editingCoupon 
+        ? `${API_URL}/admin/coupons/${editingCoupon.id}` 
+        : `${API_URL}/admin/coupons`;
+      const method = editingCoupon ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(couponForm)
+      });
+      const data = await res.json();
+      if (data.status === 'ok') {
+        setCouponModalOpen(false);
+        fetchCoupons();
+        setStatusMessage({ 
+          text: editingCoupon ? 'Cupón actualizado correctamente.' : '¡Cupón creado exitosamente!', 
+          type: 'success' 
+        });
+      } else {
+        setStatusMessage({ text: data.error || 'No se pudo guardar el cupón', type: 'error' });
+      }
+    } catch (err) {
+      console.error('Error guardando cupón:', err);
+      setStatusMessage({ text: 'Error de red al guardar el cupón', type: 'error' });
+    } finally {
+      setSavingCoupon(false);
+    }
+  };
+
+  const handleToggleCoupon = async (id) => {
+    const token = sessionStorage.getItem('distrito_admin_token') || localStorage.getItem('token');
+    try {
+      const res = await fetch(`${API_URL}/admin/coupons/${id}/toggle`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.status === 'ok') {
+        setCoupons(prev => prev.map(c => c.id === id ? { ...c, is_active: data.coupon.is_active } : c));
+      }
+    } catch (err) {
+      console.error('Error toggling coupon:', err);
+    }
+  };
+
+  const handleDeleteCoupon = async (id, code) => {
+    if (!window.confirm(`¿Seguro que deseas eliminar el cupón "${code}"?`)) return;
+    const token = sessionStorage.getItem('distrito_admin_token') || localStorage.getItem('token');
+    try {
+      const res = await fetch(`${API_URL}/admin/coupons/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.status === 'ok') {
+        setCoupons(prev => prev.filter(c => c.id !== id));
+        setStatusMessage({ text: `Cupón ${code} eliminado con éxito.`, type: 'info' });
+      } else {
+        setStatusMessage({ text: data.error || 'No se pudo eliminar el cupón.', type: 'error' });
+      }
+    } catch (err) {
+      console.error('Error deleting coupon:', err);
+    }
+  };
+
   // Keyboard shortcut Ctrl + S
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -551,6 +701,7 @@ export default function AdminApp() {
               { id: 'pedidos', label: 'Pedidos & Pagos', icon: <ShoppingBag size={16} /> },
               { id: 'distribucion', label: 'Descarga & APK', icon: <Download size={16} /> },
               { id: 'banners', label: 'Anuncios & Banners', icon: <Megaphone size={16} /> },
+              { id: 'cupones', label: 'Cupones & Promos', icon: <Ticket size={16} /> },
               { id: 'push', label: 'Notificaciones Push', icon: <Bell size={16} /> },
             ].map(tab => (
               <button
@@ -1750,6 +1901,349 @@ export default function AdminApp() {
                   </button>
                 </div>
               </form>
+            </div>
+          )}
+
+          {/* TAB 7: CUPONES & BENEFICIOS DE LA APP */}
+          {activeTab === 'cupones' && (
+            <div className="ds-card" style={{ padding: '24px' }}>
+              <div className="ds-card-header" style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+                <div>
+                  <h2 className="ds-card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Ticket size={22} color="#B30401" /> Cupones y Descuentos de la APP Móvil
+                  </h2>
+                  <p className="ds-card-subtitle">
+                    Configura cupones exclusivos para la aplicación. Cada cupón se descontará autoritativamente y se desactivará automáticamente para el cliente una vez utilizado.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleOpenCreateCoupon}
+                  className="ds-btn ds-btn-primary"
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px', fontWeight: 800 }}
+                >
+                  <Plus size={18} /> Crear Nuevo Cupón
+                </button>
+              </div>
+
+              {/* Lista de cupones */}
+              {loadingCoupons ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--ds-text-secondary)' }}>
+                  <RefreshCw size={24} className="spin" style={{ animation: 'spin 1s linear infinite' }} />
+                  <p style={{ marginTop: '10px' }}>Cargando cupones...</p>
+                </div>
+              ) : coupons.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px', border: '1.5px dashed var(--ds-border)', borderRadius: '12px' }}>
+                  <Ticket size={40} style={{ opacity: 0.4, marginBottom: '12px' }} />
+                  <div style={{ fontWeight: 700, fontSize: '15px' }}>No hay cupones configurados</div>
+                  <p style={{ color: 'var(--ds-text-secondary)', fontSize: '13px', marginTop: '4px' }}>
+                    Haz clic en "Crear Nuevo Cupón" para ofrecer descuentos y promociones en la app.
+                  </p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  {coupons.map((cpn) => {
+                    const isPercentage = cpn.discount_type === 'percentage';
+                    const isFreeDelivery = cpn.discount_type === 'free_delivery';
+                    const isFixed = cpn.discount_type === 'fixed';
+                    const discountBadge = isFreeDelivery
+                      ? 'Domicilio Gratis'
+                      : isPercentage
+                      ? `${Math.round(Number(cpn.discount_value))}% OFF`
+                      : `$${Number(cpn.discount_value).toLocaleString('es-CO')} OFF`;
+
+                    return (
+                      <div
+                        key={cpn.id}
+                        style={{
+                          border: `1.5px solid ${cpn.is_active ? 'var(--ds-border)' : 'rgba(239, 68, 68, 0.25)'}`,
+                          borderRadius: '14px',
+                          padding: '16px 20px',
+                          backgroundColor: cpn.is_active ? 'var(--ds-bg-card)' : 'rgba(0,0,0,0.02)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          flexWrap: 'wrap',
+                          gap: '14px',
+                          transition: 'all 0.2s ease',
+                          opacity: cpn.is_active ? 1 : 0.75
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', minWidth: '240px' }}>
+                          <div style={{
+                            padding: '8px 14px',
+                            borderRadius: '10px',
+                            backgroundColor: cpn.is_active ? '#FEE2E2' : '#F3F4F6',
+                            color: cpn.is_active ? '#B30401' : '#6B7280',
+                            fontWeight: 900,
+                            letterSpacing: '1px',
+                            fontSize: '15px',
+                            border: `1.5px dashed ${cpn.is_active ? '#F87171' : '#D1D5DB'}`
+                          }}>
+                            {cpn.code}
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 800, fontSize: '15px', color: 'var(--ds-text-primary)' }}>
+                              {cpn.title}
+                            </div>
+                            {cpn.description && (
+                              <div style={{ fontSize: '12px', color: 'var(--ds-text-secondary)', marginTop: '2px' }}>
+                                {cpn.description}
+                              </div>
+                            )}
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '6px' }}>
+                              <span style={{
+                                fontSize: '11px',
+                                fontWeight: 800,
+                                padding: '2px 8px',
+                                borderRadius: '6px',
+                                backgroundColor: isFreeDelivery ? '#DCFCE7' : isPercentage ? '#E0E7FF' : '#FEF3C7',
+                                color: isFreeDelivery ? '#15803D' : isPercentage ? '#4338CA' : '#B45309'
+                              }}>
+                                {discountBadge}
+                              </span>
+                              {Number(cpn.min_order_total) > 0 && (
+                                <span style={{ fontSize: '11px', color: 'var(--ds-text-secondary)', padding: '2px 6px', backgroundColor: 'var(--ds-bg-elevated)', borderRadius: '6px' }}>
+                                  Mínimo: ${Number(cpn.min_order_total).toLocaleString('es-CO')}
+                                </span>
+                              )}
+                              <span style={{ fontSize: '11px', color: 'var(--ds-text-secondary)', padding: '2px 6px', backgroundColor: 'var(--ds-bg-elevated)', borderRadius: '6px' }}>
+                                {cpn.max_uses_per_customer === 1 ? '1 uso por usuario' : `${cpn.max_uses_per_customer} usos por usuario`}
+                              </span>
+                              <span style={{ fontSize: '11px', fontWeight: 700, color: '#2563EB', padding: '2px 6px', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderRadius: '6px' }}>
+                                {cpn.total_redemptions || 0} canjes registrados
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Controles de estado y acciones */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleCoupon(cpn.id)}
+                            className={`ds-btn ds-btn-sm ${cpn.is_active ? 'ds-btn-success' : 'ds-btn-secondary'}`}
+                            style={{ fontWeight: 700, fontSize: '12px' }}
+                          >
+                            {cpn.is_active ? '● Activo' : '○ Inactivo'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditCoupon(cpn)}
+                            className="ds-btn ds-btn-sm ds-btn-secondary"
+                            title="Editar cupón"
+                            style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+                          >
+                            <Edit2 size={14} /> Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCoupon(cpn.id, cpn.code)}
+                            className="ds-btn ds-btn-sm ds-btn-danger"
+                            title="Eliminar cupón"
+                            style={{ display: 'flex', alignItems: 'center', padding: '6px 8px' }}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* MODAL / OVERLAY PARA CREAR / EDITAR CUPÓN */}
+              {couponModalOpen && (
+                <div style={{
+                  position: 'fixed',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  backgroundColor: 'rgba(0, 0, 0, 0.65)',
+                  backdropFilter: 'blur(4px)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 9999,
+                  padding: '16px'
+                }}>
+                  <div style={{
+                    backgroundColor: 'var(--ds-bg-card)',
+                    borderRadius: '18px',
+                    width: '100%',
+                    maxWidth: '540px',
+                    padding: '24px',
+                    boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+                    border: '1.5px solid var(--ds-border)',
+                    maxHeight: '90vh',
+                    overflowY: 'auto'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                      <h3 style={{ fontSize: '18px', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Ticket size={20} color="#B30401" />
+                        {editingCoupon ? `Editar Cupón: ${editingCoupon.code}` : 'Nuevo Cupón para la APP'}
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => setCouponModalOpen(false)}
+                        style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'var(--ds-text-secondary)' }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleSaveCoupon}>
+                      <div className="ds-form-group" style={{ marginBottom: '14px' }}>
+                        <label className="ds-label">Código del Cupón * (En mayúsculas, sin espacios)</label>
+                        <input
+                          type="text"
+                          className="ds-input"
+                          placeholder="Ej: DOMIAPP, BURGER10K, PROMO15"
+                          value={couponForm.code}
+                          onChange={(e) => setCouponForm(prev => ({ ...prev, code: e.target.value.toUpperCase().replace(/\s/g, '') }))}
+                          required
+                          style={{ fontWeight: 800, letterSpacing: '1px' }}
+                        />
+                      </div>
+
+                      <div className="ds-form-group" style={{ marginBottom: '14px' }}>
+                        <label className="ds-label">Título descriptivo del Cupón *</label>
+                        <input
+                          type="text"
+                          className="ds-input"
+                          placeholder="Ej: Domicilio Gratis por tu primera compra"
+                          value={couponForm.title}
+                          onChange={(e) => setCouponForm(prev => ({ ...prev, title: e.target.value }))}
+                          required
+                        />
+                      </div>
+
+                      <div className="ds-form-group" style={{ marginBottom: '14px' }}>
+                        <label className="ds-label">Descripción o Restricciones (Opcional)</label>
+                        <textarea
+                          className="ds-input"
+                          rows={2}
+                          placeholder="Ej: Válido para pedidos en la app oficial de Distric House."
+                          value={couponForm.description}
+                          onChange={(e) => setCouponForm(prev => ({ ...prev, description: e.target.value }))}
+                        />
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
+                        <div className="ds-form-group">
+                          <label className="ds-label">Tipo de Beneficio</label>
+                          <select
+                            className="ds-input"
+                            value={couponForm.discount_type}
+                            onChange={(e) => setCouponForm(prev => ({ ...prev, discount_type: e.target.value }))}
+                          >
+                            <option value="free_delivery">🎁 Domicilio Gratis</option>
+                            <option value="percentage">Porcentaje (% Descuento)</option>
+                            <option value="fixed">Valor Fijo ($ COP Descuento)</option>
+                          </select>
+                        </div>
+
+                        {couponForm.discount_type !== 'free_delivery' ? (
+                          <div className="ds-form-group">
+                            <label className="ds-label">
+                              {couponForm.discount_type === 'percentage' ? 'Porcentaje (ej: 10 para 10%)' : 'Monto Fijo COP (ej: 4000)'}
+                            </label>
+                            <input
+                              type="number"
+                              className="ds-input"
+                              min="0"
+                              max={couponForm.discount_type === 'percentage' ? '100' : '500000'}
+                              value={couponForm.discount_value}
+                              onChange={(e) => setCouponForm(prev => ({ ...prev, discount_value: Number(e.target.value) }))}
+                            />
+                          </div>
+                        ) : (
+                          <div className="ds-form-group">
+                            <label className="ds-label">Cobertura Domicilio</label>
+                            <input
+                              type="text"
+                              className="ds-input"
+                              value="100% Tarifa Domicilio"
+                              disabled
+                              style={{ backgroundColor: 'var(--ds-bg-elevated)', opacity: 0.8 }}
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
+                        <div className="ds-form-group">
+                          <label className="ds-label">Pedido Mínimo ($ COP, 0 = Sin mínimo)</label>
+                          <input
+                            type="number"
+                            className="ds-input"
+                            min="0"
+                            step="1000"
+                            value={couponForm.min_order_total}
+                            onChange={(e) => setCouponForm(prev => ({ ...prev, min_order_total: Number(e.target.value) }))}
+                          />
+                        </div>
+
+                        <div className="ds-form-group">
+                          <label className="ds-label">Límite por Cliente (usos)</label>
+                          <input
+                            type="number"
+                            className="ds-input"
+                            min="1"
+                            max="999"
+                            value={couponForm.max_uses_per_customer}
+                            onChange={(e) => setCouponForm(prev => ({ ...prev, max_uses_per_customer: Number(e.target.value) }))}
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '20px' }}>
+                        <div className="ds-form-group">
+                          <label className="ds-label">Fecha de Vencimiento (Opcional)</label>
+                          <input
+                            type="date"
+                            className="ds-input"
+                            value={couponForm.expires_at}
+                            onChange={(e) => setCouponForm(prev => ({ ...prev, expires_at: e.target.value }))}
+                          />
+                        </div>
+
+                        <div className="ds-form-group" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                          <label className="ds-label" style={{ marginBottom: '6px' }}>Estado Inicial</label>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>
+                            <input
+                              type="checkbox"
+                              checked={couponForm.is_active}
+                              onChange={(e) => setCouponForm(prev => ({ ...prev, is_active: e.target.checked }))}
+                              style={{ width: '18px', height: '18px', accentColor: '#B30401' }}
+                            />
+                            Cupón Activo en la App
+                          </label>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                        <button
+                          type="button"
+                          onClick={() => setCouponModalOpen(false)}
+                          className="ds-btn ds-btn-secondary"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={savingCoupon}
+                          className="ds-btn ds-btn-primary"
+                          style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 800 }}
+                        >
+                          <Save size={16} /> {savingCoupon ? 'Guardando...' : (editingCoupon ? 'Actualizar Cupón' : 'Crear Cupón')}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
