@@ -172,11 +172,13 @@ export default function AdminInventario() {
 
   // Recetas
   const [selectedRecipeProduct, setSelectedRecipeProduct] = useState('');
+  const [recipeCategoryFilter, setRecipeCategoryFilter] = useState('ALL');
   const [newRecipeInsumo, setNewRecipeInsumo] = useState('');
   const [newRecipeQty, setNewRecipeQty] = useState(1);
   const [copiedRecipe, setCopiedRecipe] = useState(null);
   const [copyModalOpen, setCopyModalOpen] = useState(false);
   const [copyTargetProductId, setCopyTargetProductId] = useState('');
+  const [copyCategoryFilter, setCopyCategoryFilter] = useState('ALL');
   const [copyMode, setCopyMode] = useState('replace');
   const [copyingRecipe, setCopyingRecipe] = useState(false);
 
@@ -2360,6 +2362,7 @@ export default function AdminInventario() {
       cost: activeRecipeCost
     });
     setCopyTargetProductId('');
+    setCopyCategoryFilter('ALL');
     setCopyMode('replace');
     setCopyModalOpen(true);
   };
@@ -2484,6 +2487,29 @@ export default function AdminInventario() {
   const activeSelectedProduct = useMemo(() => {
     return products.find((p) => String(p.id) === String(selectedRecipeProduct));
   }, [products, selectedRecipeProduct]);
+
+  const recipeProductCategories = useMemo(() => {
+    const cats = new Set();
+    products.forEach((p) => {
+      if (p.category) cats.add(p.category);
+    });
+    return Array.from(cats).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+  }, [products]);
+
+  const recipeFilteredProducts = useMemo(() => {
+    if (!recipeCategoryFilter || recipeCategoryFilter === 'ALL') {
+      return products;
+    }
+    return products.filter((p) => p.category === recipeCategoryFilter);
+  }, [products, recipeCategoryFilter]);
+
+  const copyFilteredProducts = useMemo(() => {
+    let list = products.filter((p) => String(p.id) !== String(copiedRecipe?.productId));
+    if (copyCategoryFilter && copyCategoryFilter !== 'ALL') {
+      list = list.filter((p) => p.category === copyCategoryFilter);
+    }
+    return list;
+  }, [products, copiedRecipe, copyCategoryFilter]);
 
   // Rentabilidad filtrada y KPIs
   const filteredProfitability = useMemo(() => {
@@ -3697,14 +3723,55 @@ export default function AdminInventario() {
 
               <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 <div className="ds-form-group">
+                  <label className="ds-form-label">Categoría del Producto</label>
+                  <select
+                    className="ds-select"
+                    value={recipeCategoryFilter}
+                    onChange={(e) => {
+                      const newCat = e.target.value;
+                      setRecipeCategoryFilter(newCat);
+                      if (newCat && newCat !== 'ALL') {
+                        const curProd = products.find((p) => String(p.id) === String(selectedRecipeProduct));
+                        if (curProd && curProd.category !== newCat) {
+                          setSelectedRecipeProduct('');
+                        }
+                      }
+                    }}
+                  >
+                    <option value="ALL">Todas las categorías ({products.length})</option>
+                    {recipeProductCategories.map((cat) => {
+                      const count = products.filter((p) => p.category === cat).length;
+                      return (
+                        <option key={cat} value={cat}>
+                          {cat} ({count})
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                <div className="ds-form-group">
                   <label className="ds-form-label">Producto de Venta (Carta) *</label>
                   <select
                     className="ds-select"
                     value={selectedRecipeProduct}
-                    onChange={(e) => setSelectedRecipeProduct(e.target.value)}
+                    onChange={(e) => {
+                      const prodId = e.target.value;
+                      setSelectedRecipeProduct(prodId);
+                      if (prodId) {
+                        const prod = products.find((p) => String(p.id) === String(prodId));
+                        if (prod?.category && recipeCategoryFilter !== 'ALL' && recipeCategoryFilter !== prod.category) {
+                          setRecipeCategoryFilter(prod.category);
+                        }
+                      }
+                    }}
                   >
-                    <option value="">Selecciona un producto…</option>
-                    {products.map((p) => (
+                    <option value="">
+                      {recipeFilteredProducts.length === 0
+                        ? 'No hay productos en esta categoría'
+                        : 'Selecciona un producto…'}
+                    </option>
+                    {recipeFilteredProducts.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.title} ({formatCurrency(p.price)})
                       </option>
@@ -6949,6 +7016,25 @@ export default function AdminInventario() {
               </div>
 
               <div className="ds-form-group">
+                <label className="ds-form-label">Filtrar por Categoría</label>
+                <select
+                  className="ds-select"
+                  value={copyCategoryFilter}
+                  onChange={(e) => {
+                    setCopyCategoryFilter(e.target.value);
+                    setCopyTargetProductId('');
+                  }}
+                >
+                  <option value="ALL">Todas las Categorías</option>
+                  {recipeProductCategories.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="ds-form-group">
                 <label className="ds-form-label">Producto Destino que Recibirá la Receta *</label>
                 <select
                   className="ds-select"
@@ -6957,13 +7043,11 @@ export default function AdminInventario() {
                   required
                 >
                   <option value="">Selecciona el producto destino…</option>
-                  {products
-                    .filter((p) => String(p.id) !== String(copiedRecipe?.productId))
-                    .map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.title} ({formatCurrency(p.price)})
-                      </option>
-                    ))}
+                  {copyFilteredProducts.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.title} ({formatCurrency(p.price)})
+                    </option>
+                  ))}
                 </select>
               </div>
 
