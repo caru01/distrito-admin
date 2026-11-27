@@ -287,7 +287,7 @@ export default function AdminPedidos() {
   const handleUpdateStatus = async (id, newStatus) => {
     const order = orders.find(o => o.id === id);
     const isPickupOrder = order && String(order.delivery_type || '').toLowerCase() !== 'domicilio';
-    if (newStatus === 'Listo' && order && !order.tracking_sent_at && (isPickupOrder || order.source !== 'Web')) {
+    if (newStatus === 'Listo' && order && !order.tracking_sent_at) {
       const prompt = isPickupOrder
         ? '¿Deseas avisar por WhatsApp que el pedido está listo para recoger?'
         : '¿Deseas enviar el enlace de seguimiento a este cliente por WhatsApp?';
@@ -1604,7 +1604,7 @@ export default function AdminPedidos() {
                             <div className="ds-dropdown-menu">
                               <button onClick={() => { handleSendWhatsApp(order.customer_phone, order.id, order); setOpenMenuId(null); }} className="ds-dropdown-item">
                                 <MessageCircle size={16} color={order.customer_phone ? "#22C55E" : "#10B981"} />
-                                {order.customer_phone ? ' WhatsApp' : ' WhatsApp (Cloud API)'}
+                                {order.customer_phone ? ' Enviar seguimiento (WhatsApp)' : ' Enviar seguimiento (Cloud API)'}
                               </button>
                               <button onClick={() => { handleUpdateStatus(order.id, 'Cancelado'); setOpenMenuId(null); }} className="ds-dropdown-item" style={{ color: '#F59E0B' }}><X size={16} /> Anular Orden</button>
                               <button onClick={() => { handleDeleteOrder(order.id); setOpenMenuId(null); }} className="ds-dropdown-item ds-dropdown-item-danger"><Trash2 size={16} /> Eliminar</button>
@@ -1775,7 +1775,7 @@ export default function AdminPedidos() {
                       <div className="ds-dropdown-menu">
                         <button onClick={() => { handleSendWhatsApp(order.customer_phone, order.id, order); setOpenMenuId(null); }} className="ds-dropdown-item">
                           <MessageCircle size={16} color={order.customer_phone ? "#22C55E" : "#10B981"} />
-                          {order.customer_phone ? ' WhatsApp' : ' WhatsApp (Cloud API)'}
+                          {order.customer_phone ? ' Enviar seguimiento (WhatsApp)' : ' Enviar seguimiento (Cloud API)'}
                         </button>
                         <button onClick={() => { handleUpdateStatus(order.id, 'Cancelado'); setOpenMenuId(null); }} className="ds-dropdown-item" style={{ color: '#F59E0B' }}><X size={16} /> Anular Orden</button>
                         <button onClick={() => { handleDeleteOrder(order.id); setOpenMenuId(null); }} className="ds-dropdown-item ds-dropdown-item-danger"><Trash2 size={16} /> Eliminar</button>
@@ -1866,23 +1866,41 @@ export default function AdminPedidos() {
                     <div style={{ color: 'var(--ds-text-secondary)', fontSize: '14px', marginTop: '4px' }}><strong>Referencia:</strong> {selectedOrder.delivery_reference}</div>
                   )}
                   <div style={{ color: 'var(--ds-text-secondary)', fontSize: '14px', marginTop: '4px' }}><strong>Entrega:</strong> {selectedOrder.delivery_type}</div>
-                  {selectedOrder.source !== 'Web' && (
-                    <div style={{ marginTop: '12px', padding: '10px', backgroundColor: selectedOrder.tracking_sent_at ? 'rgba(34,197,94,0.1)' : 'rgba(245,158,11,0.1)', borderRadius: '8px', border: `1px solid ${selectedOrder.tracking_sent_at ? 'rgba(34,197,94,0.2)' : 'rgba(245,158,11,0.2)'}` }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <strong style={{ color: selectedOrder.tracking_sent_at ? '#22C55E' : '#F59E0B', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <MessageCircle size={14} /> {selectedOrder.tracking_sent_at ? 'Seguimiento Enviado' : 'Seguimiento Pendiente'}
-                          </strong>
-                          <div style={{ color: 'var(--ds-text-secondary)', fontSize: '12px', marginTop: '2px' }}>
-                            {selectedOrder.tracking_sent_at ? `Enviado el ${new Date(selectedOrder.tracking_sent_at).toLocaleString()}` : 'El cliente aún no recibe el enlace'}
-                          </div>
+                  
+                  {/* Tarjeta de Envío de Enlace de Seguimiento WhatsApp para el Cliente */}
+                  <div style={{ marginTop: '14px', padding: '12px 14px', backgroundColor: selectedOrder.tracking_sent_at ? 'rgba(34,197,94,0.1)' : 'rgba(245,158,11,0.1)', borderRadius: '10px', border: `1px solid ${selectedOrder.tracking_sent_at ? 'rgba(34,197,94,0.25)' : 'rgba(245,158,11,0.25)'}` }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                      <div>
+                        <strong style={{ color: selectedOrder.tracking_sent_at ? '#22C55E' : '#F59E0B', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <MessageCircle size={15} /> {selectedOrder.tracking_sent_at ? 'Seguimiento Enviado' : 'Seguimiento Pendiente'}
+                        </strong>
+                        <div style={{ color: 'var(--ds-text-secondary)', fontSize: '12px', marginTop: '3px' }}>
+                          {selectedOrder.tracking_sent_at ? `Enviado el ${new Date(selectedOrder.tracking_sent_at).toLocaleString('es-CO')}` : 'El cliente aún no recibe el enlace de seguimiento'}
                         </div>
-                        <button onClick={() => handleSendWhatsApp(selectedOrder.customer_phone, selectedOrder.id, selectedOrder)} className="ds-btn ds-btn-sm" style={{ backgroundColor: '#25D366', color: '#fff', fontSize: '12px', padding: '4px 8px' }}>
-                          Enviar seguimiento
-                        </button>
                       </div>
+                      <button 
+                        type="button"
+                        onClick={() => handleSendWhatsApp(selectedOrder.customer_phone, selectedOrder.id, selectedOrder)} 
+                        className="ds-btn ds-btn-sm" 
+                        style={{ 
+                          backgroundColor: '#25D366', 
+                          color: '#fff', 
+                          fontSize: '12.5px', 
+                          fontWeight: 700, 
+                          padding: '6px 14px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          borderRadius: '8px',
+                          border: 'none',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <MessageCircle size={15} />
+                        {selectedOrder.tracking_sent_at ? 'Reenviar seguimiento' : 'Enviar seguimiento'}
+                      </button>
                     </div>
-                  )}
+                  </div>
                 </div>
               </div>
               {String(selectedOrder.delivery_type || '').toLowerCase() === 'domicilio' && (selectedOrder.delivery_provider_type || selectedOrder.delivery_user_id) && <div className="ds-card" style={{ padding: '20px', marginBottom: '24px' }}>
