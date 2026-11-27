@@ -287,7 +287,8 @@ export default function AdminPedidos() {
   const handleUpdateStatus = async (id, newStatus) => {
     const order = orders.find(o => o.id === id);
     const isPickupOrder = order && String(order.delivery_type || '').toLowerCase() !== 'domicilio';
-    if (newStatus === 'Listo' && order && !order.tracking_sent_at) {
+    const isAppOrder = order && (String(order.source || '').toUpperCase().includes('APP') || String(order.source || '').toLowerCase().includes('movil') || String(order.source || '').toLowerCase().includes('móvil'));
+    if (newStatus === 'Listo' && order && !isAppOrder && !order.tracking_sent_at) {
       const prompt = isPickupOrder
         ? '¿Deseas avisar por WhatsApp que el pedido está listo para recoger?'
         : '¿Deseas enviar el enlace de seguimiento a este cliente por WhatsApp?';
@@ -1868,39 +1869,86 @@ export default function AdminPedidos() {
                   <div style={{ color: 'var(--ds-text-secondary)', fontSize: '14px', marginTop: '4px' }}><strong>Entrega:</strong> {selectedOrder.delivery_type}</div>
                   
                   {/* Tarjeta de Envío de Enlace de Seguimiento WhatsApp para el Cliente */}
-                  <div style={{ marginTop: '14px', padding: '12px 14px', backgroundColor: selectedOrder.tracking_sent_at ? 'rgba(34,197,94,0.1)' : 'rgba(245,158,11,0.1)', borderRadius: '10px', border: `1px solid ${selectedOrder.tracking_sent_at ? 'rgba(34,197,94,0.25)' : 'rgba(245,158,11,0.25)'}` }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                      <div>
-                        <strong style={{ color: selectedOrder.tracking_sent_at ? '#22C55E' : '#F59E0B', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <MessageCircle size={15} /> {selectedOrder.tracking_sent_at ? 'Seguimiento Enviado' : 'Seguimiento Pendiente'}
-                        </strong>
-                        <div style={{ color: 'var(--ds-text-secondary)', fontSize: '12px', marginTop: '3px' }}>
-                          {selectedOrder.tracking_sent_at ? `Enviado el ${new Date(selectedOrder.tracking_sent_at).toLocaleString('es-CO')}` : 'El cliente aún no recibe el enlace de seguimiento'}
+                  {(() => {
+                    const isAppOrder = String(selectedOrder.source || '').toUpperCase().includes('APP') || String(selectedOrder.source || '').toLowerCase().includes('movil') || String(selectedOrder.source || '').toLowerCase().includes('móvil');
+
+                    if (isAppOrder) {
+                      return (
+                        <div style={{ marginTop: '14px', padding: '12px 14px', backgroundColor: 'rgba(59,130,246,0.08)', borderRadius: '10px', border: '1px solid rgba(59,130,246,0.25)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                            <div>
+                              <strong style={{ color: '#2563EB', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Smartphone size={15} /> Pedido desde App Android (Rastreo en Vivo)
+                              </strong>
+                              <div style={{ color: 'var(--ds-text-secondary)', fontSize: '12px', marginTop: '3px' }}>
+                                {selectedOrder.tracking_sent_at
+                                  ? `Enlace WhatsApp enviado el ${new Date(selectedOrder.tracking_sent_at).toLocaleString('es-CO')}`
+                                  : 'El cliente realiza el seguimiento en tiempo real directamente desde su app móvil.'}
+                              </div>
+                            </div>
+                            <button 
+                              type="button"
+                              onClick={() => handleSendWhatsApp(selectedOrder.customer_phone, selectedOrder.id, selectedOrder)} 
+                              className="ds-btn ds-btn-sm" 
+                              style={{ 
+                                backgroundColor: selectedOrder.tracking_sent_at ? '#22C55E' : 'rgba(59,130,246,0.15)', 
+                                color: selectedOrder.tracking_sent_at ? '#fff' : '#2563EB', 
+                                border: selectedOrder.tracking_sent_at ? 'none' : '1px solid rgba(59,130,246,0.3)',
+                                fontSize: '12px', 
+                                fontWeight: 700, 
+                                padding: '6px 12px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                borderRadius: '8px',
+                                cursor: 'pointer'
+                              }}
+                              title="Enviar por WhatsApp como respaldo opcional si el cliente lo solicita"
+                            >
+                              <MessageCircle size={14} />
+                              {selectedOrder.tracking_sent_at ? 'Reenviar WhatsApp' : 'Enviar respaldo WhatsApp'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div style={{ marginTop: '14px', padding: '12px 14px', backgroundColor: selectedOrder.tracking_sent_at ? 'rgba(34,197,94,0.1)' : 'rgba(245,158,11,0.1)', borderRadius: '10px', border: `1px solid ${selectedOrder.tracking_sent_at ? 'rgba(34,197,94,0.25)' : 'rgba(245,158,11,0.25)'}` }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                          <div>
+                            <strong style={{ color: selectedOrder.tracking_sent_at ? '#22C55E' : '#F59E0B', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <MessageCircle size={15} /> {selectedOrder.tracking_sent_at ? 'Seguimiento Enviado' : 'Seguimiento Pendiente'}
+                            </strong>
+                            <div style={{ color: 'var(--ds-text-secondary)', fontSize: '12px', marginTop: '3px' }}>
+                              {selectedOrder.tracking_sent_at ? `Enviado el ${new Date(selectedOrder.tracking_sent_at).toLocaleString('es-CO')}` : 'El cliente aún no recibe el enlace de seguimiento'}
+                            </div>
+                          </div>
+                          <button 
+                            type="button"
+                            onClick={() => handleSendWhatsApp(selectedOrder.customer_phone, selectedOrder.id, selectedOrder)} 
+                            className="ds-btn ds-btn-sm" 
+                            style={{ 
+                              backgroundColor: '#25D366', 
+                              color: '#fff', 
+                              fontSize: '12.5px', 
+                              fontWeight: 700, 
+                              padding: '6px 14px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              borderRadius: '8px',
+                              border: 'none',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <MessageCircle size={15} />
+                            {selectedOrder.tracking_sent_at ? 'Reenviar seguimiento' : 'Enviar seguimiento'}
+                          </button>
                         </div>
                       </div>
-                      <button 
-                        type="button"
-                        onClick={() => handleSendWhatsApp(selectedOrder.customer_phone, selectedOrder.id, selectedOrder)} 
-                        className="ds-btn ds-btn-sm" 
-                        style={{ 
-                          backgroundColor: '#25D366', 
-                          color: '#fff', 
-                          fontSize: '12.5px', 
-                          fontWeight: 700, 
-                          padding: '6px 14px',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          borderRadius: '8px',
-                          border: 'none',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        <MessageCircle size={15} />
-                        {selectedOrder.tracking_sent_at ? 'Reenviar seguimiento' : 'Enviar seguimiento'}
-                      </button>
-                    </div>
-                  </div>
+                    );
+                  })()}
                 </div>
               </div>
               {String(selectedOrder.delivery_type || '').toLowerCase() === 'domicilio' && (selectedOrder.delivery_provider_type || selectedOrder.delivery_user_id) && <div className="ds-card" style={{ padding: '20px', marginBottom: '24px' }}>
