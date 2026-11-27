@@ -12,7 +12,9 @@ import {
   MapPin, 
   Clock, 
   Phone,
-  AlertCircle
+  AlertCircle,
+  Eye,
+  ShoppingBag
 } from 'lucide-react';
 import { API_URL } from '../config/api';
 
@@ -56,6 +58,7 @@ export default function DriverSettlementModal({ isOpen, onClose, orders = [], ac
   const [selectedOrderIds, setSelectedOrderIds] = useState([]);
   const [copied, setCopied] = useState(false);
   const [loadingDrivers, setLoadingDrivers] = useState(false);
+  const [viewingOrder, setViewingOrder] = useState(null);
 
   // 1. Cargar lista de domiciliarios registrados desde la API
   useEffect(() => {
@@ -204,13 +207,42 @@ export default function DriverSettlementModal({ isOpen, onClose, orders = [], ac
     setSelectedOrderIds([]);
   };
 
+  // Obtener la tarifa real de cada orden (ej: $7.000, $6.000 o tarifa base)
+  const getOrderDeliveryFee = (o) => {
+    if (o && o.delivery_fee !== undefined && o.delivery_fee !== null && Number(o.delivery_fee) > 0) {
+      return Number(o.delivery_fee);
+    }
+    return Number(feePerDelivery || 6000);
+  };
+
   // 6. Órdenes efectivamente seleccionadas para la liquidación
   const activeOrdersForReport = useMemo(() => {
     return driverOrders.filter(o => selectedOrderIds.includes(o.id));
   }, [driverOrders, selectedOrderIds]);
 
   const totalDeliveries = activeOrdersForReport.length;
-  const totalAmountToPay = totalDeliveries * Number(feePerDelivery || 0);
+
+  // Desglose de cuántos domicilios fueron de 6.000, 7.000, etc.
+  const feeBreakdown = useMemo(() => {
+    const counts = {};
+    activeOrdersForReport.forEach(o => {
+      const fee = getOrderDeliveryFee(o);
+      counts[fee] = (counts[fee] || 0) + 1;
+    });
+    return Object.entries(counts).map(([feeStr, count]) => {
+      const fee = Number(feeStr);
+      return {
+        fee,
+        count,
+        subtotal: fee * count
+      };
+    }).sort((a, b) => a.fee - b.fee);
+  }, [activeOrdersForReport, feePerDelivery]);
+
+  // Total a pagar considerando las tarifas reales individuales de cada orden
+  const totalAmountToPay = useMemo(() => {
+    return activeOrdersForReport.reduce((acc, o) => acc + getOrderDeliveryFee(o), 0);
+  }, [activeOrdersForReport, feePerDelivery]);
 
   // Actualizar tarifa en localStorage al editar
   const handleFeeChange = (val) => {
@@ -244,10 +276,22 @@ export default function DriverSettlementModal({ isOpen, onClose, orders = [], ac
             ? 'Compartido' 
             : 'Efectivo';
 
-        return `${idx + 1}. *Orden #${orderIdPadded}* – Dirección: ${fullAddress} – Pago: *${paymentMethodLabel}*`;
+        const orderFee = getOrderDeliveryFee(o);
+
+        return `${idx + 1}. *Orden #${orderIdPadded}* – Domicilio: *$${formatCOP(orderFee)}* – Direc: ${fullAddress} – Pago: *${paymentMethodLabel}*`;
       }).join('\n');
     } else {
       ordersListText = '(No hay órdenes seleccionadas)';
+    }
+
+    let feeSummarySection = '';
+    if (feeBreakdown.length > 1) {
+      const breakdownLines = feeBreakdown.map(b => `• ${b.count} ${b.count === 1 ? 'domicilio' : 'domicilios'} de $${formatCOP(b.fee)} = $${formatCOP(b.subtotal)}`);
+      feeSummarySection = `💰 *Desglose de Tarifas:*\n${breakdownLines.join('\n')}\n`;
+    } else if (feeBreakdown.length === 1) {
+      feeSummarySection = `💰 Valor por domicilio: $${formatCOP(feeBreakdown[0].fee)}\n`;
+    } else {
+      feeSummarySection = `💰 Valor por domicilio: $${formatCOP(feePerDelivery)}\n`;
     }
 
     return (
@@ -261,13 +305,12 @@ export default function DriverSettlementModal({ isOpen, onClose, orders = [], ac
 
 ${ordersListText}
 
-💰 Valor por domicilio: $${formatCOP(feePerDelivery)}
-
+${feeSummarySection}
 💵 *TOTAL A PAGAR: $${formatCOP(totalAmountToPay)}*
 
 Gracias por su trabajo y compromiso.`
     );
-  }, [date, activeOrdersForReport, totalDeliveries, feePerDelivery, totalAmountToPay]);
+  }, [date, activeOrdersForReport, totalDeliveries, feePerDelivery, totalAmountToPay, feeBreakdown]);
 
   // 8. Enviar a WhatsApp
   const handleSendWhatsApp = () => {
@@ -461,11 +504,40 @@ Gracias por su trabajo y compromiso.`
               gap: '4px'
             }}>
               <span style={{ fontSize: '11px', color: 'var(--ds-text-secondary)', fontWeight: 700, textTransform: 'uppercase' }}>
-                Valor por Domicilio
+                Tarifas de Domicilio
               </span>
-              <span style={{ fontSize: '24px', fontWeight: 800, color: 'var(--ds-text-primary)' }}>
-                ${formatCOP(feePerDelivery)}
-              </span>
+              {feeBreakdown.length === 0 ? (
+                <span style={{ fontSize: '24px', fontWeight: 800, color: 'var(--ds-text-primary)' }}>
+                  ${formatCOP(feePerDelivery)}
+                </span>
+              ) : feeBreakdown.length === 1 ? (
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                  <span style={{ fontSize: '24px', fontWeight: 800, color: 'var(--ds-text-primary)' }}>
+                    ${formatCOP(feeBreakdown[0].fee)}
+                  </span>
+                  <span style={{ fontSize: '12px', color: 'var(--ds-text-muted)' }}>({feeBreakdown[0].count} ord.)</span>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', marginTop: '2px' }}>
+                  {feeBreakdown.map((b) => (
+                    <span 
+                      key={b.fee} 
+                      className="ds-badge" 
+                      style={{
+                        backgroundColor: b.fee >= 7000 ? 'rgba(239, 68, 68, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                        color: b.fee >= 7000 ? '#DC2626' : '#D97706',
+                        border: b.fee >= 7000 ? '1px solid rgba(239, 68, 68, 0.28)' : '1px solid rgba(245, 158, 11, 0.28)',
+                        fontSize: '11px',
+                        fontWeight: 800,
+                        padding: '2px 7px'
+                      }}
+                      title={`${b.count} domicilios a $${formatCOP(b.fee)} = $${formatCOP(b.subtotal)}`}
+                    >
+                      {b.count}x ${formatCOP(b.fee)}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div style={{ 
@@ -544,6 +616,7 @@ Gracias por su trabajo y compromiso.`
                   driverOrders.map((ord, idx) => {
                     const isChecked = selectedOrderIds.includes(ord.id);
                     const orderNum = String(ord.id).padStart(4, '0');
+                    const orderFee = getOrderDeliveryFee(ord);
                     return (
                       <label 
                         key={ord.id}
@@ -551,12 +624,12 @@ Gracias por su trabajo y compromiso.`
                           display: 'flex',
                           alignItems: 'flex-start',
                           gap: '10px',
-                          padding: '8px 10px',
+                          padding: '10px 12px',
                           borderRadius: '8px',
                           cursor: 'pointer',
                           backgroundColor: isChecked ? 'rgba(16, 185, 129, 0.06)' : 'transparent',
                           border: isChecked ? '1px solid rgba(16, 185, 129, 0.25)' : '1px solid transparent',
-                          marginBottom: '4px',
+                          marginBottom: '6px',
                           transition: 'all 0.15s ease'
                         }}
                       >
@@ -567,11 +640,28 @@ Gracias por su trabajo y compromiso.`
                           style={{ marginTop: '3px', accentColor: '#10B981', cursor: 'pointer', width: '16px', height: '16px' }}
                         />
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', flexWrap: 'wrap' }}>
                             <strong style={{ fontSize: '13px', color: 'var(--ds-text-primary)' }}>
                               #{idx + 1}. Orden #{orderNum}
                             </strong>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
+                              {/* Tarifa del domicilio ($6.000, $7.000, etc.) */}
+                              <span 
+                                className="ds-badge" 
+                                style={{
+                                  backgroundColor: orderFee >= 7000 ? 'rgba(239, 68, 68, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                                  color: orderFee >= 7000 ? '#DC2626' : '#D97706',
+                                  border: orderFee >= 7000 ? '1px solid rgba(239, 68, 68, 0.28)' : '1px solid rgba(245, 158, 11, 0.28)',
+                                  fontSize: '11px',
+                                  fontWeight: 800,
+                                  padding: '2px 6px'
+                                }}
+                                title={`Tarifa de este domicilio: $${formatCOP(orderFee)}`}
+                              >
+                                Dom: ${formatCOP(orderFee)}
+                              </span>
+
+                              {/* Método de pago */}
                               <span className="ds-badge" style={{
                                 backgroundColor: String(ord.payment_method || '').toLowerCase() === 'transferencia' ? 'rgba(139, 92, 246, 0.15)' : 'rgba(16, 185, 129, 0.15)',
                                 color: String(ord.payment_method || '').toLowerCase() === 'transferencia' ? '#8B5CF6' : '#10B981',
@@ -580,12 +670,43 @@ Gracias por su trabajo y compromiso.`
                               }}>
                                 {String(ord.payment_method || '').toLowerCase() === 'transferencia' ? 'Transferencia' : (String(ord.payment_method || '').toLowerCase() === 'compartido' ? 'Compartido' : 'Efectivo')}
                               </span>
+
+                              {/* Estado del pedido */}
                               <span className="ds-badge ds-badge-neutral" style={{ fontSize: '10px' }}>
                                 {ord.status}
                               </span>
+
+                              {/* Botón Ver Orden */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setViewingOrder(ord);
+                                }}
+                                className="ds-btn ds-btn-ghost ds-btn-sm"
+                                style={{
+                                  padding: '2px 8px',
+                                  height: '22px',
+                                  fontSize: '11px',
+                                  fontWeight: 700,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  color: 'var(--ds-primary, #B30401)',
+                                  backgroundColor: 'rgba(179, 4, 1, 0.08)',
+                                  border: '1px solid rgba(179, 4, 1, 0.22)',
+                                  borderRadius: '6px',
+                                  cursor: 'pointer'
+                                }}
+                                title={`Ver detalles completos de la Orden #${orderNum}`}
+                              >
+                                <Eye size={12} />
+                                <span>Ver orden</span>
+                              </button>
                             </div>
                           </div>
-                          <div style={{ fontSize: '12px', color: 'var(--ds-text-secondary)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <div style={{ fontSize: '12px', color: 'var(--ds-text-secondary)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                             <MapPin size={11} style={{ flexShrink: 0 }} />
                             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {[ord.address, ord.barrio].filter(Boolean).join(', ')}
@@ -718,6 +839,179 @@ Gracias por su trabajo y compromiso.`
         </div>
 
       </div>
+
+      {/* Modal Emergente para Ver Orden en Detalle */}
+      {viewingOrder && (
+        <div 
+          className="ds-modal-overlay" 
+          style={{ zIndex: 10005, backgroundColor: 'rgba(0, 0, 0, 0.75)' }}
+          onMouseDown={(e) => e.target === e.currentTarget && setViewingOrder(null)}
+        >
+          <div 
+            className="ds-modal"
+            role="dialog"
+            aria-modal="true"
+            style={{
+              maxWidth: '560px',
+              width: '92%',
+              maxHeight: '88vh',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              borderRadius: '16px',
+              boxShadow: '0 20px 45px rgba(0,0,0,0.45)',
+              border: '1px solid var(--ds-border)',
+              backgroundColor: 'var(--ds-bg-surface)'
+            }}
+          >
+            {/* Header */}
+            <div className="ds-modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid var(--ds-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <span style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--ds-primary)' }}>
+                  Detalle del Pedido
+                </span>
+                <h3 style={{ margin: '2px 0 0 0', fontSize: '18px', fontWeight: 800, color: 'var(--ds-text-primary)' }}>
+                  Orden #{String(viewingOrder.id).padStart(4, '0')}
+                </h3>
+              </div>
+              <button 
+                type="button" 
+                className="ds-btn ds-btn-ghost ds-btn-icon" 
+                onClick={() => setViewingOrder(null)}
+                style={{ borderRadius: '50%' }}
+                title="Cerrar detalle"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Contenido con scroll */}
+            <div style={{ padding: '18px 20px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              
+              {/* Estado y Pago */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--ds-bg-elevated)', padding: '10px 14px', borderRadius: '10px', border: '1px solid var(--ds-border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span className="ds-badge ds-badge-success">{viewingOrder.status}</span>
+                  <span className="ds-badge" style={{
+                    backgroundColor: String(viewingOrder.payment_method || '').toLowerCase() === 'transferencia' ? 'rgba(139, 92, 246, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                    color: String(viewingOrder.payment_method || '').toLowerCase() === 'transferencia' ? '#8B5CF6' : '#10B981',
+                    fontWeight: 700
+                  }}>
+                    {String(viewingOrder.payment_method || '').toLowerCase() === 'transferencia' ? '💳 Transferencia' : '💵 Efectivo'}
+                  </span>
+                </div>
+                <span style={{ fontSize: '12px', color: 'var(--ds-text-muted)' }}>
+                  {viewingOrder.created_at ? new Date(viewingOrder.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : ''}
+                </span>
+              </div>
+
+              {/* Datos del Cliente y Dirección */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', backgroundColor: 'var(--ds-bg-surface)', padding: '12px 14px', borderRadius: '10px', border: '1px solid var(--ds-border)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <strong style={{ fontSize: '14px', color: 'var(--ds-text-primary)' }}>{viewingOrder.customer_name || 'Cliente'}</strong>
+                  {viewingOrder.customer_phone && (
+                    <a 
+                      href={`https://wa.me/${viewingOrder.customer_phone.replace(/\D/g, '')}`} 
+                      target="_blank" 
+                      rel="noreferrer"
+                      style={{ fontSize: '12px', color: '#10B981', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}
+                    >
+                      <Phone size={12} /> {viewingOrder.customer_phone}
+                    </a>
+                  )}
+                </div>
+                <div style={{ fontSize: '13px', color: 'var(--ds-text-secondary)', display: 'flex', alignItems: 'flex-start', gap: '6px', marginTop: '2px' }}>
+                  <MapPin size={15} style={{ flexShrink: 0, marginTop: '2px', color: 'var(--ds-primary)' }} />
+                  <span>
+                    {[viewingOrder.address, viewingOrder.barrio].filter(Boolean).join(', ')}
+                    {viewingOrder.delivery_apartment && ` · Apto: ${viewingOrder.delivery_apartment}`}
+                    {viewingOrder.delivery_tower && ` · Torre: ${viewingOrder.delivery_tower}`}
+                  </span>
+                </div>
+                {viewingOrder.delivery_reference && (
+                  <div style={{ fontSize: '12px', color: 'var(--ds-text-muted)', marginLeft: '21px' }}>
+                    📍 Ref: {viewingOrder.delivery_reference}
+                  </div>
+                )}
+                {viewingOrder.notes && (
+                  <div style={{ fontSize: '12px', color: '#D97706', backgroundColor: 'rgba(245, 158, 11, 0.08)', padding: '6px 10px', borderRadius: '6px', marginTop: '4px' }}>
+                    📝 <strong>Nota:</strong> {viewingOrder.notes}
+                  </div>
+                )}
+              </div>
+
+              {/* Productos del Pedido */}
+              <div>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--ds-text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>
+                  Productos ({Array.isArray(viewingOrder.cart_json) ? viewingOrder.cart_json.reduce((acc, it) => acc + (it.quantity || 1), 0) : 0})
+                </span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {(Array.isArray(viewingOrder.cart_json) ? viewingOrder.cart_json : []).map((it, pIdx) => (
+                    <div 
+                      key={pIdx} 
+                      style={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'baseline',
+                        padding: '8px 10px',
+                        backgroundColor: 'var(--ds-bg-elevated)',
+                        borderRadius: '8px',
+                        fontSize: '13px'
+                      }}
+                    >
+                      <div>
+                        <strong style={{ color: 'var(--ds-text-primary)' }}>{it.quantity}x {it.title}</strong>
+                        {it.notes && <div style={{ fontSize: '11px', color: 'var(--ds-text-muted)' }}>({it.notes})</div>}
+                      </div>
+                      <span style={{ fontWeight: 700, color: 'var(--ds-text-primary)' }}>
+                        ${formatCOP((Number(it.price) || 0) * (Number(it.quantity) || 1))}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Desglose Financiero */}
+              <div style={{ borderTop: '1px solid var(--ds-border)', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--ds-text-secondary)' }}>
+                  <span>Subtotal Productos:</span>
+                  <span>${formatCOP(Math.max(0, (Number(viewingOrder.total) || 0) - getOrderDeliveryFee(viewingOrder)))}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#D97706', fontWeight: 700 }}>
+                  <span>🛵 Tarifa Domicilio:</span>
+                  <span style={{ backgroundColor: getOrderDeliveryFee(viewingOrder) >= 7000 ? 'rgba(239, 68, 68, 0.12)' : 'rgba(245, 158, 11, 0.12)', color: getOrderDeliveryFee(viewingOrder) >= 7000 ? '#DC2626' : '#D97706', padding: '2px 8px', borderRadius: '4px' }}>
+                    ${formatCOP(getOrderDeliveryFee(viewingOrder))}
+                  </span>
+                </div>
+                {viewingOrder.change_required !== null && viewingOrder.change_required !== undefined && viewingOrder.change_required > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--ds-text-muted)' }}>
+                    <span>Cambio Requerido:</span>
+                    <span>${formatCOP(viewingOrder.change_required)}</span>
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', fontWeight: 900, color: 'var(--ds-text-primary)', borderTop: '1px dashed var(--ds-border)', paddingTop: '8px', marginTop: '2px' }}>
+                  <span>Total Pedido:</span>
+                  <span style={{ color: 'var(--ds-primary)' }}>${formatCOP(viewingOrder.total)}</span>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: '12px 20px', borderTop: '1px solid var(--ds-border)', display: 'flex', justifyContent: 'flex-end', backgroundColor: 'var(--ds-bg-elevated)' }}>
+              <button 
+                type="button" 
+                className="ds-btn ds-btn-secondary" 
+                onClick={() => setViewingOrder(null)}
+                style={{ fontWeight: 600, padding: '6px 18px' }}
+              >
+                Cerrar
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }
