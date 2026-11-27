@@ -163,11 +163,14 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
 
     let modifiersHtml = '';
     if (Array.isArray(modifiers) && modifiers.length > 0) {
-      modifiersHtml = `<div class="modifier-item">` +
+      modifiersHtml += `<div class="modifier-item">` +
         modifiers.map(m => `<div>• ${typeof m === 'string' ? m : (m.name || m.label || m.title)}</div>`).join('') +
       `</div>`;
-    } else if (item.notes) {
-      modifiersHtml = `<div class="modifier-item"><div>• ${item.notes}</div></div>`;
+    }
+
+    const itemNote = (item.notes || item.note || item.observacion || item.observaciones || item.comentario || item.comments || '').toString().trim();
+    if (itemNote) {
+      modifiersHtml += `<div class="product-note">&gt;&gt; NOTA: ${itemNote}</div>`;
     }
 
     productsRowsHtml += `
@@ -368,14 +371,25 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
       font-size: 10.5px;
     }
     .modifier-item {
-      margin-left: 10px;
-      margin-top: 1px;
+      margin-left: 8px;
+      margin-top: 1.5px;
       margin-bottom: 2px;
-      font-size: 9px;
-      color: #222;
-      font-weight: 400;
-      line-height: 1.15;
+      font-size: 10px;
+      color: #000 !important;
+      font-weight: 700;
+      line-height: 1.2;
       word-break: break-word;
+    }
+    .product-note {
+      margin-left: 8px;
+      margin-top: 2px;
+      margin-bottom: 2.5px;
+      font-size: 10.5px;
+      color: #000 !important;
+      font-weight: 800;
+      line-height: 1.2;
+      word-break: break-word;
+      letter-spacing: -0.1px;
     }
 
     /* TOTALES: Etiquetas normales, Valores en negrita */
@@ -425,12 +439,12 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
 
     /* OBSERVACIONES */
     .obs-text {
-      font-size: 10.5px;
-      font-weight: 700;
+      font-size: 11px;
+      font-weight: 800;
       line-height: 1.2;
       white-space: pre-line;
       word-break: break-word;
-      color: #000;
+      color: #000 !important;
       margin-top: 1.5px;
     }
 
