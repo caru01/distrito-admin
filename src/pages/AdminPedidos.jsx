@@ -287,7 +287,13 @@ export default function AdminPedidos() {
   const handleUpdateStatus = async (id, newStatus) => {
     const order = orders.find(o => o.id === id);
     const isPickupOrder = order && String(order.delivery_type || '').toLowerCase() !== 'domicilio';
-    const isAppOrder = order && (String(order.source || '').toUpperCase().includes('APP') || String(order.source || '').toLowerCase().includes('movil') || String(order.source || '').toLowerCase().includes('móvil'));
+    const isAppOrder = order && !String(order.source || '').toLowerCase().includes('whatsapp') && (
+      String(order.source || '').trim().toLowerCase() === 'app' ||
+      String(order.source || '').toLowerCase().startsWith('app') ||
+      String(order.source || '').toLowerCase().includes('movil') ||
+      String(order.source || '').toLowerCase().includes('móvil') ||
+      String(order.source || '').toLowerCase().includes('mobile')
+    );
     if (newStatus === 'Listo' && order && !isAppOrder && !order.tracking_sent_at) {
       const prompt = isPickupOrder
         ? '¿Deseas avisar por WhatsApp que el pedido está listo para recoger?'
@@ -586,7 +592,9 @@ export default function AdminPedidos() {
         const src = String(order.source || '').toLowerCase();
         const targetSrc = filterSource.toLowerCase();
         if (targetSrc === 'app') {
-          if (!src.includes('app') && !src.includes('mobile') && !src.includes('movil') && !src.includes('móvil')) return false;
+          if (src.includes('whatsapp') || (!src.startsWith('app') && !src.includes('mobile') && !src.includes('movil') && !src.includes('móvil'))) return false;
+        } else if (targetSrc === 'whatsapp') {
+          if (!src.includes('whatsapp')) return false;
         } else if (targetSrc === 'presencial') {
           if (src !== 'presencial' && src !== 'mostrador') return false;
         } else if (targetSrc === 'rappi') {
@@ -647,7 +655,8 @@ export default function AdminPedidos() {
         </span>
       );
     }
-    if (s === 'app' || s === 'mobile' || s.includes('app') || s.includes('móvil') || s.includes('movil')) {
+    if (s.includes('whatsapp')) return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><MessageCircle size={16} color="#22C55E" /> WhatsApp</div>;
+    if (s === 'app' || s === 'mobile' || s.startsWith('app') || s.includes('móvil') || s.includes('movil')) {
       return (
         <span style={{ 
           display: 'inline-flex', 
@@ -665,7 +674,6 @@ export default function AdminPedidos() {
         </span>
       );
     }
-    if (s.includes('whatsapp')) return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><MessageCircle size={16} color="#22C55E" /> WhatsApp</div>;
     if (s === 'presencial' || s === 'mostrador') return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Store size={16} color="#B30401" /> {source || 'Mostrador'}</div>;
     if (s.includes('tel')) return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={16} color="#60A5FA" /> Teléfono</div>;
     return <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Globe size={16} color="#A78BFA" /> Web</div>;
@@ -1870,7 +1878,13 @@ export default function AdminPedidos() {
                   
                   {/* Tarjeta de Envío de Enlace de Seguimiento WhatsApp para el Cliente */}
                   {(() => {
-                    const isAppOrder = String(selectedOrder.source || '').toUpperCase().includes('APP') || String(selectedOrder.source || '').toLowerCase().includes('movil') || String(selectedOrder.source || '').toLowerCase().includes('móvil');
+                    const isAppOrder = !String(selectedOrder.source || '').toLowerCase().includes('whatsapp') && (
+                      String(selectedOrder.source || '').trim().toLowerCase() === 'app' ||
+                      String(selectedOrder.source || '').toLowerCase().startsWith('app') ||
+                      String(selectedOrder.source || '').toLowerCase().includes('movil') ||
+                      String(selectedOrder.source || '').toLowerCase().includes('móvil') ||
+                      String(selectedOrder.source || '').toLowerCase().includes('mobile')
+                    );
 
                     if (isAppOrder) {
                       return (

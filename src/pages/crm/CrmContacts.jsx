@@ -494,7 +494,7 @@ function ContactDetail({ id, close, notify, refresh }) {
                       <p>
                         {formatDateTime(order.created_at)} · {(() => {
                           const s = String(order.source || '').toLowerCase().trim();
-                          if (s === 'app' || s === 'mobile' || s.includes('app') || s.includes('movil') || s.includes('móvil')) return 'APP';
+                          if (!s.includes('whatsapp') && (s === 'app' || s === 'mobile' || s.startsWith('app') || s.includes('movil') || s.includes('móvil'))) return 'APP';
                           return order.source || "Web";
                         })()} ·{" "}
                         {order.delivery_type || "Domicilio"} ({order.payment_method || "Efectivo"})

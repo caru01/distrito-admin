@@ -203,8 +203,8 @@ export default function TomarPedido() {
           })(),
           source: (() => {
             const src = String(editOrder.source || '').toLowerCase().trim();
-            if (src.includes('app') || src.includes('mobile') || src.includes('movil')) return 'APP';
             if (src.includes('whatsapp') || editOrder.crm_contact_id) return 'WhatsApp';
+            if (src === 'app' || src.startsWith('app') || src.includes('mobile') || src.includes('movil') || src.includes('móvil')) return 'APP';
             if (src.includes('tel') || src === 'telefono') return 'Teléfono';
             if (src.includes('web')) return 'Web';
             if (src.includes('mostrador') || src.includes('presencial')) return 'Mostrador';
@@ -1355,7 +1355,7 @@ export default function TomarPedido() {
                   {SOURCE_OPTIONS.map(s => {
                     const isSourceActive = (() => {
                       const src = String(customer.source || '').toLowerCase().trim();
-                      if (s.key === 'APP') return src === 'app' || src.includes('app') || src.includes('mobile') || src.includes('movil');
+                      if (s.key === 'APP') return !src.includes('whatsapp') && (src === 'app' || src.startsWith('app') || src.includes('mobile') || src.includes('movil') || src.includes('móvil'));
                       if (s.key === 'WhatsApp') return src.includes('whatsapp') || (!src && !customer.source);
                       if (s.key === 'Teléfono') return src.includes('tel');
                       if (s.key === 'Web') return src.includes('web');
