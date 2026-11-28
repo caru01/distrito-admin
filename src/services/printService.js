@@ -170,7 +170,7 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
 
     const itemNote = (item.notes || item.note || item.observacion || item.observaciones || item.comentario || item.comments || '').toString().trim();
     if (itemNote) {
-      modifiersHtml += `<div class="product-note">&gt;&gt; NOTA: ${itemNote}</div>`;
+      modifiersHtml += `<div class="product-note"><strong>Nota:</strong> ${itemNote}</div>`;
     }
 
     productsRowsHtml += `
@@ -382,14 +382,17 @@ export const generateSingleComandaHTML = (order, paperWidth = 58) => {
     }
     .product-note {
       margin-left: 8px;
-      margin-top: 2px;
-      margin-bottom: 2.5px;
-      font-size: 10.5px;
+      margin-top: 1.5px;
+      margin-bottom: 2px;
+      font-size: 10px;
       color: #000 !important;
-      font-weight: 800;
+      font-weight: 400;
       line-height: 1.2;
       word-break: break-word;
-      letter-spacing: -0.1px;
+    }
+    .product-note strong {
+      font-weight: 800;
+      color: #000 !important;
     }
 
     /* TOTALES: Etiquetas normales, Valores en negrita */
